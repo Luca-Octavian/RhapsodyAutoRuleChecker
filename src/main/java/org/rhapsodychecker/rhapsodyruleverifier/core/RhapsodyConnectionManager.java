@@ -1,0 +1,169 @@
+package org.rhapsodychecker.rhapsodyruleverifier.core;
+
+import com.telelogic.rhapsody.core.IRPApplication;
+import com.telelogic.rhapsody.core.IRPProject;
+import com.telelogic.rhapsody.core.RhapsodyAppServer;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+/**
+ * Manages a single connection to IBM Rhapsody.
+ * First tries to open a project from a given .rpy/.rpyx path; if that fails, falls back to the active Rhapsody instance.
+ * Singleton, thread-safe, single-responsibility: creating/holding the IRPApplication and IRPProject handles.
+ */
+public final class RhapsodyConnectionManager {
+
+    private volatile IRPApplication application;
+    private volatile IRPProject project;
+
+    // Track lifecycle to avoid quitting a user-started instance
+    private volatile boolean applicationCreatedByManager = false;
+    private volatile boolean projectOpenedByManager = false;
+
+    private RhapsodyConnectionManager() {
+    }
+
+    public static RhapsodyConnectionManager getInstance() {
+        return Holder.INSTANCE;
+    }
+
+    private static class Holder {
+        private static final RhapsodyConnectionManager INSTANCE = new RhapsodyConnectionManager();
+    }
+
+    /**
+     * Connect to Rhapsody by opening the given project file; if that fails, attach to an active instance and use its active project.
+     * If already connected, this is a no-op.
+     *
+     * @param projectFilePath absolute path to .rpy/.rpyx (can be null/empty to force attach to active project)
+     * @throws RhapsodyConnectionException if neither opening the file nor attaching to an active project succeeds
+     */
+    public synchronized void connect(String projectFilePath) throws RhapsodyConnectionException {
+        if (isConnected()) {
+            return;
+        }
+
+        try {
+            application = tryGetActiveApplication();
+            if (application == null) {
+                application = RhapsodyAppServer.createRhapsodyApplication();
+                applicationCreatedByManager = true;
+            }
+
+            // 1) Try to open the provided project file (if any)
+            if (projectFilePath != null && !projectFilePath.trim().isEmpty()) {
+                project = tryOpenProject(application, projectFilePath.trim());
+                if (project != null) {
+                    projectOpenedByManager = true;
+                }
+            }
+
+            // 2) Fallback: use active project (if open)
+            if (project == null) {
+                project = application.activeProject();
+            }
+
+            if (project == null) {
+                throw new RhapsodyConnectionException("Could not open project and no active project is available.");
+            }
+        } catch (UnsatisfiedLinkError e) {
+            // Common when Rhapsody native DLLs are not on PATH (…\\Share\\bin, …\\bin)
+            cleanupOnFailure();
+            throw new RhapsodyConnectionException("Failed to load Rhapsody native libraries. Check PATH to Rhapsody \\Share\\bin and \\bin.", e);
+        } catch (Throwable t) {
+            cleanupOnFailure();
+            throw new RhapsodyConnectionException("Failed to connect to Rhapsody: " + t.getMessage(), t);
+        }
+    }
+
+    /**
+     * @return true if both application and project are available.
+     */
+    public boolean isConnected() {
+        return application != null && project != null;
+    }
+
+    public IRPApplication getApplication() {
+        ensureConnected();
+        return application;
+    }
+
+    public IRPProject getProject() {
+        ensureConnected();
+        return project;
+    }
+
+    /**
+     * Gracefully shuts down the application only if this manager created it.
+     * If attached to a user-started instance, it will not quit it.
+     */
+    public synchronized void shutdown() {
+        if (application != null) {
+            try {
+                // If we opened a project, Rhapsody will close it when quitting.
+                if (applicationCreatedByManager) {
+                    try {
+                        // IRPApplication typically provides quit(); if not available in your version, remove this call.
+                        application.quit();
+                    } catch (Throwable ignored) {
+                        // Best-effort shutdown; ignore
+                    }
+                }
+            } finally {
+                application = null;
+                project = null;
+                applicationCreatedByManager = false;
+                projectOpenedByManager = false;
+            }
+        }
+    }
+
+    // --- Internal helpers ---
+
+    private IRPApplication tryGetActiveApplication() {
+        try {
+            return RhapsodyAppServer.getActiveRhapsodyApplication();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private IRPProject tryOpenProject(IRPApplication app, String pathStr) {
+        Path path = Paths.get(pathStr);
+        if (!Files.exists(path)) {
+            return null;
+        }
+        IRPProject prj = app.openProject(path.toString());
+        if (prj == null) {
+            // Some versions might still set activeProject on success
+            prj = app.activeProject();
+        }
+        return prj;
+    }
+
+    private void ensureConnected() throws IllegalStateException {
+        if (!isConnected()) {
+            throw new IllegalStateException("Not connected to Rhapsody. Call connect(...) first.");
+        }
+    }
+
+    private void cleanupOnFailure() {
+        // Do not quit an external instance on failure; only clear fields if we created one
+        application = null;
+        project = null;
+        applicationCreatedByManager = false;
+        projectOpenedByManager = false;
+    }
+
+    // Keep exception local to avoid extra files at this stage
+    public static class RhapsodyConnectionException extends Exception {
+        public RhapsodyConnectionException(String message) {
+            super(message);
+        }
+        public RhapsodyConnectionException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+}

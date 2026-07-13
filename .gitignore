@@ -1,0 +1,46 @@
+# ---- Compiled class files ----
+*.class
+
+# ---- Package/build artifacts ----
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# ---- Maven ----
+target/
+
+# ---- IDE: Eclipse ----
+.project
+.classpath
+.settings/
+bin/
+
+# ---- IDE: IntelliJ ----
+.idea/
+*.iml
+out/
+
+# ---- IDE: VS Code ----
+.vscode/
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs ----
+*.log
+
+# ---- Rhapsody API JAR (not distributable) ----
+RhapsodyAPI.jar
+
+# ---- Config overrides (keep defaults; ignore local/user overrides) ----
+# Uncomment if you use local override files:
+# rules-local.yaml
+# aliases-local.yaml
+
+# ---- Export output ----
+/downloads/
+/exports/
