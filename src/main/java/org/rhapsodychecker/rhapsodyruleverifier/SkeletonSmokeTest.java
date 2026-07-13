@@ -2,9 +2,12 @@ package org.rhapsodychecker.rhapsodyruleverifier;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
+import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
+import org.rhapsodychecker.rhapsodyruleverifier.core.index.SetOps;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
@@ -27,7 +30,11 @@ public class SkeletonSmokeTest {
             RhapsodyModelSnapshot snapshot = loader.loadModel(conn.getProject());
             System.out.println("[PASS] Loaded " + snapshot.records().size() + " elements");
 
-            // 3) Verify element kinds are classified
+            // 2.5) Build the index over the loaded records
+            ElementIndex index = ElementIndex.build(snapshot.records());
+            System.out.println("[PASS] Index built from " + index.repository().allRecords().size() + " elements");
+
+            // 3) Verify element kinds are classified (manual loop, kept for cross-check)
             int blocks = 0, ports = 0, parts = 0, other = 0;
             for (ElementRecord rec : snapshot.records()) {
                 switch (rec.kind()) {
@@ -41,7 +48,27 @@ public class SkeletonSmokeTest {
                     default:             other++;  break;
                 }
             }
-            
+
+            // 3.5) Same counts, but computed via the index instead of manual iteration
+            int blocksViaIndex = index.guidsByKind(ElementKind.BLOCK).size()
+                    + index.guidsByKind(ElementKind.INTERFACE_BLOCK).size();
+            int portsViaIndex = index.guidsByKind(ElementKind.PORT_FULL).size()
+                    + index.guidsByKind(ElementKind.PORT_PROXY).size()
+                    + index.guidsByKind(ElementKind.PORT_FLOW).size()
+                    + index.guidsByKind(ElementKind.PORT).size();
+            int partsViaIndex = index.guidsByKind(ElementKind.PART).size();
+            int otherViaIndex = snapshot.records().size() - blocksViaIndex - portsViaIndex - partsViaIndex;
+
+            System.out.println("\n--- Kind counts: manual loop vs index (should match) ---");
+            System.out.println("  Blocks: manual=" + blocks + " | index=" + blocksViaIndex
+                    + (blocks == blocksViaIndex ? "  [MATCH]" : "  [MISMATCH]"));
+            System.out.println("  Ports:  manual=" + ports + " | index=" + portsViaIndex
+                    + (ports == portsViaIndex ? "  [MATCH]" : "  [MISMATCH]"));
+            System.out.println("  Parts:  manual=" + parts + " | index=" + partsViaIndex
+                    + (parts == partsViaIndex ? "  [MATCH]" : "  [MISMATCH]"));
+            System.out.println("  Other:  manual=" + other + " | index=" + otherViaIndex
+                    + (other == otherViaIndex ? "  [MATCH]" : "  [MISMATCH]"));
+
             System.out.println("\n--- Part details (first 20) ---");
             int partsPrinted = 0;
             for (ElementRecord r : snapshot.records()) {
@@ -62,8 +89,8 @@ public class SkeletonSmokeTest {
             }
             System.out.println("[INFO] Blocks: " + blocks + ", Ports: " + ports
                     + ", Parts: " + parts + ", Other: " + other);
-            
-         // Debug: find potential parts (Attributes or elements with "part" in stereotype/metaclass)
+
+            // Debug: find potential parts (Attributes or elements with "part" in stereotype/metaclass)
             System.out.println("\n--- Part candidates ---");
             int partCandidates = 0;
             for (ElementRecord r : snapshot.records()) {
@@ -92,8 +119,8 @@ public class SkeletonSmokeTest {
                 System.out.println("  None found. Parts may not be included in getNestedElementsRecursive().");
                 System.out.println("  May need a second pass: iterate blocks and call getAttributes()/getParts().");
             }
-            
-         // Debug: inspect attributes of first 5 blocks
+
+            // Debug: inspect attributes of first 5 blocks
             System.out.println("\n--- Block attributes debug ---");
             int blocksInspected = 0;
             for (ElementRecord r : snapshot.records()) {
@@ -167,6 +194,12 @@ public class SkeletonSmokeTest {
                 if (blocksInspected >= 5) break;
             }
 
+            long withDescription = snapshot.records().stream()
+                    .filter(r -> r.description().isPresent() && !r.description().get().isEmpty())
+                    .count();
+            System.out.println("[INFO] Elements with description: " + withDescription + " / " + snapshot.records().size());
+
+
             // 4) Print a few sample records for visual inspection
             int sampleCount = Math.min(10, snapshot.records().size());
             System.out.println("\n--- Sample elements (first " + sampleCount + ") ---");
@@ -204,6 +237,37 @@ public class SkeletonSmokeTest {
             } else {
                 System.out.println("[WARN] Handle map size (" + snapshot.handleByGuid().size()
                         + ") differs from record count (" + snapshot.records().size() + ")");
+            }
+
+            // 8) Compound index query demo: elements that are metaclass "Class"
+            //    AND have stereotype "Block" OR "Component" (mirrors an ArchitectureElements
+            //    config-style elementSet definition)
+            Set<String> classGuids = index.guidsByMetaClass("Class", true);
+            Set<String> blockOrComponent = SetOps.union(List.of(
+                    index.guidsByStereotype("Block", true),
+                    index.guidsByStereotype("Component", true)
+            ));
+            Set<String> archElementGuids = SetOps.intersect(classGuids, blockOrComponent);
+            List<ElementRecord> archElements = index.toRecords(archElementGuids);
+
+            System.out.println("\n--- Compound index query: Class + (Block or Component) stereotype ---");
+            System.out.println("[INFO] Architecture elements found: " + archElements.size());
+            int archPrinted = 0;
+            for (ElementRecord r : archElements) {
+                System.out.println("  " + r.name() + " | path=" + r.ownerPath().orElse("<root>"));
+                archPrinted++;
+                if (archPrinted >= 20) {
+                    System.out.println("  ... (showing first 20)");
+                    break;
+                }
+            }
+
+            // 9) Quick GUID lookup sanity check via the index/repository
+            if (!snapshot.records().isEmpty()) {
+                String sampleGuid = snapshot.records().get(0).guid();
+                boolean found = index.repository().get(sampleGuid).isPresent();
+                System.out.println("\n[INFO] Repository GUID lookup sanity check for '" + sampleGuid
+                        + "': " + (found ? "[PASS] found" : "[FAIL] not found"));
             }
 
             System.out.println("\n[DONE] Smoke test complete.");

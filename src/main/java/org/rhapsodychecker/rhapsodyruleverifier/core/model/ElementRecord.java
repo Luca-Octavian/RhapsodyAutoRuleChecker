@@ -18,6 +18,7 @@ public final class ElementRecord {
     private final String name;
     private final String metaClass;
     private final ElementKind kind;
+    private final String description;
 
     // Ownership / navigation
     private final String ownerGuid;   // optional
@@ -38,6 +39,7 @@ public final class ElementRecord {
 
         this.ownerGuid = emptyToNull(trimOrNull(b.ownerGuid));
         this.ownerPath = emptyToNull(trimOrNull(b.ownerPath));
+        this.description = emptyToNull(trimOrNull(b.description));
 
         this.typeGuid = emptyToNull(trimOrNull(b.typeGuid));
         this.typeName = emptyToNull(trimOrNull(b.typeName));
@@ -77,6 +79,11 @@ public final class ElementRecord {
     public Optional<String> typeName() {
         return Optional.ofNullable(typeName);
     }
+    
+    public Optional<String> description() {
+        return Optional.ofNullable(description);
+    }
+
 
     /**
      * Stereotypes applied to this element. Never null. Unmodifiable.
@@ -127,6 +134,7 @@ public final class ElementRecord {
                 ", kind=" + kind +
                 ", ownerPath=" + (ownerPath == null ? "<none>" : ownerPath) +
                 ", stereotypes=" + stereotypes +
+                ", description=" + (description == null ? "<none>" : description.substring(0, Math.min(description.length(), 50))) +
                 '}';
     }
 
@@ -147,6 +155,7 @@ public final class ElementRecord {
 
         private String typeGuid;
         private String typeName;
+        private String description;
 
         private Set<String> stereotypes;
 
@@ -184,6 +193,11 @@ public final class ElementRecord {
 
         public Builder typeGuid(String typeGuid) {
             this.typeGuid = typeGuid;
+            return this;
+        }
+        
+        public Builder description(String description) {
+            this.description = description;
             return this;
         }
 

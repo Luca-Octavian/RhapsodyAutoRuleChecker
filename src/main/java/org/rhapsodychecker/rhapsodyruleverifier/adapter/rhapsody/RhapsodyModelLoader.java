@@ -48,6 +48,7 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
         String metaClass = safeStr(elt.getMetaClass());
         String ownerPath = computeOwnerPath(elt);
         Set<String> stereotypes = readStereotypeNames(elt);
+        String description = safeGetDescription(elt);
 
         String typeGuid = null;
         String typeName = null;
@@ -76,6 +77,7 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
                 .stereotypes(stereotypes)
                 .typeGuid(typeGuid)
                 .typeName(typeName)
+                .description(description)
                 .build();
 
         records.add(rec);
@@ -278,6 +280,8 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
                 if (guid.isEmpty() || name.isEmpty()) continue;
 
                 Set<String> stereotypes = readStereotypeNames(elt);
+                String description = safeGetDescription(elt);
+
 
                 String ownerPath = ownerRec.ownerPath()
                         .map(p -> p + "::" + ownerRec.name())
@@ -308,6 +312,7 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
                         .stereotypes(stereotypes)
                         .typeGuid(typeGuid)
                         .typeName(typeName)
+                        .description(description)
                         .build();
 
                 result.add(partRec);
@@ -337,6 +342,15 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
         return null;
     }
     
+    private String safeGetDescription(IRPModelElement elt) {
+        try {
+            String desc = elt.getDescription();
+            return desc == null ? null : desc.trim();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private boolean containsStereo(Set<String> set, String exact) {
         return set != null && set.contains(exact);
     }
