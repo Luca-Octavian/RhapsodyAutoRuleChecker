@@ -1,15 +1,18 @@
 package org.rhapsodychecker.rhapsodyruleverifier;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
+import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyPortInfoResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.SetOps;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
+import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.PortInfo;
 import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
 import com.telelogic.rhapsody.core.*;
 
@@ -89,6 +92,64 @@ public class SkeletonSmokeTest {
             }
             System.out.println("[INFO] Blocks: " + blocks + ", Ports: " + ports
                     + ", Parts: " + parts + ", Other: " + other);
+
+            // --- New: Port direction & multiplicity ---
+            Set<String> portGuids = new LinkedHashSet<>();
+            portGuids.addAll(index.guidsByKind(ElementKind.PORT));
+            portGuids.addAll(index.guidsByKind(ElementKind.PORT_FULL));
+            portGuids.addAll(index.guidsByKind(ElementKind.PORT_PROXY));
+            portGuids.addAll(index.guidsByKind(ElementKind.PORT_FLOW));
+            List<ElementRecord> portRecords = index.toRecords(portGuids);
+
+            RhapsodyPortInfoResolver portResolver = new RhapsodyPortInfoResolver(snapshot);
+
+            int in = 0, out = 0, inout = 0, noneDir = 0, unknown = 0;
+            int limit = Math.min(20, portRecords.size());
+            System.out.println("\n--- Port direction/multiplicity (first " + limit + ") ---");
+            for (int i = 0; i < limit; i++) {
+                ElementRecord pr = portRecords.get(i);
+                PortInfo info = portResolver.resolve(pr);
+                switch (info.direction()) {
+                    case IN: in++; break;
+                    case OUT: out++; break;
+                    case INOUT: inout++; break;
+                    case NONE: noneDir++; break;
+                    default: unknown++; break;
+                }
+                System.out.println("  " + pr.name()
+                        + " | kind=" + pr.kind()
+                        + " | dir=" + info.direction() + " [" + info.directionSource() + "]"
+                        + " | mult=" + info.multiplicity() + " [" + info.multiplicitySource() + "]"
+                        + " | owner=" + pr.ownerPath().orElse("<root>"));
+            }
+            System.out.println("[INFO] Port direction counts (sample " + limit + "): "
+                    + "IN=" + in + ", OUT=" + out + ", INOUT=" + inout + ", NONE=" + noneDir + ", UNKNOWN=" + unknown);
+            
+            System.out.println("\n--- Port stereotype/interface summary ---");
+            int withPortStereotype = 0, withProvidedIface = 0, withRequiredIface = 0;
+            for (ElementRecord pr : portRecords) {
+                if (pr.kind() != ElementKind.PORT) {
+                    withPortStereotype++; // has FullPort/ProxyPort/FlowPort stereotype
+                }
+                IRPModelElement handle = snapshot.handleByGuid().get(pr.guid());
+                if (handle instanceof IRPPort) {
+                    IRPPort p = (IRPPort) handle;
+                    try {
+                        IRPCollection prov = p.getProvidedInterfaces();
+                        if (prov != null && prov.getCount() > 0) withProvidedIface++;
+                    } catch (Throwable ignored) {}
+                    try {
+                        IRPCollection req = p.getRequiredInterfaces();
+                        if (req != null && req.getCount() > 0) withRequiredIface++;
+                    } catch (Throwable ignored) {}
+                }
+            }
+            System.out.println("  Ports with FullPort/ProxyPort/FlowPort stereotype: " + withPortStereotype + " / " + portRecords.size());
+            System.out.println("  Ports with provided interfaces: " + withProvidedIface);
+            System.out.println("  Ports with required interfaces: " + withRequiredIface);
+            if (withPortStereotype == 0 && withProvidedIface == 0 && withRequiredIface == 0) {
+                System.out.println("  [INFO] Direction may be encoded in naming convention (C_IN_*, C_OUT_*) or not applicable for this model.");
+            }
 
             // Debug: find potential parts (Attributes or elements with "part" in stereotype/metaclass)
             System.out.println("\n--- Part candidates ---");
@@ -240,8 +301,6 @@ public class SkeletonSmokeTest {
             }
 
             // 8) Compound index query demo: elements that are metaclass "Class"
-            //    AND have stereotype "Block" OR "Component" (mirrors an ArchitectureElements
-            //    config-style elementSet definition)
             Set<String> classGuids = index.guidsByMetaClass("Class", true);
             Set<String> blockOrComponent = SetOps.union(List.of(
                     index.guidsByStereotype("Block", true),
