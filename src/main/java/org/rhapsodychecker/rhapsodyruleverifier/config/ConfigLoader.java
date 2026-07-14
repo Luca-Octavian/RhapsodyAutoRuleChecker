@@ -110,6 +110,7 @@ public final class ConfigLoader {
                     .id(id)
                     .title(optString(fields, "title", null))
                     .types(optStringList(fields, "types"))
+                    .kinds(optStringList(fields, "kinds"))
                     .stereotypes(optStringList(fields, "stereotypes"))
                     .includePackages(optStringList(fields, "includePackages"))
                     .excludePackages(optStringList(fields, "excludePackages"))

@@ -8,6 +8,7 @@ import java.util.*;
 public final class ElementSetDefinition {
     private final String id;
     private final String title;
+    private final List<String> kinds;
     private final List<String> types;
     private final List<String> stereotypes;
     private final List<String> includePackages;
@@ -16,6 +17,7 @@ public final class ElementSetDefinition {
     private ElementSetDefinition(Builder b) {
         this.id = requireNonBlank(b.id, "elementSet id");
         this.title = b.title;
+        this.kinds = freezeList(b.kinds);
         this.types = freezeList(b.types);
         this.stereotypes = freezeList(b.stereotypes);
         this.includePackages = freezeList(b.includePackages);
@@ -26,13 +28,16 @@ public final class ElementSetDefinition {
     public Optional<String> title() { return Optional.ofNullable(title); }
     public List<String> types() { return types; }
     public List<String> stereotypes() { return stereotypes; }
+    public List<String> kinds() { return kinds; }
     public List<String> includePackages() { return includePackages; }
     public List<String> excludePackages() { return excludePackages; }
+    
 
     @Override
     public String toString() {
         return "ElementSetDefinition{id='" + id + "', types=" + types + ", stereotypes=" + stereotypes + "}";
     }
+    
 
     public static Builder builder() { return new Builder(); }
 
@@ -43,12 +48,15 @@ public final class ElementSetDefinition {
         private List<String> stereotypes;
         private List<String> includePackages;
         private List<String> excludePackages;
+        private List<String> kinds;
+        
 
         private Builder() {}
 
         public Builder id(String id) { this.id = id; return this; }
         public Builder title(String title) { this.title = title; return this; }
         public Builder types(List<String> types) { this.types = types; return this; }
+        public Builder kinds(List<String> kinds) { this.kinds = kinds; return this; }
         public Builder stereotypes(List<String> stereotypes) { this.stereotypes = stereotypes; return this; }
         public Builder includePackages(List<String> includePackages) { this.includePackages = includePackages; return this; }
         public Builder excludePackages(List<String> excludePackages) { this.excludePackages = excludePackages; return this; }

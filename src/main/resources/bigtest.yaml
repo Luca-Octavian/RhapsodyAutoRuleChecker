@@ -1,0 +1,190 @@
+schemaVersion: 1
+mode: lenient
+
+aliases:
+  ELEMENT_DESCRIPTION:
+    kind: description
+    title: "Element description"
+
+  ELEMENT_NAME:
+    kind: name
+    title: "Element name"
+
+  SAFETY_ASIL_TAG:
+    kind: taggedValue
+    profileName: ISO26262
+    tagName: ASIL
+    type: enum
+    values: [QM, A, B, C, D]
+    title: "ASIL level (tag)"
+
+  SAFETY_ASIL_STEREO:
+    kind: stereotypeSet
+    profileName: ASIL_Stereotypes
+    stereotypeNames: [ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    title: "ASIL level (stereotypes)"
+
+elementSets:
+  AllBlocks:
+    title: "All Blocks"
+    types: [Class]
+    stereotypes: [Block]
+
+  AllInterfaceBlocks:
+    title: "All Interface Blocks"
+    types: [Class]
+    stereotypes: [InterfaceBlock]
+
+  BlocksAndInterfaceBlocks:
+    title: "Blocks and Interface Blocks"
+    types: [Class]
+    stereotypes: [Block, InterfaceBlock]
+
+  AllPorts:
+    title: "All ports (standard and SysML)"
+    types: [Port, SysMLPort]
+
+  FlowPorts:
+    title: "Flow ports only"
+    types: [SysMLPort]
+    stereotypes: [flowPort]
+
+  AllParts:
+    title: "All parts"
+    kinds: [PART]
+
+  LogicalElements:
+    title: "Elements with Logical-Element stereotype"
+    stereotypes: [Logical-Element]
+
+  TechnicalElements:
+    title: "Elements with Technical-Element stereotype"
+    stereotypes: [Technical-Element]
+
+  AllRequirements:
+    title: "All requirements"
+    types: [Requirement]
+
+  ArchitectureElements:
+    title: "Blocks, InterfaceBlocks, Parts, and Ports"
+    types: [Class, Object, Port, SysMLPort]
+    stereotypes: [Block, InterfaceBlock, flowPort]
+
+rules:
+  # ── Description rules ──────────────────────────────────
+  - id: BLOCK_DESCRIPTION_REQUIRED
+    title: "All Blocks must have a description"
+    appliesTo: { set: AllBlocks }
+    type: RequiredValue
+    target: ELEMENT_DESCRIPTION
+    params:
+      nonEmpty: true
+    message: "Block '{elementName}' has no description"
+
+  - id: IBLOCK_DESCRIPTION_REQUIRED
+    title: "All Interface Blocks must have a description"
+    appliesTo: { set: AllInterfaceBlocks }
+    type: RequiredValue
+    target: ELEMENT_DESCRIPTION
+    params:
+      nonEmpty: true
+    message: "Interface Block '{elementName}' has no description"
+
+  - id: PART_DESCRIPTION_REQUIRED
+    title: "All Parts must have a description"
+    appliesTo: { set: AllParts }
+    type: RequiredValue
+    target: ELEMENT_DESCRIPTION
+    params:
+      nonEmpty: true
+    message: "Part '{elementName}' has no description"
+
+  - id: FLOWPORT_DESCRIPTION_REQUIRED
+    title: "All Flow Ports must have a description"
+    appliesTo: { set: FlowPorts }
+    type: RequiredValue
+    target: ELEMENT_DESCRIPTION
+    params:
+      nonEmpty: true
+    message: "Flow Port '{elementName}' has no description"
+
+  # ── ASIL rules ─────────────────────────────────────────
+  - id: BLOCK_ASIL_REQUIRED_TAG
+    title: "All Blocks must have an ASIL tag"
+    appliesTo: { set: AllBlocks }
+    type: RequiredValue
+    target: SAFETY_ASIL_TAG
+    params:
+      nonEmpty: true
+      operator: in
+      values: [QM, A, B, C, D]
+    message: "Block '{elementName}' has no valid ASIL tag (got '{value}')"
+
+  - id: BLOCK_ASIL_REQUIRED_STEREO
+    title: "All Blocks must have an ASIL stereotype"
+    appliesTo: { set: AllBlocks }
+    type: RequiredStereotypeOneOf
+    params:
+      anyOf: [ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    message: "Block '{elementName}' has no ASIL stereotype (expected one of {expected})"
+
+  - id: PART_ASIL_REQUIRED_STEREO
+    title: "All Parts must have an ASIL stereotype"
+    appliesTo: { set: AllParts }
+    type: RequiredStereotypeOneOf
+    params:
+      anyOf: [ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    message: "Part '{elementName}' has no ASIL stereotype"
+
+  # ── Stereotype rules ───────────────────────────────────
+  - id: LOGICAL_MUST_HAVE_SUBSYSTEM
+    title: "Logical elements should have Subsystem stereotype"
+    appliesTo: { set: LogicalElements }
+    type: RequiredStereotype
+    params:
+      requiredStereotypes: [Subsystem]
+    message: "Logical element '{elementName}' is missing 'Subsystem' stereotype"
+
+  - id: BLOCK_MUST_BE_LOGICAL_OR_TECHNICAL
+    title: "All Blocks must be either Logical or Technical"
+    appliesTo: { set: AllBlocks }
+    type: RequiredStereotypeOneOf
+    params:
+      anyOf: [Logical-Element, Technical-Element, EE-Domain, ME-Domain, SW-Execution-Domain]
+    message: "Block '{elementName}' has no domain stereotype (expected Logical/Technical/EE/ME/SW)"
+
+  # ── Relation rules ─────────────────────────────────────
+  - id: BLOCK_MUST_HAVE_SATISFY_REFINE
+    title: "All Blocks must have at least one satisfy/refine link"
+    appliesTo: { set: AllBlocks }
+    type: RelationExists
+    params:
+      relationKind: dependency
+      direction: any
+      relationStereotypes: [satisfy, refine]
+      operator: gte
+      value: 1
+    message: "Block '{elementName}' has no satisfy/refine link"
+
+  - id: LOGICAL_MUST_HAVE_SATISFY_REFINE
+    title: "Logical elements must have satisfy/refine links"
+    appliesTo: { set: LogicalElements }
+    type: RelationExists
+    params:
+      relationKind: dependency
+      direction: any
+      relationStereotypes: [satisfy, refine]
+      operator: gte
+      value: 1
+    message: "Logical element '{elementName}' has no satisfy/refine link"
+
+  - id: BLOCK_MUST_BE_CONNECTED
+    title: "All Blocks must have at least one connection"
+    appliesTo: { set: AllBlocks }
+    type: RelationExists
+    params:
+      relationKind: any
+      direction: any
+      operator: gte
+      value: 1
+    message: "Block '{elementName}' is isolated (no connections)"
