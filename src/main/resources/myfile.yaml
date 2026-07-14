@@ -81,7 +81,8 @@ rules:
       relationKind: dependency
       direction: any
       relationStereotypes: [satisfy, refine]
-      targetSet: SystemRequirements
+      # targetSet: SystemRequirements
       operator: gte
       value: 1
     message: "{elementName} has no satisfy/refine link to System Requirements"
+   

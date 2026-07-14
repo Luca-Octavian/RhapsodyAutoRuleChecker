@@ -4,11 +4,11 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.config;
  * Built-in generic rule types that can be driven entirely from config.
  */
 public enum RuleType {
-    REQUIRED_VALUE,         // property/tag must exist and optionally match allowed values
-    REQUIRED_STEREOTYPE,    // element must have a specific stereotype
-    REQUIRED_STEREOTYPE_ONE_OF, // element must have exactly one from a set
-    NAMING_PATTERN,         // element name must match a regex
-    RELATION_EXISTS;        // element must have a specific relationship (future)
+    REQUIRED_VALUE,
+    REQUIRED_STEREOTYPE,
+    REQUIRED_STEREOTYPE_ONE_OF,
+    NAMING_PATTERN,
+    RELATION_EXISTS;
 
     public static RuleType fromString(String value) {
         if (value == null || value.trim().isEmpty()) {
@@ -31,3 +31,5 @@ public enum RuleType {
         }
     }
 }
+
+

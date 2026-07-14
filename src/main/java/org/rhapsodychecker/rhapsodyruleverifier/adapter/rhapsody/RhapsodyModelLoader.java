@@ -47,6 +47,15 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
 
         String metaClass = safeStr(elt.getMetaClass());
         String ownerPath = computeOwnerPath(elt);
+        String ownerGuid = null;
+        try {
+            IRPModelElement owner = elt.getOwner();
+            if (owner != null && !(owner instanceof IRPProject)) {
+                ownerGuid = safeStr(owner.getGUID());
+            }
+        } catch (Throwable t) {
+            // ignore
+        }
         Set<String> stereotypes = readStereotypeNames(elt);
         String description = safeGetDescription(elt);
 
@@ -73,6 +82,7 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
                 .name(name)
                 .metaClass(metaClass)
                 .kind(kind)
+                .ownerGuid(ownerGuid)
                 .ownerPath(ownerPath)
                 .stereotypes(stereotypes)
                 .typeGuid(typeGuid)
@@ -230,27 +240,38 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
 
     private ElementKind classify(String metaClass, Set<String> stereotypes) {
         String mc = metaClass == null ? "" : metaClass.trim();
+
         if ("Class".equals(mc)) {
             if (containsStereo(stereotypes, "Block")) return ElementKind.BLOCK;
             if (containsStereo(stereotypes, "InterfaceBlock")) return ElementKind.INTERFACE_BLOCK;
             return ElementKind.OTHER;
         }
+
         if ("Object".equals(mc)) {
-            // SysML parts are Objects (IRPInstance) owned by Blocks
-            // They will be classified as PART in the second pass based on ownership;
-            // in the first pass, mark as OTHER (will be skipped/overridden)
-            return ElementKind.OTHER;
+            return ElementKind.OTHER; // Parts handled in second pass
         }
+
         if ("Attribute".equals(mc)) {
             if (containsStereoAnyCase(stereotypes, "Part")) return ElementKind.PART;
             return ElementKind.OTHER;
         }
+
+        // Standard UML Port (technical/hardware ports in this model)
         if ("Port".equals(mc)) {
-            if (containsStereo(stereotypes, "FullPort")) return ElementKind.PORT_FULL;
-            if (containsStereo(stereotypes, "ProxyPort")) return ElementKind.PORT_PROXY;
-            if (containsStereo(stereotypes, "FlowPort")) return ElementKind.PORT_FLOW;
+            if (containsStereoAnyCase(stereotypes, "FullPort")) return ElementKind.PORT_FULL;
+            if (containsStereoAnyCase(stereotypes, "ProxyPort")) return ElementKind.PORT_PROXY;
+            if (containsStereoAnyCase(stereotypes, "FlowPort")) return ElementKind.PORT_FLOW;
             return ElementKind.PORT;
         }
+
+        // SysML Port (flow ports in this model)
+        if ("SysMLPort".equals(mc)) {
+            if (containsStereoAnyCase(stereotypes, "flowPort")) return ElementKind.PORT_FLOW;
+            if (containsStereoAnyCase(stereotypes, "FullPort")) return ElementKind.PORT_FULL;
+            if (containsStereoAnyCase(stereotypes, "ProxyPort")) return ElementKind.PORT_PROXY;
+            return ElementKind.PORT;
+        }
+
         if ("Package".equals(mc)) return ElementKind.PACKAGE;
         if ("Interface".equals(mc)) return ElementKind.INTERFACE;
         if ("Requirement".equals(mc)) return ElementKind.REQUIREMENT;
@@ -258,6 +279,7 @@ public RhapsodyModelSnapshot loadModel(IRPProject project) {
 
         return ElementKind.OTHER;
     }
+
 
     
     private List<ElementRecord> fetchOwnedParts(IRPClassifier classifier, ElementRecord ownerRec) {

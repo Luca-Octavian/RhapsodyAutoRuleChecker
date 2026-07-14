@@ -180,7 +180,75 @@ public class SkeletonSmokeTest {
                 System.out.println("  None found. Parts may not be included in getNestedElementsRecursive().");
                 System.out.println("  May need a second pass: iterate blocks and call getAttributes()/getParts().");
             }
+            
+         // Debug: inspect how Flow Ports appear in the model
+            System.out.println("\n--- Flow Port investigation ---");
+            int inspected = 0;
+            for (ElementRecord r : snapshot.records()) {
+                if (!r.kind().isPortKind()) continue;
+                IRPModelElement handle = snapshot.handleByGuid().get(r.guid());
+                if (handle == null) continue;
 
+                // Check interface name (reveals the actual Rhapsody type)
+                String ifaceName = "";
+                try { ifaceName = handle.getInterfaceName(); } catch (Throwable t) {}
+
+                // Check metaClass more carefully
+                String metaClass = "";
+                try { metaClass = handle.getMetaClass(); } catch (Throwable t) {}
+
+                // Check all user-defined properties/tags
+                String allTags = "";
+                try {
+                    java.lang.reflect.Method m = handle.getClass().getMethod("getUserDefinedMetaClass");
+                    Object udmc = m.invoke(handle);
+                    if (udmc != null) allTags = udmc.toString();
+                } catch (Throwable t) {
+                    allTags = "<no userDefinedMetaClass>";
+                }
+
+                // Print first 30 ports with full details
+                if (inspected < 30) {
+                    System.out.println("  name=" + r.name()
+                            + " | metaClass=" + metaClass
+                            + " | interfaceName=" + ifaceName
+                            + " | userDefinedMeta=" + allTags
+                            + " | stereo=" + r.stereotypes()
+                            + " | owner=" + r.ownerPath().orElse("<root>"));
+                }
+                inspected++;
+            }
+            System.out.println("[INFO] Total ports inspected: " + inspected);
+
+            // Also: search ALL elements for anything with "flow" in name/stereotype/metaclass
+            System.out.println("\n--- Elements with 'flow' in meta/stereotype/name ---");
+            int flowFound = 0;
+            for (ElementRecord r : snapshot.records()) {
+                boolean match = r.metaClass().toLowerCase().contains("flow")
+                        || r.name().toLowerCase().contains("flow");
+                if (!match) {
+                    for (String s : r.stereotypes()) {
+                        if (s.toLowerCase().contains("flow")) { match = true; break; }
+                    }
+                }
+                if (match) {
+                    System.out.println("  name=" + r.name()
+                            + " | meta=" + r.metaClass()
+                            + " | kind=" + r.kind()
+                            + " | stereo=" + r.stereotypes()
+                            + " | owner=" + r.ownerPath().orElse("<root>"));
+                    flowFound++;
+                    if (flowFound >= 30) {
+                        System.out.println("  ... (showing first 30)");
+                        break;
+                    }
+                }
+            }
+            if (flowFound == 0) {
+                System.out.println("  None found. Flow ports may use a different naming/classification in this model.");
+            }
+
+            
             // Debug: inspect attributes of first 5 blocks
             System.out.println("\n--- Block attributes debug ---");
             int blocksInspected = 0;

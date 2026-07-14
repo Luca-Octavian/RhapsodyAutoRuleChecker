@@ -1,0 +1,30 @@
+// File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/core/rule/EvaluationContext.java
+package org.rhapsodychecker.rhapsodyruleverifier.core.rule;
+
+import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
+import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
+import org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl.RelationExistsRule.RelationQuery;
+
+import java.util.Optional;
+
+/**
+ * Provides services and configuration to rules during evaluation.
+ */
+public interface EvaluationContext {
+
+    /**
+     * Resolver for aliases (description, tags, stereotypes, etc.).
+     */
+    AliasResolver aliases();
+
+    /**
+     * Count relations on an element that match the given query filters.
+     * Implemented by the adapter layer.
+     */
+    int countMatchingRelations(ElementRecord element, RelationQuery query);
+
+    /**
+     * Global option (e.g., lenient/strict mode).
+     */
+    Optional<Object> getOption(String key);
+}

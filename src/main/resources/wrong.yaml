@@ -27,7 +27,7 @@ aliases:
 
 elementSets:
   BadSet:
-    types: [Block]
+    types: Block
     stereotypes: [Port] 
 
 rules:
