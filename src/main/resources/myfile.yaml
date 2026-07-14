@@ -1,0 +1,87 @@
+# File: src/main/resources/test-rules.yaml
+schemaVersion: 1
+mode: lenient
+
+aliases:
+  ELEMENT_DESCRIPTION:
+    kind: description
+    title: "Description"
+    help: "The description field of the element"
+
+  SAFETY_ASIL_TAG:
+    kind: taggedValue
+    profileName: ISO26262
+    tagName: ASIL
+    type: enum
+    values: [QM, A, B, C, D]
+    title: "ASIL (tag)"
+
+  SAFETY_ASIL_LEVELS:
+    kind: stereotypeSet
+    profileName: ASIL_Stereotypes
+    stereotypeNames: [ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    title: "ASIL (stereotypes)"
+
+  ELEMENT_NAME:
+    kind: name
+    title: "Element name"
+
+elementSets:
+  ArchitectureElements:
+    title: "Blocks and InterfaceBlocks"
+    types: [Class]
+    stereotypes: [Block, InterfaceBlock]
+    excludePackages: ["^Libraries($|::)"]
+
+  AllPorts:
+    title: "All port elements"
+    types: [Port]
+
+  SystemRequirements:
+    title: "System Requirements"
+    types: [Requirement]
+    includePackages: ["^L2a_System"]
+
+rules:
+  - id: ARCH_DESCRIPTION_REQUIRED
+    title: "Description must be provided"
+    appliesTo: { set: ArchitectureElements }
+    type: RequiredValue
+    target: ELEMENT_DESCRIPTION
+    params:
+      nonEmpty: true
+      minLength: 10
+    message: "Description missing or too short for {elementName}"
+
+  - id: ARCH_ASIL_REQUIRED
+    title: "ASIL must be assigned"
+    appliesTo: { set: ArchitectureElements }
+    type: RequiredValue
+    target: SAFETY_ASIL_TAG
+    params:
+      operator: in
+      values: [QM, A, B, C, D]
+    message: "Missing or invalid ASIL for {elementName} (got '{value}')"
+
+  - id: ARCH_NAME_PATTERN
+    title: "Name must follow convention"
+    enabled: false
+    appliesTo: { set: ArchitectureElements }
+    type: NamingPattern
+    target: ELEMENT_NAME
+    params:
+      pattern: "^[A-Z][A-Za-z0-9_]*$"
+    message: "Name '{value}' does not follow naming convention"
+
+  - id: ARCH_LINK_TO_REQUIREMENTS
+    title: "Must have satisfy/refine to System Requirements"
+    appliesTo: { set: ArchitectureElements }
+    type: RelationExists
+    params:
+      relationKind: dependency
+      direction: any
+      relationStereotypes: [satisfy, refine]
+      targetSet: SystemRequirements
+      operator: gte
+      value: 1
+    message: "{elementName} has no satisfy/refine link to System Requirements"

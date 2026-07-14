@@ -1,0 +1,78 @@
+# File: src/main/resources/test-rules-bad.yaml
+# This file contains intentional errors to test config validation.
+# Each section has inline comments explaining what's wrong.
+
+schemaVersion: 1   
+
+mode: strict
+
+aliases:
+  BAD_TAG_ALIAS:
+    kind: taggedValue          
+    profileName: ISO26262  
+    tagName: ASIL
+
+  BAD_STEREOTYPE:
+    kind: stereotype
+    stereotypeName: ASIL_QM
+
+  BAD_STEREOTYPE_SET:
+    kind: stereotypeSet
+    profileName: SomeProfile
+    stereotypeNames: [A,B,LMAO,KEK]  
+
+  MISSING_KIND:
+    title: "No kind specified"
+    kind: description
+
+elementSets:
+  BadSet:
+    types: [Block]
+    stereotypes: [Port] 
+
+rules:
+  - title: "No ID rule"
+    id: GOOD_ID!
+    appliesTo: { set: ArchitectureElements }
+    type: RequiredValue
+    target: ELEMENT_DESCRIPTION
+
+  - id: BAD_TYPE_RULE
+    type: RequiredValue 
+    appliesTo: { set: ArchitectureElements }
+    target: ELEMENT_DESCRIPTION
+
+  - id: BAD_SET_REF
+    type: RequiredValue
+    appliesTo: { set: NonExistentSet }  
+    target: ELEMENT_DESCRIPTION
+
+  - id: BAD_ALIAS_REF
+    type: RequiredValue
+    appliesTo: { set: BadSet }
+    target: GHOST_ALIAS  # ERROR: alias not defined
+
+  - id: NO_SCOPE
+    type: RequiredValue
+    target: BAD_TAG_ALIAS
+    # missing appliesTo  # ERROR: must specify set or types/stereotypes
+
+  - id: NO_TARGET
+    type: RequiredValue
+    appliesTo: { set: BadSet }
+    # missing target  # ERROR: RequiredValue requires a target
+
+  - id: BAD_OPERATOR
+    type: RequiredValue
+    appliesTo: { set: BadSet }
+    target: BAD_TAG_ALIAS
+    params:
+      operator: greater  # ERROR: invalid; use gt, gte, lt, etc.
+
+  - id: BAD_RELATION
+    type: RelationExists
+    appliesTo: { set: BadSet }
+    params:
+      relationKind: assoc    # ERROR: use 'association'
+      direction: both        # ERROR: use 'incoming', 'outgoing', or 'any'
+      relationStereotypes: satisfy  # ERROR: must be a list
