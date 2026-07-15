@@ -9,6 +9,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.rule.ResultFormatter;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleEngine;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
+import org.rhapsodychecker.rhapsodyruleverifier.export.ExcelReportExporter;
 
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
@@ -82,6 +83,10 @@ public class FullPipelineSmokeTest {
                         entry.getKey(), total, c[0], c[1], c[2]);
             }
             System.out.println();
+            String excelOutputPath = "rule-failures-report.xlsx";
+            ExcelReportExporter.exportFailures(summary.allResults(), index, excelOutputPath);
+            System.out.println("[OK] Excel report exported to: " + Paths.get(excelOutputPath).toAbsolutePath());
+
 
         } catch (Throwable t) {
             System.err.println("[FAIL] " + t.getMessage());
