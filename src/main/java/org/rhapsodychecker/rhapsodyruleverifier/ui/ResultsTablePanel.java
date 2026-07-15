@@ -10,12 +10,12 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
-/**
- * Panel containing a JTable that displays rule evaluation failures.
- * Supports sorting and a quick filter text field.
- */
 public final class ResultsTablePanel extends JPanel {
 
     private static final String[] COLUMNS = {"Rule ID", "Element Name", "Location"};
@@ -25,6 +25,12 @@ public final class ResultsTablePanel extends JPanel {
     private final JTextField filterField;
     private final JLabel statusLabel;
     private TableRowSorter<DefaultTableModel> sorter;
+
+    // Store GUIDs parallel to table rows (model index -> GUID)
+    private final List<String> rowGuids = new ArrayList<>();
+
+    // Callback for double-click navigation
+    private Consumer<String> onElementDoubleClick;
 
     public ResultsTablePanel() {
         setLayout(new BorderLayout(5, 5));
@@ -52,10 +58,26 @@ public final class ResultsTablePanel extends JPanel {
         table.setFillsViewportHeight(true);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
 
-        // Set column widths
         table.getColumnModel().getColumn(0).setPreferredWidth(250);
         table.getColumnModel().getColumn(1).setPreferredWidth(200);
         table.getColumnModel().getColumn(2).setPreferredWidth(400);
+
+        // Double-click listener
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && onElementDoubleClick != null) {
+                    int viewRow = table.getSelectedRow();
+                    if (viewRow < 0) return;
+                    // Convert view index to model index (handles sorting/filtering)
+                    int modelRow = table.convertRowIndexToModel(viewRow);
+                    if (modelRow >= 0 && modelRow < rowGuids.size()) {
+                        String guid = rowGuids.get(modelRow);
+                        onElementDoubleClick.accept(guid);
+                    }
+                }
+            }
+        });
 
         JScrollPane scrollPane = new JScrollPane(table);
 
@@ -69,10 +91,16 @@ public final class ResultsTablePanel extends JPanel {
     }
 
     /**
-     * Populate the table with FAIL results.
+     * Set callback for when a user double-clicks a result row.
+     * The callback receives the element GUID.
      */
+    public void setOnElementDoubleClick(Consumer<String> callback) {
+        this.onElementDoubleClick = callback;
+    }
+
     public void loadResults(List<RuleResult> results, ElementIndex index) {
         tableModel.setRowCount(0);
+        rowGuids.clear();
         int failCount = 0;
 
         for (RuleResult r : results) {
@@ -87,18 +115,17 @@ public final class ResultsTablePanel extends JPanel {
                     : path.replace("::", " > ") + " > " + elementName;
 
             tableModel.addRow(new Object[]{r.ruleId(), elementName, readablePath});
+            rowGuids.add(r.elementGuid());
             failCount++;
         }
 
-        statusLabel.setText("  Failures: " + failCount);
+        statusLabel.setText("  Failures: " + failCount + "  (double-click to navigate in Rhapsody)");
         filterField.setText("");
     }
 
-    /**
-     * Clear the table.
-     */
     public void clear() {
         tableModel.setRowCount(0);
+        rowGuids.clear();
         statusLabel.setText("  No results");
         filterField.setText("");
     }

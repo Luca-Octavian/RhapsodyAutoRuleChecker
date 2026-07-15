@@ -7,19 +7,19 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.ConfigLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
-import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleEngine;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 import org.rhapsodychecker.rhapsodyruleverifier.export.ExcelReportExporter;
+import com.telelogic.rhapsody.core.IRPModelElement;
+
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class MainFrame extends JFrame {
 
@@ -112,7 +112,36 @@ public class MainFrame extends JFrame {
         loadModelBtn.addActionListener(e -> loadModel());
         runBtn.addActionListener(e -> runEvaluation());
         exportBtn.addActionListener(e -> exportExcel());
+
+        // Double-click on result row -> navigate in Rhapsody
+        resultsPanel.setOnElementDoubleClick(this::navigateToElement);
     }
+
+    private void navigateToElement(String guid) {
+        if (snapshot == null || guid == null || guid.isEmpty()) return;
+
+        com.telelogic.rhapsody.core.IRPModelElement elt = snapshot.handleByGuid().get(guid);
+        if (elt == null) {
+            statusBar.setText("  Element not found in model: " + guid);
+            return;
+        }
+
+        try {
+            // Try locateInBrowser first (opens and highlights in Rhapsody browser)
+            elt.locateInBrowser();
+            statusBar.setText("  Navigated to: " + elt.getName());
+        } catch (Throwable t1) {
+            try {
+                // Fallback: try highLightElement via the application
+                RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
+                conn.getApplication().highLightElement(elt);
+                statusBar.setText("  Highlighted: " + elt.getName());
+            } catch (Throwable t2) {
+                statusBar.setText("  Could not navigate to element (is Rhapsody open?)");
+            }
+        }
+    }
+
 
     private void browseFile(JTextField target, String description, String... extensions) {
         JFileChooser chooser = new JFileChooser();
@@ -125,18 +154,12 @@ public class MainFrame extends JFrame {
 
     private void loadModel() {
         String modelPath = modelPathField.getText().trim();
-        String configPath = configPathField.getText().trim();
 
         if (modelPath.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please select a model file.", "Missing Model", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        if (configPath.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please select a config file.", "Missing Config", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
 
-        // Run on background thread to not block UI
         loadModelBtn.setEnabled(false);
         statusBar.setText("  Loading model...");
         resultsPanel.clear();
@@ -148,24 +171,18 @@ public class MainFrame extends JFrame {
             @Override
             protected Void doInBackground() {
                 try {
-                    // Connect
                     RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
                     conn.connect(modelPath);
 
-                    // Soft scan for tree
                     RhapsodyPackageScanner scanner = new RhapsodyPackageScanner();
                     packageTree = scanner.scanPackages(conn.getProject());
 
-                    // Full model load
                     RhapsodyModelLoader loader = new RhapsodyModelLoader();
                     snapshot = loader.loadModel(conn.getProject());
 
-                    // Build index
                     index = ElementIndex.build(snapshot.records());
 
-                    // Load config
-                    config = ConfigLoader.load(Paths.get(configPath));
-
+                    // Config NOT loaded here anymore
                 } catch (Throwable t) {
                     error = t.getMessage();
                 }
@@ -181,8 +198,7 @@ public class MainFrame extends JFrame {
                             "Error: " + error, "Load Failed", JOptionPane.ERROR_MESSAGE);
                 } else {
                     treePanel.loadTree(packageTree);
-                    statusBar.setText("  Model loaded: " + snapshot.records().size() + " elements | "
-                            + config.enabledRules().size() + " rules enabled");
+                    statusBar.setText("  Model loaded: " + snapshot.records().size() + " elements");
                 }
                 updateButtonStates();
             }
@@ -191,14 +207,19 @@ public class MainFrame extends JFrame {
     }
 
     private void runEvaluation() {
-        if (snapshot == null || index == null || config == null) {
+        if (snapshot == null || index == null) {
             JOptionPane.showMessageDialog(this, "Load a model first.", "No Model", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
+        String configPath = configPathField.getText().trim();
+        if (configPath.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please select a config file.", "Missing Config", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         String selectedPath = treePanel.getSelectedPath();
-        statusBar.setText("  Running evaluation" +
-                (selectedPath.isEmpty() ? " (full model)..." : " from: " + selectedPath + "..."));
+        statusBar.setText("  Loading config & running evaluation...");
         runBtn.setEnabled(false);
 
         SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
@@ -207,32 +228,24 @@ public class MainFrame extends JFrame {
             @Override
             protected Void doInBackground() {
                 try {
+                    config = ConfigLoader.load(Paths.get(configPath));
+
                     RhapsodyAliasResolver aliasResolver = new RhapsodyAliasResolver(config, snapshot);
                     ElementSelector selector = new ElementSelector(index, config);
                     RhapsodyEvaluationContext context = new RhapsodyEvaluationContext(
                             aliasResolver, snapshot, config, index, selector);
-                    RuleEngine engine = new RuleEngine(config, selector, context);
+
+                    // Scope filtering is now inside the engine
+                    RuleEngine engine = new RuleEngine(config, selector, context, selectedPath);
 
                     RuleEngine.EvaluationSummary summary = engine.evaluateWithSummary();
-
-                    // Filter by selected package path
-                    if (!selectedPath.isEmpty()) {
-                        lastResults = summary.allResults().stream()
-                                .filter(r -> {
-                                    return index.repository().get(r.elementGuid())
-                                            .flatMap(ElementRecord::ownerPath)
-                                            .map(p -> p.startsWith(selectedPath) || p.equals(selectedPath))
-                                            .orElse(false);
-                                })
-                                .collect(Collectors.toList());
-                    } else {
-                        lastResults = summary.allResults();
-                    }
+                    lastResults = summary.allResults();
                 } catch (Throwable t) {
                     error = t.getMessage();
                 }
                 return null;
             }
+
 
             @Override
             protected void done() {
@@ -253,6 +266,7 @@ public class MainFrame extends JFrame {
         };
         worker.execute();
     }
+
 
     private void exportExcel() {
         if (lastResults == null || lastResults.isEmpty()) {
@@ -283,10 +297,11 @@ public class MainFrame extends JFrame {
     }
 
     private void updateButtonStates() {
-        boolean modelLoaded = snapshot != null && index != null && config != null;
+        boolean modelLoaded = snapshot != null && index != null;
         runBtn.setEnabled(modelLoaded);
         exportBtn.setEnabled(lastResults != null && !lastResults.isEmpty());
     }
+
 
     // ── Entry point ──
     public static void main(String[] args) {

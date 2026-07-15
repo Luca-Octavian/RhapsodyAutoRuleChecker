@@ -1,4 +1,4 @@
-// File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/core/rule/RuleEngine.java
+
 package org.rhapsodychecker.rhapsodyruleverifier.core.rule;
 
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
@@ -7,28 +7,26 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
-/**
- * Orchestrates rule evaluation:
- * - Gets candidates from ElementSelector
- * - Applies each Rule to its candidates
- * - Collects all RuleResults
- */
 public final class RuleEngine {
 
     private final RuleCheckerConfig config;
     private final ElementSelector selector;
     private final EvaluationContext context;
+    private final String scopePath; // empty = full model
 
     public RuleEngine(RuleCheckerConfig config, ElementSelector selector, EvaluationContext context) {
+        this(config, selector, context, "");
+    }
+
+    public RuleEngine(RuleCheckerConfig config, ElementSelector selector, EvaluationContext context, String scopePath) {
         this.config = Objects.requireNonNull(config, "config");
         this.selector = Objects.requireNonNull(selector, "selector");
         this.context = Objects.requireNonNull(context, "context");
+        this.scopePath = scopePath != null ? scopePath : "";
     }
 
-    /**
-     * Run all enabled rules and collect results.
-     */
     public List<RuleResult> evaluateAll() {
         List<RuleResult> allResults = new ArrayList<>();
         List<RuleSpec> enabledSpecs = config.enabledRules();
@@ -37,6 +35,15 @@ public final class RuleEngine {
             try {
                 Rule rule = RuleFactory.createRule(spec);
                 List<ElementRecord> candidates = selector.selectCandidates(spec);
+
+                // Filter candidates by scope BEFORE evaluation
+                if (!scopePath.isEmpty()) {
+                    candidates = candidates.stream()
+                            .filter(c -> c.ownerPath()
+                                    .map(p -> p.equals(scopePath) || p.startsWith(scopePath + "::"))
+                                    .orElse(false))
+                            .collect(Collectors.toList());
+                }
 
                 for (ElementRecord candidate : candidates) {
                     try {
@@ -50,7 +57,6 @@ public final class RuleEngine {
                     }
                 }
             } catch (Throwable t) {
-                // Rule-level error (e.g., bad config); record once
                 allResults.add(DefaultRuleResult.skipped(spec.id(), "N/A",
                         "Rule could not be created: " + t.getMessage()));
             }
@@ -59,17 +65,11 @@ public final class RuleEngine {
         return Collections.unmodifiableList(allResults);
     }
 
-    /**
-     * Run all enabled rules and return a summary.
-     */
     public EvaluationSummary evaluateWithSummary() {
         List<RuleResult> results = evaluateAll();
         return new EvaluationSummary(results);
     }
 
-    /**
-     * Simple summary of evaluation results.
-     */
     public static final class EvaluationSummary {
         private final List<RuleResult> allResults;
         private final List<RuleResult> passed;
@@ -97,7 +97,6 @@ public final class RuleEngine {
         public List<RuleResult> passed() { return passed; }
         public List<RuleResult> failed() { return failed; }
         public List<RuleResult> skipped() { return skipped; }
-
         public int totalCount() { return allResults.size(); }
         public int passCount() { return passed.size(); }
         public int failCount() { return failed.size(); }
