@@ -8,7 +8,8 @@ public enum RuleType {
     REQUIRED_STEREOTYPE,
     REQUIRED_STEREOTYPE_ONE_OF,
     NAMING_PATTERN,
-    RELATION_EXISTS;
+    RELATION_EXISTS,
+    OWNER_STEREOTYPE_CONSTRAINT;
 
     public static RuleType fromString(String value) {
         if (value == null || value.trim().isEmpty()) {
@@ -25,9 +26,11 @@ public enum RuleType {
             case "naming_pattern":      return NAMING_PATTERN;
             case "relationexists":
             case "relation_exists":     return RELATION_EXISTS;
+            case "ownerstereotypeconstraint":
+            case "owner_stereotype_constraint": return OWNER_STEREOTYPE_CONSTRAINT;
             default:
                 throw new IllegalArgumentException("Unknown RuleType: '" + value + "'. "
-                        + "Allowed: RequiredValue, RequiredStereotype, RequiredStereotypeOneOf, NamingPattern, RelationExists");
+                        + "Allowed: RequiredValue, RequiredStereotype, RequiredStereotypeOneOf, NamingPattern, RelationExists, OwnerStereotypeConstraint");
         }
     }
 }

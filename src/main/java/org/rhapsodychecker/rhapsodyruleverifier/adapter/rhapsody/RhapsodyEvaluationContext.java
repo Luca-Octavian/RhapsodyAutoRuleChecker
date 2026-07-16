@@ -104,6 +104,13 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         }
         return Optional.empty();
     }
+    
+    @Override
+    public Optional<ElementRecord> findElementByGuid(String guid) {
+        if (guid == null || guid.isEmpty()) return Optional.empty();
+        return index.repository().get(guid);
+    }
+    
 
     // ---- Relation collection from Rhapsody ----
 

@@ -23,6 +23,9 @@ public final class RuleFactory {
             case REQUIRED_VALUE:
                 rule = new RequiredValueRule();
                 break;
+            case OWNER_STEREOTYPE_CONSTRAINT:
+                rule = new OwnerStereotypeConstraintRule();
+                break;
             case REQUIRED_STEREOTYPE:
                 rule = new RequiredStereotypeRule();
                 break;

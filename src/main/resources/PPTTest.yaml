@@ -1,0 +1,253 @@
+schemaVersion: 1
+mode: lenient
+
+aliases:
+  PORT_DATA_TYPE:
+    kind: portType
+    title: "Port data type / classifier"
+
+  PORT_DIRECTION:
+    kind: portDirection
+    title: "Port direction (in/out/inout)"
+
+  ELEMENT_DESCRIPTION:
+    kind: description
+    title: "Element description"
+
+  ELEMENT_NAME:
+    kind: name
+    title: "Element name"
+
+  SAFETY_ASIL_STEREO:
+    kind: stereotypeSet
+    profileName: ASIL_Stereotypes
+    stereotypeNames: [ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    title: "ASIL level (stereotypes)"
+
+  SAFETY_ASIL_TAG:
+    kind: taggedValue
+    profileName: ISO26262
+    tagName: ASIL
+    type: enum
+    values: [QM, A, B, C, D]
+    title: "ASIL level (tag)"
+
+  PORT_MULTIPLICITY:
+    kind: portMultiplicity
+    title: "Port multiplicity"
+
+elementSets:
+  # ── Architecture elements ──
+  ArchitectureElements:
+    title: "All architecture elements (Blocks, InterfaceBlocks, Parts, Ports)"
+    kinds: [BLOCK, INTERFACE_BLOCK, PART, PORT, PORT_FULL, PORT_PROXY, PORT_FLOW]
+
+  AllBlocks:
+    title: "All Blocks"
+    kinds: [BLOCK, INTERFACE_BLOCK]
+
+  AllParts:
+    title: "All Parts"
+    kinds: [PART]
+
+  AllPorts:
+    title: "All Ports (any kind)"
+    kinds: [PORT, PORT_FULL, PORT_PROXY, PORT_FLOW]
+
+  BlocksPartsAndPorts:
+    title: "Blocks, Parts, and Ports combined"
+    kinds: [BLOCK, INTERFACE_BLOCK, PART, PORT, PORT_FULL, PORT_PROXY, PORT_FLOW]
+
+  # ── Logical / Technical ──
+  LogicalElements:
+    title: "Elements with Logical-Element stereotype"
+    stereotypes: [Logical-Element]
+
+  TechnicalElements:
+    title: "Elements with Technical-Element stereotype"
+    stereotypes: [Technical-Element]
+
+  LogicalPorts:
+    title: "Flow Ports owned by Logical Elements"
+    kinds: [PORT_FLOW]
+
+  TechnicalPorts:
+    title: "Standard Ports owned by Technical Elements"
+    kinds: [PORT]
+
+  # ── Requirements ──
+  SystemRequirements:
+    title: "System Requirements (SyRS / SyFD)"
+    types: [Requirement]
+
+rules:
+  # ══════════════════════════════════════════════
+  # Rule 1: All arch elements must have ASIL
+  # ══════════════════════════════════════════════
+  - id: ARCH_ASIL_REQUIRED_STEREO
+    title: "All architecture elements must have an ASIL stereotype"
+    appliesTo: { set: ArchitectureElements }
+    type: RequiredStereotypeOneOf
+    params:
+      anyOf: [ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    message: "'{elementName}' has no ASIL stereotype assigned"
+
+  - id: ARCH_ASIL_REQUIRED_TAG
+    title: "All architecture elements must have an ASIL tag"
+    appliesTo: { set: ArchitectureElements }
+    type: RequiredValue
+    target: SAFETY_ASIL_TAG
+    params:
+      nonEmpty: true
+      operator: in
+      values: [QM, A, B, C, D]
+    message: "'{elementName}' has no valid ASIL tag (got '{value}')"
+
+  # ══════════════════════════════════════════════
+  # Rule 2: All arch elements must have description
+  # ══════════════════════════════════════════════
+  - id: ARCH_DESCRIPTION_REQUIRED
+    title: "All architecture elements must have a description"
+    appliesTo: { set: ArchitectureElements }
+    type: RequiredValue
+    target: ELEMENT_DESCRIPTION
+    params:
+      nonEmpty: true
+    message: "'{elementName}' has no description"
+
+  # ══════════════════════════════════════════════
+  # Rule 3: All blocks, parts, ports must have at
+  #         least one stereotype
+  # ══════════════════════════════════════════════
+  - id: BLOCK_MUST_HAVE_STEREOTYPE
+    title: "All Blocks must have at least one stereotype"
+    appliesTo: { set: AllBlocks }
+    type: RequiredStereotypeOneOf
+    params:
+      anyOf: [Block, InterfaceBlock, Logical-Element, Technical-Element,
+              EE-Domain, ME-Domain, SW-Execution-Domain, Subsystem, Component]
+    message: "Block '{elementName}' has no domain/type stereotype"
+
+  - id: PART_MUST_HAVE_STEREOTYPE
+    title: "All Parts must have at least one stereotype"
+    appliesTo: { set: AllParts }
+    type: RequiredStereotypeOneOf
+    params:
+      anyOf: [Logical-Element, Technical-Element, Subsystem,
+              EE-Domain, ME-Domain, SW-Execution-Domain]
+    message: "Part '{elementName}' has no domain/type stereotype"
+
+  - id: PORT_MUST_HAVE_STEREOTYPE
+    title: "All Ports must have at least one stereotype"
+    appliesTo: { set: AllPorts }
+    type: RequiredStereotypeOneOf
+    params:
+      anyOf: [flowPort, FullPort, ProxyPort, FlowPort, ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    message: "Port '{elementName}' has no port-type or ASIL stereotype"
+
+  - id: LOGICAL_PORT_MUST_HAVE_TYPE
+    title: "Logical ports must have a data type assigned"
+    appliesTo: { set: LogicalPorts }
+    type: RequiredValue
+    target: PORT_DATA_TYPE
+    params:
+      nonEmpty: true
+    message: "Logical port '{elementName}' has no data type assigned"
+
+  - id: LOGICAL_PORT_MUST_HAVE_DIRECTION
+    title: "Logical ports must have a direction assigned"
+    appliesTo: { set: LogicalPorts }
+    type: RequiredValue
+    target: PORT_DIRECTION
+    params:
+      nonEmpty: true
+      operator: in
+      values: [IN, OUT, INOUT]
+    message: "Logical port '{elementName}' has no direction assigned (got '{value}')"
+
+  - id: TECHNICAL_PORT_NO_MULTIPLICITY
+    title: "Technical ports must not use multiplicity (must be 1..1)"
+    appliesTo: { set: TechnicalPorts }
+    type: RequiredValue
+    target: PORT_MULTIPLICITY
+    params:
+      operator: in
+      values: ["1", "1..1"]
+    message: "Technical port '{elementName}' must not use multiplicity (got '{value}')"
+
+  # ══════════════════════════════════════════════
+  # Rule 6: All arch elements must be linked to
+  #         any other arch element
+  # ══════════════════════════════════════════════
+  - id: ARCH_MUST_BE_CONNECTED
+    title: "All architecture elements must be linked to at least one other element"
+    appliesTo: { set: ArchitectureElements }
+    type: RelationExists
+    params:
+      relationKind: any
+      direction: any
+      operator: gte
+      value: 1
+    message: "'{elementName}' is isolated — no connections to other elements"
+
+  # ══════════════════════════════════════════════
+  # Rule 7: All blocks, parts, ports must have
+  #         satisfy/refine to SyRS/SyFD
+  # ══════════════════════════════════════════════
+  - id: BLOCK_SATISFY_REFINE_REQUIRED
+    title: "All Blocks must have at least one satisfy/refine link"
+    appliesTo: { set: AllBlocks }
+    type: RelationExists
+    params:
+      relationKind: dependency
+      direction: any
+      relationStereotypes: [satisfy, refine]
+      operator: gte
+      value: 1
+    message: "Block '{elementName}' has no <<satisfy>>/<<refine>> link to requirements"
+
+  - id: PART_SATISFY_REFINE_REQUIRED
+    title: "All Parts must have at least one satisfy/refine link"
+    appliesTo: { set: AllParts }
+    type: RelationExists
+    params:
+      relationKind: dependency
+      direction: any
+      relationStereotypes: [satisfy, refine]
+      operator: gte
+      value: 1
+    message: "Part '{elementName}' has no <<satisfy>>/<<refine>> link to requirements"
+
+  - id: PORT_SATISFY_REFINE_REQUIRED
+    title: "All Ports must have at least one satisfy/refine link"
+    appliesTo: { set: AllPorts }
+    type: RelationExists
+    params:
+      relationKind: dependency
+      direction: any
+      relationStereotypes: [satisfy, refine]
+      operator: gte
+      value: 1
+    message: "Port '{elementName}' has no <<satisfy>>/<<refine>> link to requirements"
+
+  # ══════════════════════════════════════════════
+  # Rule 8: Logical elements → only FlowPorts
+  # Rule 9: Technical elements → only standard Ports
+  # ══════════════════════════════════════════════
+  - id: LOGICAL_BLOCK_PORTS_MUST_BE_FLOW
+    title: "Ports in Logical-Element blocks must be FlowPorts"
+    appliesTo: { set: AllPorts }
+    type: OwnerStereotypeConstraint
+    params:
+      ownerStereotype: Logical-Element
+      allowedKinds: [PORT_FLOW]
+    message: "Port '{elementName}' is owned by a Logical-Element block but is kind {actualKind}, expected {allowedKinds}"
+
+  - id: TECHNICAL_BLOCK_PORTS_MUST_BE_STANDARD
+    title: "Ports in Technical-Element blocks must be standard Ports"
+    appliesTo: { set: AllPorts }
+    type: OwnerStereotypeConstraint
+    params:
+      ownerStereotype: Technical-Element
+      allowedKinds: [PORT]
+    message: "Port '{elementName}' is owned by a Technical-Element block but is kind {actualKind}, expected {allowedKinds}"

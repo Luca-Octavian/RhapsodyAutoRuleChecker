@@ -48,7 +48,7 @@ public class MainFrame extends JFrame {
     private List<RuleResult> lastResults;
 
     public MainFrame() {
-        super("Rhapsody Rule Checker");
+        super("Rhapsody Model Checker");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 700);
         setLocationRelativeTo(null);

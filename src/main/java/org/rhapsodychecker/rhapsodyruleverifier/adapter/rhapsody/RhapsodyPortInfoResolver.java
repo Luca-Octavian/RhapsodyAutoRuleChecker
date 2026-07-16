@@ -25,16 +25,12 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
     @Override
     public PortInfo resolve(ElementRecord element) {
         IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
-        if (!(handle instanceof IRPPort)) {
-            return new PortInfo(PortDirection.UNKNOWN, Multiplicity.unknown(), "not-a-port", "n/a");
+        if (handle == null) {
+            return new PortInfo(PortDirection.UNKNOWN, Multiplicity.unknown(), "not-found", "n/a");
         }
-        IRPPort port = (IRPPort) handle;
 
-        // Direction
-        DirectionResult dir = resolveDirection(element, port);
-
-        // Multiplicity
-        MultiplicityResult mult = resolveMultiplicity(element, port);
+        DirectionResult dir = resolveDirection(element, handle);
+        MultiplicityResult mult = resolveMultiplicity(element, handle);
 
         return new PortInfo(dir.direction, mult.multiplicity, dir.source, mult.source);
     }
@@ -47,25 +43,41 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
         DirectionResult(PortDirection d, String s) { this.direction = d; this.source = s; }
     }
 
-    private DirectionResult resolveDirection(ElementRecord element, IRPPort port) {
-        // FlowPort: try tag-based direction first (common in SysML profiles)
-        if (hasStereoIgnoreCase(element, "FlowPort") || hasStereoIgnoreCase(element, "Flow Port")) {
-            Optional<String> tagDir = tryReadTagValue(port, "direction")
-                    .map(Optional::ofNullable).orElse(tryReadTagValue(port, "flowDirection"));
+    private DirectionResult resolveDirection(ElementRecord element, IRPModelElement handle) {
+        // Method 1: getPortDirection() — works for SysMLPort / FlowPort
+        Optional<String> portDir = tryCallString(handle, "getPortDirection");
+        if (portDir.isPresent()) {
+            PortDirection d = mapDirection(portDir.get());
+            return new DirectionResult(d, "getPortDirection:" + portDir.get());
+        }
+
+        // Method 2: getDirection()
+        Optional<String> dir = tryCallString(handle, "getDirection");
+        if (dir.isPresent()) {
+            PortDirection d = mapDirection(dir.get());
+            return new DirectionResult(d, "getDirection:" + dir.get());
+        }
+
+        // Method 3: tag-based direction for FlowPorts
+        if (hasStereoIgnoreCase(element, "FlowPort") || hasStereoIgnoreCase(element, "flowPort")) {
+            Optional<String> tagDir = tryReadTagValue(handle, "direction");
+            if (!tagDir.isPresent()) tagDir = tryReadTagValue(handle, "flowDirection");
             if (tagDir.isPresent()) {
                 PortDirection d = mapDirection(tagDir.get());
-                return new DirectionResult(d, "flowPortTag:" + tagDir.get());
+                return new DirectionResult(d, "tag:" + tagDir.get());
             }
         }
 
-        // Generic ports: infer from provided/required interfaces
-        int provided = countCollection(safeInvokeCollection(port, "getProvidedInterfaces"));
-        int required = countCollection(safeInvokeCollection(port, "getRequiredInterfaces"));
-        if (provided > 0 && required > 0) return new DirectionResult(PortDirection.INOUT, "provided/required");
-        if (provided > 0) return new DirectionResult(PortDirection.OUT, "provided");
-        if (required > 0) return new DirectionResult(PortDirection.IN, "required");
+        // Method 4: infer from provided/required interfaces
+        if (handle instanceof IRPPort) {
+            int provided = countCollection(safeInvokeCollection(handle, "getProvidedInterfaces"));
+            int required = countCollection(safeInvokeCollection(handle, "getRequiredInterfaces"));
+            if (provided > 0 && required > 0) return new DirectionResult(PortDirection.INOUT, "provided/required");
+            if (provided > 0) return new DirectionResult(PortDirection.OUT, "provided");
+            if (required > 0) return new DirectionResult(PortDirection.IN, "required");
+        }
 
-        return new DirectionResult(PortDirection.NONE, "no-provided-required");
+        return new DirectionResult(PortDirection.NONE, "no-direction-found");
     }
 
     private boolean hasStereoIgnoreCase(ElementRecord e, String s) {
@@ -81,7 +93,7 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
         switch (s) {
             case "in": case "input": return PortDirection.IN;
             case "out": case "output": return PortDirection.OUT;
-            case "inout": case "in/out": return PortDirection.INOUT;
+            case "inout": case "in/out": case "in-out": return PortDirection.INOUT;
             case "none": return PortDirection.NONE;
             default: return PortDirection.UNKNOWN;
         }
@@ -95,36 +107,27 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
         MultiplicityResult(Multiplicity m, String s) { this.multiplicity = m; this.source = s; }
     }
 
-    private MultiplicityResult resolveMultiplicity(ElementRecord element, IRPPort port) {
-        // Try a single string like "1..*" via getMultiplicity()/getCardinality()
-        Optional<String> multStr = tryCallString(port, "getMultiplicity");
-        if (!multStr.isPresent()) multStr = tryCallString(port, "getCardinality");
+    private MultiplicityResult resolveMultiplicity(ElementRecord element, IRPModelElement handle) {
+        Optional<String> multStr = tryCallString(handle, "getMultiplicity");
+        if (!multStr.isPresent()) multStr = tryCallString(handle, "getCardinality");
         if (multStr.isPresent()) {
             Multiplicity m = parseRange(multStr.get());
             return new MultiplicityResult(m, "method:getMultiplicity");
         }
 
-        // Try separate lower/upper methods
-        Optional<Integer> lower = tryCallInt(port, "getMultiplicityLower");
-        Optional<Integer> upper = tryCallInt(port, "getMultiplicityUpper");
-        if (!lower.isPresent()) lower = tryCallInt(port, "getLowerMultiplicity");
-        if (!upper.isPresent()) upper = tryCallInt(port, "getUpperMultiplicity");
+        Optional<Integer> lower = tryCallInt(handle, "getMultiplicityLower");
+        Optional<Integer> upper = tryCallInt(handle, "getMultiplicityUpper");
+        if (!lower.isPresent()) lower = tryCallInt(handle, "getLowerMultiplicity");
+        if (!upper.isPresent()) upper = tryCallInt(handle, "getUpperMultiplicity");
         if (lower.isPresent() || upper.isPresent()) {
             Multiplicity m = Multiplicity.of(lower.orElse(null), upper.orElse(null));
             return new MultiplicityResult(m, "method:getMultiplicityLower/Upper");
         }
 
-        // Try tag-based multiplicity (profile-specific): "multiplicity", "lower", "upper"
-        Optional<String> tMult = tryReadTagValue(port, "multiplicity");
+        Optional<String> tMult = tryReadTagValue(handle, "multiplicity");
         if (tMult.isPresent()) {
             Multiplicity m = parseRange(tMult.get());
             return new MultiplicityResult(m, "tag:multiplicity");
-        }
-        Optional<Integer> tLower = tryReadTagValue(port, "lower").flatMap(RhapsodyPortInfoResolver::parseInt);
-        Optional<Integer> tUpper = tryReadTagValue(port, "upper").flatMap(RhapsodyPortInfoResolver::parseInt);
-        if (tLower.isPresent() || tUpper.isPresent()) {
-            Multiplicity m = Multiplicity.of(tLower.orElse(null), tUpper.orElse(null));
-            return new MultiplicityResult(m, "tag:lower/upper");
         }
 
         return new MultiplicityResult(Multiplicity.unknown(), "unknown");
@@ -139,7 +142,6 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
             Integer up = parseUpper(parts.length > 1 ? parts[1] : null);
             return Multiplicity.of(lo, up);
         }
-        // Single value like "1" or "*"
         Integer lo = parseInt(v).orElse(null);
         Integer up = "*".equals(v) ? null : lo;
         return Multiplicity.of(lo, up);
@@ -151,6 +153,7 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
         if (t.isEmpty() || "*".equals(t)) return Optional.empty();
         try { return Optional.of(Integer.parseInt(t)); } catch (NumberFormatException e) { return Optional.empty(); }
     }
+
     private static Integer parseUpper(String s) {
         if (s == null) return null;
         String t = s.trim();
@@ -158,7 +161,7 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
         try { return Integer.parseInt(t); } catch (NumberFormatException e) { return null; }
     }
 
-    // ---- Low-level helpers (defensive/reflection) ----
+    // ---- Low-level helpers ----
 
     private static Optional<String> tryCallString(Object target, String method) {
         try {
@@ -168,7 +171,11 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
                 String s = ((String) val).trim();
                 return s.isEmpty() ? Optional.empty() : Optional.of(s);
             }
-        } catch (Throwable ignore) { }
+            if (val != null) {
+                String s = val.toString().trim();
+                return s.isEmpty() ? Optional.empty() : Optional.of(s);
+            }
+        } catch (Throwable ignore) {}
         return Optional.empty();
     }
 
@@ -178,12 +185,11 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
             Object val = m.invoke(target);
             if (val instanceof Integer) return Optional.of((Integer) val);
             if (val instanceof String) return parseInt((String) val);
-        } catch (Throwable ignore) { }
+        } catch (Throwable ignore) {}
         return Optional.empty();
     }
 
     private static Optional<String> tryReadTagValue(IRPModelElement elt, String tagName) {
-        // Best-effort: iterate tags and match by name (case-insensitive)
         try {
             IRPCollection tags = (IRPCollection) elt.getClass().getMethod("getTags").invoke(elt);
             if (tags == null) return Optional.empty();
@@ -199,7 +205,7 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
                     }
                 }
             }
-        } catch (Throwable ignore) { }
+        } catch (Throwable ignore) {}
         return Optional.empty();
     }
 
@@ -212,7 +218,6 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
     }
 
     private static String tryGetValue(Object tagObj) {
-        // IRPTag often has getValue()
         try {
             Method m = tagObj.getClass().getMethod("getValue");
             Object v = m.invoke(tagObj);

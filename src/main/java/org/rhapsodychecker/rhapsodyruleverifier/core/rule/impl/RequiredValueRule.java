@@ -20,6 +20,7 @@ public final class RequiredValueRule implements Rule {
     private String title;
     private String message;
     private String targetAlias;
+    private boolean passIfAbsent;
 
     // Params
     private boolean nonEmpty;
@@ -52,6 +53,7 @@ public final class RequiredValueRule implements Rule {
 
         this.nonEmpty = optBool(p, "nonEmpty", false);
         this.minLength = optInt(p, "minLength", 0);
+        this.passIfAbsent = optBool(p, "passIfAbsent", false);
         this.maxLength = optInt(p, "maxLength", Integer.MAX_VALUE);
 
         String opStr = optString(p, "operator");
@@ -80,13 +82,15 @@ public final class RequiredValueRule implements Rule {
 
             // Check presence
             if (!resolved.isPresent()) {
+                if (passIfAbsent) {
+                    return DefaultRuleResult.pass(id, element.guid());
+                }
                 if (nonEmpty || operator != null) {
                     return DefaultRuleResult.fail(id, element.guid(),
                             formatMessage(element, "<absent>", "value is required but absent"));
                 }
                 return DefaultRuleResult.skipped(id, element.guid(), "Value not present, not required");
             }
-
             String value = resolved.asString().orElse("");
 
             // NonEmpty check

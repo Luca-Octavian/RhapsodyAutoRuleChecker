@@ -27,4 +27,5 @@ public interface EvaluationContext {
      * Global option (e.g., lenient/strict mode).
      */
     Optional<Object> getOption(String key);
+    Optional<ElementRecord> findElementByGuid(String guid);
 }

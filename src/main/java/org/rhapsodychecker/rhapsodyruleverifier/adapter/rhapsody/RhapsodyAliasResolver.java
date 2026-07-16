@@ -7,28 +7,26 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.DefaultResolvedValue;
+import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.PortInfo;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.ResolvedValue;
 
 import java.lang.reflect.Method;
 import java.util.*;
 
-/**
- * Rhapsody-specific implementation of AliasResolver.
- * Reads values from the live model based on alias definitions from config.
- */
 public final class RhapsodyAliasResolver implements AliasResolver {
 
     private final RuleCheckerConfig config;
     private final RhapsodyModelSnapshot snapshot;
+    private final RhapsodyPortInfoResolver portInfoResolver;
 
     public RhapsodyAliasResolver(RuleCheckerConfig config, RhapsodyModelSnapshot snapshot) {
         this.config = Objects.requireNonNull(config, "config");
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
+        this.portInfoResolver = new RhapsodyPortInfoResolver(snapshot);
     }
 
     @Override
     public ResolvedValue resolveValue(ElementRecord element, String aliasId) {
-        // Handle built-in shortcuts (description, name) without alias definition
         if ("description".equalsIgnoreCase(aliasId)) {
             return resolveDescription(element);
         }
@@ -46,19 +44,20 @@ public final class RhapsodyAliasResolver implements AliasResolver {
         switch (alias.kind()) {
             case DESCRIPTION:
                 return resolveDescription(element);
-
             case NAME:
                 return DefaultResolvedValue.of(element.name(), "name");
-
             case TAGGED_VALUE:
                 return resolveTaggedValue(element, alias);
-
             case STEREOTYPE:
                 return resolveStereotypePresence(element, alias);
-
             case STEREOTYPE_SET:
                 return resolveStereotypeSet(element, alias);
-
+            case PORT_TYPE:
+                return resolvePortType(element);
+            case PORT_DIRECTION:
+                return resolvePortDirection(element);
+            case PORT_MULTIPLICITY:
+                return resolvePortMultiplicity(element);
             default:
                 return DefaultResolvedValue.absent();
         }
@@ -79,15 +78,12 @@ public final class RhapsodyAliasResolver implements AliasResolver {
         String tagName = alias.tagName().orElse(null);
         if (tagName == null) return DefaultResolvedValue.absent();
 
-        // Try reading the tag value
         String value = tryReadTag(handle, tagName);
         if (value != null && !value.trim().isEmpty()) {
             return DefaultResolvedValue.of(value.trim(), "taggedValue:" + tagName);
         }
 
-        // Fallback: check if ASIL-like tag is modeled as stereotypes
         if (!alias.values().isEmpty()) {
-            // Check if any stereotype matches an allowed value
             for (String allowed : alias.values()) {
                 if (element.hasStereotypeIgnoreCase(allowed)
                         || element.hasStereotypeIgnoreCase(tagName + "_" + allowed)) {
@@ -104,10 +100,7 @@ public final class RhapsodyAliasResolver implements AliasResolver {
         if (stereoName == null) return DefaultResolvedValue.absent();
 
         boolean has = element.hasStereotypeIgnoreCase(stereoName);
-        if (has) {
-            return DefaultResolvedValue.of("true", "stereotype:" + stereoName);
-        }
-        return DefaultResolvedValue.of("false", "stereotype:" + stereoName);
+        return DefaultResolvedValue.of(has ? "true" : "false", "stereotype:" + stereoName);
     }
 
     private ResolvedValue resolveStereotypeSet(ElementRecord element, AliasDefinition alias) {
@@ -118,16 +111,81 @@ public final class RhapsodyAliasResolver implements AliasResolver {
             }
         }
         if (!matched.isEmpty()) {
-            // Return the first match as the canonical value
             return DefaultResolvedValue.of(matched.get(0), "stereotypeSet:" + matched.get(0));
         }
         return DefaultResolvedValue.absent();
     }
 
+    private ResolvedValue resolvePortType(ElementRecord element) {
+        if (!element.kind().isPortKind()) {
+            return DefaultResolvedValue.absent();
+        }
+        // Check ElementRecord first
+        String typeName = element.typeName().orElse(null);
+        if (typeName != null && !typeName.trim().isEmpty()) {
+            return DefaultResolvedValue.of(typeName.trim(), "portType:elementRecord");
+        }
+
+        // Fallback: try via Rhapsody API
+        IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
+        if (handle == null) return DefaultResolvedValue.absent();
+
+        // Try getType() first (works for SysMLPort / FlowPort)
+        try {
+            java.lang.reflect.Method getType = handle.getClass().getMethod("getType");
+            Object cls = getType.invoke(handle);
+            if (cls instanceof IRPModelElement) {
+                String name = ((IRPModelElement) cls).getName();
+                if (name != null && !name.trim().isEmpty()) {
+                    return DefaultResolvedValue.of(name.trim(), "portType:getType");
+                }
+            }
+        } catch (Throwable t) { /* ignore */ }
+
+        // Try getOtherClass() (works for standard Port)
+        if (handle instanceof IRPPort) {
+            try {
+                IRPClassifier cls = ((IRPPort) handle).getOtherClass();
+                if (cls != null) {
+                    String name = cls.getName();
+                    if (name != null && !name.trim().isEmpty()) {
+                        return DefaultResolvedValue.of(name.trim(), "portType:getOtherClass");
+                    }
+                }
+            } catch (Throwable t) { /* ignore */ }
+        }
+
+        return DefaultResolvedValue.absent();
+    }
+
+
+    private ResolvedValue resolvePortDirection(ElementRecord element) {
+        if (!element.kind().isPortKind()) {
+            return DefaultResolvedValue.absent();
+        }
+        PortInfo info = portInfoResolver.resolve(element);
+        String dir = info.direction().name();
+        if ("UNKNOWN".equals(dir) || "NONE".equals(dir)) {
+            return DefaultResolvedValue.absent();
+        }
+        return DefaultResolvedValue.of(dir, info.directionSource());
+    }
+
+    private ResolvedValue resolvePortMultiplicity(ElementRecord element) {
+        if (!element.kind().isPortKind()) {
+            return DefaultResolvedValue.absent();
+        }
+        PortInfo info = portInfoResolver.resolve(element);
+        String mult = info.multiplicity().toString();
+        if ("?..* ".equals(mult) || mult.contains("?")) {
+            return DefaultResolvedValue.absent();
+        }
+        return DefaultResolvedValue.of(mult, info.multiplicitySource());
+    }
+
     // ---- Rhapsody tag reading ----
 
     private String tryReadTag(IRPModelElement elt, String tagName) {
-        // Method 1: try getTag(tagName)
         try {
             IRPTag tag = elt.getTag(tagName);
             if (tag != null) {
@@ -136,11 +194,8 @@ public final class RhapsodyAliasResolver implements AliasResolver {
                     return val.trim();
                 }
             }
-        } catch (Throwable t) {
-            // ignore, try next method
-        }
+        } catch (Throwable t) { /* ignore */ }
 
-        // Method 2: iterate getTags() collection
         try {
             Method getTags = elt.getClass().getMethod("getTags");
             Object tagsObj = getTags.invoke(elt);
@@ -170,19 +225,14 @@ public final class RhapsodyAliasResolver implements AliasResolver {
                     }
                 }
             }
-        } catch (Throwable t) {
-            // ignore
-        }
+        } catch (Throwable t) { /* ignore */ }
 
-        // Method 3: try getPropertyValue
         try {
             String val = elt.getPropertyValue(tagName);
             if (val != null && !val.trim().isEmpty()) {
                 return val.trim();
             }
-        } catch (Throwable t) {
-            // ignore
-        }
+        } catch (Throwable t) { /* ignore */ }
 
         return null;
     }

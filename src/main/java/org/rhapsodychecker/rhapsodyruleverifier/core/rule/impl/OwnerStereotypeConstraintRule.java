@@ -1,23 +1,29 @@
-// File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/core/rule/impl/RequiredStereotypeOneOfRule.java
 package org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl;
 
+import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.*;
 
 import java.util.*;
 
 /**
- * Generic rule: verifies that an element has exactly one stereotype from a given set.
- * Config-driven via params.anyOf list.
+ * Generic rule: if the element's OWNER has a given stereotype, then the
+ * element itself must be one of the allowed kinds.
+ *
+ * If the owner does NOT have the given stereotype (or has no owner at all),
+ * the rule simply does not apply to this element — no result is recorded.
+ *
+ * Config-driven via params: ownerStereotype (string), allowedKinds (list of ElementKind names).
  */
-public final class RequiredStereotypeOneOfRule implements Rule {
+public final class OwnerStereotypeConstraintRule implements Rule {
 
     private String id;
     private String title;
     private String message;
-    private List<String> anyOf;
+    private String ownerStereotype;
+    private Set<ElementKind> allowedKinds;
 
-    public RequiredStereotypeOneOfRule() {}
+    public OwnerStereotypeConstraintRule() {}
 
     @Override public String id() { return id; }
     @Override public String title() { return title != null ? title : id; }
@@ -31,50 +37,64 @@ public final class RequiredStereotypeOneOfRule implements Rule {
         Map<String, Object> p = optMap(params, "params");
         if (p == null) p = Collections.emptyMap();
 
-        this.anyOf = optStringList(p, "anyOf");
-        if (anyOf == null || anyOf.isEmpty()) {
-            throw new IllegalArgumentException("RequiredStereotypeOneOfRule '" + id + "': params.anyOf must be a non-empty list");
+        this.ownerStereotype = requireString(p, "ownerStereotype");
+
+        List<String> kindNames = optStringList(p, "allowedKinds");
+        if (kindNames == null || kindNames.isEmpty()) {
+            throw new IllegalArgumentException("OwnerStereotypeConstraintRule '" + id
+                    + "': params.allowedKinds must be a non-empty list");
+        }
+        this.allowedKinds = new HashSet<>();
+        for (String k : kindNames) {
+            try {
+                allowedKinds.add(ElementKind.valueOf(k.trim().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("OwnerStereotypeConstraintRule '" + id
+                        + "': unknown ElementKind '" + k + "' in allowedKinds");
+            }
         }
     }
 
     @Override
     public boolean appliesTo(ElementRecord element, EvaluationContext context) {
-        return true;
+        Optional<String> ownerGuid = element.ownerGuid();
+        if (!ownerGuid.isPresent()) return false;
+
+        Optional<ElementRecord> owner = context.findElementByGuid(ownerGuid.get());
+        if (!owner.isPresent()) return false;
+
+        return owner.get().hasStereotypeIgnoreCase(ownerStereotype);
     }
 
     @Override
     public RuleResult evaluate(ElementRecord element, EvaluationContext context) {
         try {
-            List<String> matched = new ArrayList<>();
-            for (String candidate : anyOf) {
-                if (element.hasStereotypeIgnoreCase(candidate)) {
-                    matched.add(candidate);
-                }
-            }
-
-            if (!matched.isEmpty()) {
+            if (allowedKinds.contains(element.kind())) {
                 return DefaultRuleResult.pass(id, element.guid());
             }
-
             return DefaultRuleResult.fail(id, element.guid(),
-                    formatMessage(element, "none found", "must have at least one of " + anyOf));
-
+                    formatMessage(element));
         } catch (Throwable t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }
     }
 
-    private String formatMessage(ElementRecord element, String value, String reason) {
+    private String formatMessage(ElementRecord element) {
         if (message != null) {
             return message
                     .replace("{elementName}", element.name())
-                    .replace("{value}", value)
-                    .replace("{expected}", anyOf.toString())
-                    .replace("{reason}", reason);
+                    .replace("{ownerStereotype}", ownerStereotype)
+                    .replace("{allowedKinds}", allowedKinds.toString())
+                    .replace("{actualKind}", element.kind().toString());
         }
-        return id + ": " + reason + " [element=" + element.name() + "]";
+        return id + ": owner has stereotype '" + ownerStereotype
+                + "' but element kind is " + element.kind()
+                + ", expected one of " + allowedKinds
+                + " [element=" + element.name() + "]";
     }
+
+    // ---- Param helpers (identice cu celelalte reguli) ----
 
     private static String requireString(Map<String, Object> m, String key) {
         Object v = m.get(key);
