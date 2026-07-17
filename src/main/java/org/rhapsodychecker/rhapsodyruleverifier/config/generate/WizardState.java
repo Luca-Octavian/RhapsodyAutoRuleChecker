@@ -13,11 +13,13 @@ import java.util.*;
  */
 public final class WizardState {
 
-    private String                     scopePath = "";
-    private String                     mode      = "lenient";
-    private final List<AliasDefinition>      aliases = new ArrayList<>();
-    private final List<ElementSetDefinition> sets    = new ArrayList<>();
-    private final List<RuleRequest>          rules   = new ArrayList<>();
+    private String                           scopePath = "";
+    private String                           mode      = "lenient";
+    private final List<AliasDefinition>      aliases   = new ArrayList<>();
+    private final List<ElementSetDefinition> sets      = new ArrayList<>();
+    private final List<RuleRequest>          rules     = new ArrayList<>();
+
+    // ── Getters (API original) ────────────────────────────────────────────────
 
     public String scopePath() { return scopePath; }
     public String mode()      { return mode; }
@@ -26,14 +28,62 @@ public final class WizardState {
     public List<ElementSetDefinition> sets()    { return Collections.unmodifiableList(sets); }
     public List<RuleRequest>          rules()   { return Collections.unmodifiableList(rules); }
 
+    // ── Fluent setters (API original) ────────────────────────────────────────
+
     public WizardState scopePath(String p) { this.scopePath = p; return this; }
     public WizardState mode(String m)      { this.mode = m;      return this; }
 
-    public WizardState addAlias(AliasDefinition a)      { aliases.add(a); return this; }
-    public WizardState addSet(ElementSetDefinition s)   { sets.add(s);    return this; }
-    public WizardState addRule(RuleRequest r)           { rules.add(r);   return this; }
+    public WizardState addAlias(AliasDefinition a)    { aliases.add(a); return this; }
+    public WizardState addSet(ElementSetDefinition s) { sets.add(s);    return this; }
+    public WizardState addRule(RuleRequest r)         { rules.add(r);   return this; }
 
-    // ---------------------------------------------------------------
+    // ── Metode noi pentru UI ─────────────────────────────────────────────────
+
+    /** Inlocuieste alias-ul cu acelasi id; il adauga la sfarsit daca nu exista. */
+    public WizardState putAlias(AliasDefinition a) {
+        for (int i = 0; i < aliases.size(); i++) {
+            if (aliases.get(i).id().equals(a.id())) {
+                aliases.set(i, a);
+                return this;
+            }
+        }
+        aliases.add(a);
+        return this;
+    }
+
+    /** Inlocuieste set-ul cu acelasi id; il adauga la sfarsit daca nu exista. */
+    public WizardState putSet(ElementSetDefinition s) {
+        for (int i = 0; i < sets.size(); i++) {
+            if (sets.get(i).id().equals(s.id())) {
+                sets.set(i, s);
+                return this;
+            }
+        }
+        sets.add(s);
+        return this;
+    }
+
+    public WizardState removeAlias(String id) {
+        aliases.removeIf(a -> a.id().equals(id));
+        return this;
+    }
+
+    public WizardState removeSet(String id) {
+        sets.removeIf(s -> s.id().equals(id));
+        return this;
+    }
+
+    public WizardState removeRule(int index) {
+        rules.remove(index);
+        return this;
+    }
+
+    public WizardState replaceRule(int index, RuleRequest r) {
+        rules.set(index, r);
+        return this;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Cerere de regulă exprimată în termeni de utilizator (fără YAML).
@@ -42,13 +92,13 @@ public final class WizardState {
      */
     public static final class RuleRequest {
 
-        private final String                  id;
-        private final String                  title;
-        private final String                  ruleType;
-        private final String                  targetAliasId;
-        private final String                  elementSetId;
-        private final Map<String, Object>     params;
-        private final String                  message;
+        private final String              id;
+        private final String              title;
+        private final String              ruleType;
+        private final String              targetAliasId;
+        private final String              elementSetId;
+        private final Map<String, Object> params;
+        private final String              message;
 
         public RuleRequest(
                 String              id,
@@ -59,13 +109,16 @@ public final class WizardState {
                 Map<String, Object> params,
                 String              message
         ) {
-            this.id           = id;
-            this.title        = title;
-            this.ruleType     = ruleType;
+            this.id            = id;
+            this.title         = title;
+            this.ruleType      = ruleType;
             this.targetAliasId = targetAliasId;
-            this.elementSetId = elementSetId;
-            this.params       = Collections.unmodifiableMap(new LinkedHashMap<>(params));
-            this.message      = message;
+            this.elementSetId  = elementSetId;
+            this.params        = Collections.unmodifiableMap(
+                                     new LinkedHashMap<>(params != null
+                                             ? params
+                                             : Collections.emptyMap()));
+            this.message       = message;
         }
 
         public String              id()            { return id; }
@@ -75,5 +128,10 @@ public final class WizardState {
         public String              elementSetId()  { return elementSetId; }
         public Map<String, Object> params()        { return params; }
         public String              message()       { return message; }
+
+        @Override
+        public String toString() {
+            return "[" + ruleType + "] " + (title != null && !title.isBlank() ? title : id);
+        }
     }
 }
