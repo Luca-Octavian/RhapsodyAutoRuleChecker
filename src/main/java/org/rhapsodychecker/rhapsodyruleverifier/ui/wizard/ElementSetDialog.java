@@ -3,6 +3,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
 
 import javax.swing.*;
 import java.awt.*;
@@ -18,6 +20,7 @@ public final class ElementSetDialog extends JDialog {
     private final CheckboxListField  stereoField;
     private final JTextField         inclField   = new JTextField(30);
     private final JTextField         exclField   = new JTextField(30);
+    private final JButton            okBtn       = new JButton("Save");
 
     private ElementSetDefinition result = null;
 
@@ -55,28 +58,28 @@ public final class ElementSetDialog extends JDialog {
         int row = 0;
 
         // ID
-        addLabelRow(form, gbc, row++, "ID *", idField);
+        addLabelRow(form, gbc, row++, "ID *", "elementSet.id", idField);
 
         // Title
-        addLabelRow(form, gbc, row++, "Title", titleField);
+        addLabelRow(form, gbc, row++, "Title", "elementSet.title", titleField);
 
         // Types
         gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
-        form.add(new JLabel("Types:"), gbc);
+        form.add(HelpIcon.labelWithHelp("Types:", "elementSet.types"), gbc);
         gbc.gridy = row++; gbc.weighty = 1; gbc.fill = GridBagConstraints.BOTH;
         form.add(typesField, gbc);
         gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Stereotypes
         gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
-        form.add(new JLabel("Stereotypes:"), gbc);
+        form.add(HelpIcon.labelWithHelp("Stereotypes:", "elementSet.stereotypes"), gbc);
         gbc.gridy = row++; gbc.weighty = 1; gbc.fill = GridBagConstraints.BOTH;
         form.add(stereoField, gbc);
         gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Include / Exclude packages
-        addLabelRow(form, gbc, row++, "Include packages (regex CSV)", inclField);
-        addLabelRow(form, gbc, row++, "Exclude packages (regex CSV)", exclField);
+        addLabelRow(form, gbc, row++, "Include packages (regex CSV)", "elementSet.includePackages", inclField);
+        addLabelRow(form, gbc, row++, "Exclude packages (regex CSV)", "elementSet.excludePackages", exclField);
 
         // Prefill
         if (pre != null) {
@@ -88,8 +91,12 @@ public final class ElementSetDialog extends JDialog {
             exclField.setText(String.join(", ", pre.excludePackages()));
         }
 
+        // Validare live: contur rosu + Save dezactivat cat timp ID e gol.
+        // Cancel ramane mereu activ - e singura iesire posibila fara sa completezi.
+        FieldValidation.onChange(idField, this::revalidateLive);
+        revalidateLive();
+
         // Buttons
-        JButton okBtn     = new JButton("Save");
         JButton cancelBtn = new JButton("Cancel");
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnRow.add(cancelBtn);
@@ -108,11 +115,27 @@ public final class ElementSetDialog extends JDialog {
     }
 
     private void addLabelRow(JPanel p, GridBagConstraints gbc,
-                             int row, String label, JTextField field) {
+                             int row, String label, String helpKey, JTextField field) {
         gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 1; gbc.weightx = 0;
-        p.add(new JLabel(label + ":"), gbc);
+        p.add(HelpIcon.labelWithHelp(label + ":", helpKey), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
         p.add(field, gbc);
+    }
+
+    /**
+     * Validare LIVE (fara popup): ruleaza la fiecare schimbare in idField,
+     * marcheaza contur rosu daca e gol si dezactiveaza Save. Cancel ramane
+     * mereu activ - userul nu poate iesi din dialog decat completand ID-ul
+     * sau apasand Cancel.
+     */
+    private void revalidateLive() {
+        boolean valid = !idField.getText().trim().isEmpty();
+        if (valid) {
+            FieldValidation.markValid(idField);
+        } else {
+            FieldValidation.markInvalid(idField);
+        }
+        okBtn.setEnabled(valid);
     }
 
     private boolean validateForm() {

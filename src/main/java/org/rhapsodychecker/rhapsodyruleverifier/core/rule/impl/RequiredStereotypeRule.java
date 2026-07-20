@@ -45,7 +45,6 @@ public final class RequiredStereotypeRule implements Rule {
     @Override
     public RuleResult evaluate(ElementRecord element, EvaluationContext context) {
         try {
-            Set<String> elementStereos = element.stereotypes();
             List<String> missing = new ArrayList<>();
 
             for (String required : requiredStereotypes) {

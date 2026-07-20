@@ -357,6 +357,13 @@ public class MainFrame extends JFrame {
                     "No Config", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        if (fastDetectionResult == null) {
+            JOptionPane.showMessageDialog(this,
+                    "No model loaded. Stereotypes and types will not be suggested.\n"
+                    + "Load a model first for the best experience.",
+                    "No Model Loaded",
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
 
         ConfigToWizardStateMapper.MappingResult mapped =
                 ConfigToWizardStateMapper.map(config, fastDetectionResult);

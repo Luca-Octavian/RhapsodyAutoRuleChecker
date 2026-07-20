@@ -5,6 +5,8 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.AliasKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.ValueType;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
 
 import javax.swing.*;
 import java.awt.*;
@@ -40,6 +42,8 @@ public final class AliasDialog extends JDialog {
     // Zona dinamica
     private final JPanel dynamicPanel = new JPanel(new GridBagLayout());
 
+    private final JButton okBtn = new JButton("Save");
+
     private AliasDefinition result = null;
 
     public AliasDialog(Window parent, FastDetectionResult fast, AliasDefinition prefill) {
@@ -60,6 +64,11 @@ public final class AliasDialog extends JDialog {
     private void build(AliasDefinition pre) {
         setLayout(new BorderLayout(5, 5));
 
+        // Default pentru un alias nou: DESCRIPTION - cel mai simplu kind,
+        // fara parametri suplimentari de completat. La editare (pre != null)
+        // e suprascris mai jos, in prefill().
+        kindCombo.setSelectedItem(AliasKind.DESCRIPTION);
+
         // ── Form statica ──────────────────────────────────────────────────────
         JPanel top = new JPanel(new GridBagLayout());
         top.setBorder(BorderFactory.createEmptyBorder(15, 20, 5, 20));
@@ -70,23 +79,30 @@ public final class AliasDialog extends JDialog {
         gbc.weightx = 1;
 
         int row = 0;
-        addFormRow(top, gbc, row++, "ID *",   idField);
-        addFormRow(top, gbc, row++, "Title",  titleField);
-        addFormRow(top, gbc, row++, "Help",   helpField);
-        addFormRow(top, gbc, row++, "Kind *", kindCombo);
+        addFormRow(top, gbc, row++, "ID *",   "alias.id",   idField);
+        addFormRow(top, gbc, row++, "Title",  "alias.title", titleField);
+        addFormRow(top, gbc, row++, "Help",   "alias.help",  helpField);
+        addFormRow(top, gbc, row++, "Kind *", "alias.kind",  kindCombo);
         add(top, BorderLayout.NORTH);
 
         // ── Zona dinamica ─────────────────────────────────────────────────────
         dynamicPanel.setBorder(BorderFactory.createTitledBorder("Kind parameters"));
         add(dynamicPanel, BorderLayout.CENTER);
 
-        kindCombo.addActionListener(e -> rebuildDynamic());
+        kindCombo.addActionListener(e -> { rebuildDynamic(); revalidateLive(); });
         rebuildDynamic();
 
         if (pre != null) prefill(pre);
 
+        // Validare live: contur rosu + Save dezactivat cat timp campurile
+        // obligatorii pentru kind-ul curent nu sunt completate. Cancel ramane
+        // mereu activ - e singura iesire posibila fara sa completezi.
+        FieldValidation.onChange(idField,      this::revalidateLive);
+        FieldValidation.onChange(profileField, this::revalidateLive);
+        FieldValidation.onChange(tagNameField,  this::revalidateLive);
+        revalidateLive();
+
         // ── Butoane ───────────────────────────────────────────────────────────
-        JButton okBtn     = new JButton("Save");
         JButton cancelBtn = new JButton("Cancel");
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnRow.add(cancelBtn);
@@ -101,7 +117,8 @@ public final class AliasDialog extends JDialog {
         });
     }
 
-    private void rebuildDynamic() {
+    @SuppressWarnings("incomplete-switch")
+	private void rebuildDynamic() {
         dynamicPanel.removeAll();
         AliasKind kind = (AliasKind) kindCombo.getSelectedItem();
         if (kind == null) { dynamicPanel.revalidate(); dynamicPanel.repaint(); return; }
@@ -115,26 +132,31 @@ public final class AliasDialog extends JDialog {
         int row = 0;
         switch (kind) {
             case TAGGED_VALUE:
-                addFormRow(dynamicPanel, gbc, row++, "Profile Name *",       profileField);
-                addFormRow(dynamicPanel, gbc, row++, "Tag Name *",           tagNameField);
-                addFormRow(dynamicPanel, gbc, row++, "Stereotype owner",     stereoOwnerField);
-                addFormRow(dynamicPanel, gbc, row++, "Value type",           valueTypeCombo);
-                addFormRow(dynamicPanel, gbc, row++, "Allowed values (CSV)", valuesField);
+                addFormRow(dynamicPanel, gbc, row++, "Profile Name *",       "alias.profileName",     profileField);
+                addFormRow(dynamicPanel, gbc, row++, "Tag Name *",           "alias.tagName",         tagNameField);
+                addFormRow(dynamicPanel, gbc, row++, "Stereotype owner",     "alias.stereotypeOwner", stereoOwnerField);
+                addFormRow(dynamicPanel, gbc, row++, "Value type",           "alias.valueType",       valueTypeCombo);
+                // Default: STRING - acelasi default folosit in ValueType.fromString().
+                // La editare, este suprascris mai jos in prefill().
+                valueTypeCombo.setSelectedItem(ValueType.STRING);
+                addFormRow(dynamicPanel, gbc, row++, "Allowed values (CSV)", "alias.values",          valuesField);
                 break;
             case STEREOTYPE:
                 gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
-                dynamicPanel.add(new JLabel("Stereotype Name *:"), gbc);
+                dynamicPanel.add(HelpIcon.labelWithHelp("Stereotype Name *:", "alias.stereotypeName"), gbc);
                 stereoNameField = new CheckboxListField(detectedStereos);
+                stereoNameField.addChangeListener(this::revalidateLive);
                 gbc.gridy = row++; gbc.weighty = 1;
                 gbc.fill  = GridBagConstraints.BOTH;
                 dynamicPanel.add(stereoNameField, gbc);
                 gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
                 break;
             case STEREOTYPE_SET:
-                addFormRow(dynamicPanel, gbc, row++, "Profile Name", setProfileField);
+                addFormRow(dynamicPanel, gbc, row++, "Profile Name", "alias.profileName", setProfileField);
                 gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
-                dynamicPanel.add(new JLabel("Stereotype Names *:"), gbc);
+                dynamicPanel.add(HelpIcon.labelWithHelp("Stereotype Names *:", "alias.stereotypeNames"), gbc);
                 stereoNamesField = new CheckboxListField(detectedStereos);
+                stereoNamesField.addChangeListener(this::revalidateLive);
                 gbc.gridy = row++; gbc.weighty = 1;
                 gbc.fill  = GridBagConstraints.BOTH;
                 dynamicPanel.add(stereoNamesField, gbc);
@@ -184,7 +206,45 @@ public final class AliasDialog extends JDialog {
         }
     }
 
-    private boolean validateForm() {
+    /**
+     * Validare LIVE (fara popup): ruleaza la fiecare schimbare relevanta,
+     * marcheaza contur rosu pe campurile obligatorii goale si (de)activeaza
+     * Save in consecinta. Cancel ramane mereu activ - e singura iesire
+     * posibila fara sa completezi campurile obligatorii pentru kind-ul curent.
+     */
+    private void revalidateLive() {
+        boolean valid = !idField.getText().trim().isEmpty();
+        if (valid) FieldValidation.markValid(idField); else FieldValidation.markInvalid(idField);
+
+        AliasKind kind = (AliasKind) kindCombo.getSelectedItem();
+        if (kind != null) {
+            switch (kind) {
+                case TAGGED_VALUE:
+                    boolean profileOk = !profileField.getText().trim().isEmpty();
+                    boolean tagOk     = !tagNameField.getText().trim().isEmpty();
+                    if (profileOk) FieldValidation.markValid(profileField); else FieldValidation.markInvalid(profileField);
+                    if (tagOk)     FieldValidation.markValid(tagNameField); else FieldValidation.markInvalid(tagNameField);
+                    valid = valid && profileOk && tagOk;
+                    break;
+                case STEREOTYPE:
+                    boolean stereoOk = stereoNameField != null && !stereoNameField.getSelectedValues().isEmpty();
+                    if (stereoNameField != null) stereoNameField.setValid(stereoOk);
+                    valid = valid && stereoOk;
+                    break;
+                case STEREOTYPE_SET:
+                    boolean namesOk = stereoNamesField != null && !stereoNamesField.getSelectedValues().isEmpty();
+                    if (stereoNamesField != null) stereoNamesField.setValid(namesOk);
+                    valid = valid && namesOk;
+                    break;
+                default:
+                    break;
+            }
+        }
+        okBtn.setEnabled(valid);
+    }
+
+    @SuppressWarnings("incomplete-switch")
+	private boolean validateForm() {
         if (idField.getText().trim().isEmpty()) {
             warn("ID is required."); return false;
         }
@@ -251,9 +311,9 @@ public final class AliasDialog extends JDialog {
     }
 
     private static void addFormRow(JPanel p, GridBagConstraints gbc,
-                                   int row, String label, JComponent field) {
+                                   int row, String label, String helpKey, JComponent field) {
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 1;
-        p.add(new JLabel(label + ":"), gbc);
+        p.add(HelpIcon.labelWithHelp(label + ":", helpKey), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
         p.add(field, gbc);
     }

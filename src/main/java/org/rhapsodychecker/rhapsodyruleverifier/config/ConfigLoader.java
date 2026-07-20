@@ -122,7 +122,6 @@ public final class ConfigLoader {
 
     // ---- Rules ----
 
-    @SuppressWarnings("unchecked")
     private static List<RuleSpec> parseRules(List<Object> raw, List<String> errors) {
         if (raw == null || raw.isEmpty()) return Collections.emptyList();
         List<RuleSpec> out = new ArrayList<>();
@@ -282,7 +281,6 @@ public final class ConfigLoader {
         return defaultVal;
     }
 
-    @SuppressWarnings("unchecked")
     private static List<String> optStringList(Map<String, Object> map, String key) {
         Object v = map.get(key);
         if (v == null) return Collections.emptyList();

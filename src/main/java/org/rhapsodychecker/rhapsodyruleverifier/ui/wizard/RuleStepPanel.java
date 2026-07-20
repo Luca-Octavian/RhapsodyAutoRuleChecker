@@ -21,6 +21,10 @@ public final class RuleStepPanel extends JPanel {
     private final JButton editBtn   = new JButton("Edit...");
     private final JButton removeBtn = new JButton("Remove");
 
+    private static final String CARD_LIST  = "list";
+    private static final String CARD_EMPTY = "empty";
+    private final JPanel      centerPanel = new JPanel(new CardLayout());
+
     public RuleStepPanel(WizardState state, FastDetectionResult fast) {
         super(new BorderLayout(8, 8));
         this.state = state;
@@ -36,7 +40,17 @@ public final class RuleStepPanel extends JPanel {
         add(title, BorderLayout.NORTH);
 
         ruleList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        add(new JScrollPane(ruleList), BorderLayout.CENTER);
+
+        JLabel emptyLabel = new JLabel(
+                "<html><div style='text-align:center;'>No rules yet.<br>" +
+                "Click \"Add Rule...\" to define your first one.</div></html>",
+                SwingConstants.CENTER);
+        emptyLabel.setForeground(Color.GRAY);
+        emptyLabel.setFont(emptyLabel.getFont().deriveFont(Font.ITALIC, 12f));
+
+        centerPanel.add(new JScrollPane(ruleList), CARD_LIST);
+        centerPanel.add(emptyLabel, CARD_EMPTY);
+        add(centerPanel, BorderLayout.CENTER);
 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnPanel.add(addBtn);
@@ -60,11 +74,23 @@ public final class RuleStepPanel extends JPanel {
     private void refreshList() {
         listModel.clear();
         for (WizardState.RuleRequest r : state.rules()) {
-            String label = r.toString();
-            if (r.elementSetId() != null) label += "  → " + r.elementSetId();
-            if (r.targetAliasId() != null) label += "  [" + r.targetAliasId() + "]";
-            listModel.addElement(label);
+            listModel.addElement(formatEntry(r));
         }
+
+        CardLayout cl = (CardLayout) centerPanel.getLayout();
+        cl.show(centerPanel, listModel.isEmpty() ? CARD_EMPTY : CARD_LIST);
+    }
+
+    /**
+     * Formateaza un RuleRequest pentru afisare in lista, in loc de dump-ul
+     * brut r.toString() (care expune reprezentarea interna a record-ului).
+     */
+    private static String formatEntry(WizardState.RuleRequest r) {
+        StringBuilder sb = new StringBuilder(r.id());
+        sb.append("  [").append(r.ruleType().toLowerCase()).append("]");
+        if (r.elementSetId()   != null) sb.append("  on ").append(r.elementSetId());
+        if (r.targetAliasId()  != null) sb.append("  → ").append(r.targetAliasId());
+        return sb.toString();
     }
 
     private void openDialog(int editIndex, WizardState.RuleRequest prefill) {

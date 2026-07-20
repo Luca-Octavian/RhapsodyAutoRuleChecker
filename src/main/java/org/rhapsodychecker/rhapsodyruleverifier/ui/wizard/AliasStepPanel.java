@@ -22,6 +22,10 @@ public final class AliasStepPanel extends JPanel {
     private final JButton editBtn   = new JButton("Edit...");
     private final JButton removeBtn = new JButton("Remove");
 
+    private static final String CARD_LIST  = "list";
+    private static final String CARD_EMPTY = "empty";
+    private final JPanel      centerPanel = new JPanel(new CardLayout());
+
     public AliasStepPanel(WizardState state, FastDetectionResult fast) {
         super(new BorderLayout(8, 8));
         this.state = state;
@@ -37,7 +41,17 @@ public final class AliasStepPanel extends JPanel {
         add(title, BorderLayout.NORTH);
 
         aliasList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        add(new JScrollPane(aliasList), BorderLayout.CENTER);
+
+        JLabel emptyLabel = new JLabel(
+                "<html><div style='text-align:center;'>No aliases yet.<br>" +
+                "Click \"Add Alias...\" to define your first one.</div></html>",
+                SwingConstants.CENTER);
+        emptyLabel.setForeground(Color.GRAY);
+        emptyLabel.setFont(emptyLabel.getFont().deriveFont(Font.ITALIC, 12f));
+
+        centerPanel.add(new JScrollPane(aliasList), CARD_LIST);
+        centerPanel.add(emptyLabel, CARD_EMPTY);
+        add(centerPanel, BorderLayout.CENTER);
 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnPanel.add(addBtn);
@@ -65,6 +79,9 @@ public final class AliasStepPanel extends JPanel {
                     + "  [" + a.kind().name().toLowerCase() + "]"
                     + a.title().map(t -> "  \"" + t + "\"").orElse(""));
         }
+
+        CardLayout cl = (CardLayout) centerPanel.getLayout();
+        cl.show(centerPanel, listModel.isEmpty() ? CARD_EMPTY : CARD_LIST);
     }
 
     private void openDialog(AliasDefinition prefill) {

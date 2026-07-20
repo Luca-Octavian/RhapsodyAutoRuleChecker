@@ -36,7 +36,21 @@ public final class ConfigToWizardStateMapper {
 
         // ── Element Sets ──────────────────────────────────────────────────────
         for (ElementSetDefinition set : config.elementSets().values()) {
-            state.addSet(set);
+        	if (!set.kinds().isEmpty() && set.stereotypes().isEmpty()) {
+                List<String> translatedStereos = translateKindsToStereotypes(set.kinds());
+                ElementSetDefinition translated = ElementSetDefinition.builder()
+                        .id(set.id())
+                        .title(set.title().orElse(null))
+                        .kinds(set.kinds())          // pastram kinds pentru engine
+                        .types(set.types())
+                        .stereotypes(translatedStereos)  // adaugam pentru UI
+                        .includePackages(set.includePackages())
+                        .excludePackages(set.excludePackages())
+                        .build();
+                state.addSet(translated);
+            } else {
+                state.addSet(set);
+            }
 
             if (fast != null) {
                 Set<String> detectedStereos = fast.countsByStereotype().keySet();
@@ -106,4 +120,25 @@ public final class ConfigToWizardStateMapper {
         public List<String> warnings()    { return warnings; }
         public boolean      hasWarnings() { return !warnings.isEmpty(); }
     }
+    private static List<String> translateKindsToStereotypes(List<String> kinds) {
+        List<String> result = new ArrayList<>();
+        for (String kind : kinds) {
+            switch (kind.toUpperCase()) {
+                case "BLOCK":           result.add("Block");          break;
+                case "INTERFACE_BLOCK": result.add("InterfaceBlock"); break;
+                case "PORT":            result.add("Port");           break;
+                case "PORT_FULL":       result.add("fullPort");      break;
+                case "PORT_PROXY":      result.add("proxyPort");     break;
+                case "PORT_FLOW":       result.add("flowPort");      break;
+                case "INTERFACE":       result.add("Interface");      break;
+                case "PACKAGE":         result.add("Package");        break;
+                case "REQUIREMENT":     result.add("Requirement");    break;
+                case "CONNECTOR":       result.add("connector");      break;
+                // OTHER nu are echivalent de stereotip
+                default: break;
+            }
+        }
+        return result;
+    }
+
 }
