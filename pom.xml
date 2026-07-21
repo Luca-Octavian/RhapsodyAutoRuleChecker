@@ -45,6 +45,11 @@
       <artifactId>rhapsody-api</artifactId>
       <version>10.0.2</version>
     </dependency>
+    <dependency>
+        <groupId>com.formdev</groupId>
+        <artifactId>flatlaf-intellij-themes</artifactId>
+        <version>3.7.1</version>
+    </dependency>
   </dependencies>
 
   <build>

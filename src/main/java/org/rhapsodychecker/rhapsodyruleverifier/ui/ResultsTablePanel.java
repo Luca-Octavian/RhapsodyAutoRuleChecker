@@ -26,6 +26,13 @@ public final class ResultsTablePanel extends JPanel {
     private final JLabel statusLabel;
     private TableRowSorter<DefaultTableModel> sorter;
 
+    // Swaps between the results table and a placeholder message shown before
+    // any evaluation has been run yet.
+    private final CardLayout centerLayout = new CardLayout();
+    private final JPanel     centerPanel  = new JPanel(centerLayout);
+    private static final String CARD_TABLE       = "table";
+    private static final String CARD_PLACEHOLDER = "placeholder";
+
     // Store GUIDs parallel to table rows (model index -> GUID)
     private final List<String> rowGuids = new ArrayList<>();
 
@@ -81,12 +88,24 @@ public final class ResultsTablePanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(table);
 
+        // Placeholder shown before any evaluation has been run
+        JLabel placeholderLabel = new JLabel(
+                "<html><div style='text-align:center;'>No output. Run a config file to see its output here.</div></html>",
+                SwingConstants.CENTER);
+        placeholderLabel.setForeground(Color.GRAY);
+        JPanel placeholderPanel = new JPanel(new GridBagLayout());
+        placeholderPanel.add(placeholderLabel);
+
+        centerPanel.add(scrollPane, CARD_TABLE);
+        centerPanel.add(placeholderPanel, CARD_PLACEHOLDER);
+        centerLayout.show(centerPanel, CARD_PLACEHOLDER);
+
         // Status bar
         statusLabel = new JLabel("  No results");
         statusLabel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
 
         add(filterPanel, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        add(centerPanel, BorderLayout.CENTER);
         add(statusLabel, BorderLayout.SOUTH);
     }
 
@@ -121,6 +140,7 @@ public final class ResultsTablePanel extends JPanel {
 
         statusLabel.setText("  Failures: " + failCount + "  (double-click to navigate in Rhapsody)");
         filterField.setText("");
+        centerLayout.show(centerPanel, CARD_TABLE);
     }
 
     public void clear() {
@@ -128,6 +148,7 @@ public final class ResultsTablePanel extends JPanel {
         rowGuids.clear();
         statusLabel.setText("  No results");
         filterField.setText("");
+        centerLayout.show(centerPanel, CARD_PLACEHOLDER);
     }
 
     private void applyFilter() {

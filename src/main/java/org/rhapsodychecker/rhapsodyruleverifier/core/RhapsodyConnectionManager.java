@@ -22,6 +22,11 @@ public final class RhapsodyConnectionManager {
     private volatile boolean applicationCreatedByManager = false;
     private volatile boolean projectOpenedByManager = false;
 
+    // Which project path (if any) the current application/project handles belong to.
+    // Lets connect() tell "same model requested again" (safe no-op) apart from
+    // "different model requested while already connected" (must reconnect).
+    private volatile String currentProjectPath;
+
     private RhapsodyConnectionManager() {
     }
 
@@ -41,8 +46,16 @@ public final class RhapsodyConnectionManager {
      * @throws RhapsodyConnectionException if neither opening the file nor attaching to an active project succeeds
      */
     public synchronized void connect(String projectFilePath) throws RhapsodyConnectionException {
+        String normalizedPath = (projectFilePath == null || projectFilePath.trim().isEmpty())
+                ? null : projectFilePath.trim();
+
         if (isConnected()) {
-            return;
+            if (java.util.Objects.equals(normalizedPath, currentProjectPath)) {
+                return; // already connected to this exact project — true no-op
+            }
+            // A different project was requested: drop the stale handles first,
+            // otherwise we'd silently keep serving the previously loaded model.
+            disconnectInternal();
         }
 
         try {
@@ -53,8 +66,8 @@ public final class RhapsodyConnectionManager {
             }
 
             // 1) Try to open the provided project file (if any)
-            if (projectFilePath != null && !projectFilePath.trim().isEmpty()) {
-                project = tryOpenProject(application, projectFilePath.trim());
+            if (normalizedPath != null) {
+                project = tryOpenProject(application, normalizedPath);
                 if (project != null) {
                     projectOpenedByManager = true;
                 }
@@ -68,6 +81,8 @@ public final class RhapsodyConnectionManager {
             if (project == null) {
                 throw new RhapsodyConnectionException("Could not open project and no active project is available.");
             }
+
+            currentProjectPath = normalizedPath;
         } catch (UnsatisfiedLinkError e) {
             // Common when Rhapsody native DLLs are not on PATH (…\\Share\\bin, …\\bin)
             cleanupOnFailure();
@@ -76,6 +91,27 @@ public final class RhapsodyConnectionManager {
             cleanupOnFailure();
             throw new RhapsodyConnectionException("Failed to connect to Rhapsody: " + t.getMessage(), t);
         }
+    }
+
+    /**
+     * Drops the current application/project handles before reconnecting to a
+     * different project. Quits the Rhapsody instance only if this manager
+     * created it; an externally attached instance is left running (its
+     * currently open project just stops being tracked here).
+     */
+    private void disconnectInternal() {
+        if (applicationCreatedByManager && application != null) {
+            try {
+                application.quit();
+            } catch (Throwable ignored) {
+                // Best-effort; ignore
+            }
+        }
+        application = null;
+        project = null;
+        applicationCreatedByManager = false;
+        projectOpenedByManager = false;
+        currentProjectPath = null;
     }
 
     /**
@@ -116,6 +152,7 @@ public final class RhapsodyConnectionManager {
                 project = null;
                 applicationCreatedByManager = false;
                 projectOpenedByManager = false;
+                currentProjectPath = null;
             }
         }
     }
@@ -155,6 +192,7 @@ public final class RhapsodyConnectionManager {
         project = null;
         applicationCreatedByManager = false;
         projectOpenedByManager = false;
+        currentProjectPath = null;
     }
 
     // Keep exception local to avoid extra files at this stage

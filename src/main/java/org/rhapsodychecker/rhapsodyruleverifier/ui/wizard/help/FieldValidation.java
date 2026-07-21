@@ -2,17 +2,19 @@
 package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help;
 
 import javax.swing.*;
-import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import java.awt.*;
-import java.util.Map;
-import java.util.WeakHashMap;
 
 /**
  * Helper reutilizabil pentru validare LIVE in dialogurile de wizard:
- * marcheaza vizual (contur rosu) campurile obligatorii necompletate,
- * fara sa astepte click pe Save.
+ * marcheaza vizual campurile obligatorii necompletate, fara sa astepte
+ * click pe Save.
+ *
+ * Foloseste proprietatea client "JComponent.outline" din FlatLaf, care
+ * deseneaza un contur folosind culorile temei curente (Arc, Nord, etc.)
+ * in loc de o culoare hardcodata -- ramane coerent vizual indiferent de
+ * tema aleasa. Functioneaza direct pe JTextField, JComboBox, JSpinner
+ * si alte JComponent-uri suportate de FlatLaf.
  *
  * Folosire tipica intr-un dialog (vezi ElementSetDialog):
  *
@@ -29,35 +31,23 @@ import java.util.WeakHashMap;
  *       okBtn.setEnabled(valid);
  *   }
  *
- * WeakHashMap - ca sa nu tinem dialogurile inchise "vii" in memorie doar
- * pentru ca au fost validate o data (fara asta, ar fi un memory leak static
- * cat timp ruleaza aplicatia).
+ * Nota: daca aplicatia ar rula vreodata sub un alt Look and Feel (nu FlatLaf),
+ * proprietatea client e pur si simplu ignorata -- nu apare nicio eroare, dar
+ * nici indicatie vizuala. Cat timp ramanem pe FlatLaf (cazul nostru), functioneaza
+ * direct.
  */
 public final class FieldValidation {
 
-    private static final Color INVALID_COLOR = new Color(200, 60, 60);
-
-    private static final Map<JComponent, Border> ORIGINAL_BORDERS = new WeakHashMap<>();
-
     private FieldValidation() {}
 
-    /** Marcheaza componenta ca invalida (contur rosu peste border-ul original). */
+    /** Marcheaza componenta ca invalida (contur rosu, colorat de tema curenta). */
     public static void markInvalid(JComponent c) {
-        Border original = ORIGINAL_BORDERS.get(c);
-        if (original == null) {
-            original = c.getBorder();
-            ORIGINAL_BORDERS.put(c, original);
-        }
-        c.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(INVALID_COLOR, 2), original));
+        c.putClientProperty("JComponent.outline", "error");
     }
 
-    /** Reface border-ul original (component valid). */
+    /** Sterge conturul de eroare (component valid). */
     public static void markValid(JComponent c) {
-        Border original = ORIGINAL_BORDERS.get(c);
-        if (original != null) {
-            c.setBorder(original);
-        }
+        c.putClientProperty("JComponent.outline", null);
     }
 
     /** Ataseaza callback-ul la orice schimbare de text (fiecare tasta apasata). */

@@ -46,6 +46,17 @@ public final class PackageTreePanel extends JPanel {
     }
 
     /**
+     * Empties the tree, e.g. while a new model is being scanned in the
+     * background so the previous model's hierarchy isn't shown as if it
+     * were still current.
+     */
+    public void clear() {
+        rootNode.removeAllChildren();
+        rootNode.setUserObject("Loading model...");
+        treeModel.reload();
+    }
+
+    /**
      * Get the currently selected PackageNode, or null if root/nothing selected.
      */
     public PackageNode getSelectedPackage() {
