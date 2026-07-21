@@ -3,8 +3,6 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
-import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
-import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
 
 import javax.swing.*;
 import java.awt.*;
@@ -14,23 +12,30 @@ import java.util.stream.Collectors;
 
 public final class ElementSetDialog extends JDialog {
 
+    private static final List<String> KNOWN_KINDS = Arrays.asList(
+            "BLOCK", "INTERFACE_BLOCK", "PART",
+            "PORT", "PORT_FULL", "PORT_PROXY", "PORT_FLOW",
+            "INTERFACE", "PACKAGE", "REQUIREMENT", "CONNECTOR"
+    );
+
     private final JTextField         idField     = new JTextField(20);
     private final JTextField         titleField  = new JTextField(30);
+    private final CheckboxListField  kindsField;
     private final CheckboxListField  typesField;
     private final CheckboxListField  stereoField;
     private final JTextField         inclField   = new JTextField(30);
     private final JTextField         exclField   = new JTextField(30);
-    private final JButton            okBtn       = new JButton("Save");
 
     private ElementSetDefinition result = null;
 
     public ElementSetDialog(Window parent, FastDetectionResult fast,
                             ElementSetDefinition prefill) {
         super(parent, "Define Element Set", ModalityType.APPLICATION_MODAL);
-        setSize(480, 560);
+        setSize(500, 680);
         setLocationRelativeTo(parent);
 
-        // Sugestii din model
+        kindsField = new CheckboxListField(KNOWN_KINDS);
+
         List<String> detectedTypes = new ArrayList<>();
         List<String> detectedStereos = new ArrayList<>();
         if (fast != null) {
@@ -54,49 +59,84 @@ public final class ElementSetDialog extends JDialog {
         gbc.anchor  = GridBagConstraints.NORTHWEST;
         gbc.fill    = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1;
+        gbc.gridwidth = 2;
 
         int row = 0;
 
         // ID
-        addLabelRow(form, gbc, row++, "ID *", "elementSet.id", idField);
+        gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0;
+        form.add(new JLabel("ID *:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        form.add(idField, gbc);
+        gbc.gridx = 0;
 
         // Title
-        addLabelRow(form, gbc, row++, "Title", "elementSet.title", titleField);
+        gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0;
+        form.add(new JLabel("Title:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        form.add(titleField, gbc);
+        gbc.gridx = 0;
+
+        // Kinds
+        gbc.gridy = row++; gbc.gridwidth = 2; gbc.weightx = 1;
+        JLabel kindsLabel = new JLabel("Kinds:");
+        kindsLabel.setToolTipText("ElementKind filters — use for BLOCK, PART, PORT etc. " +
+                "More reliable than Types for SysML elements. ANDed with Types and Stereotypes.");
+        form.add(kindsLabel, gbc);
+        gbc.gridy = row++; gbc.weighty = 1; gbc.fill = GridBagConstraints.BOTH;
+        form.add(kindsField, gbc);
+        gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Types
-        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
-        form.add(HelpIcon.labelWithHelp("Types:", "elementSet.types"), gbc);
+        gbc.gridy = row++; gbc.gridwidth = 2; gbc.weightx = 1;
+        JLabel typesLabel = new JLabel("Types:");
+        typesLabel.setToolTipText("Rhapsody meta-classes (e.g. Class, Port, Requirement). " +
+                "ANDed with Kinds and Stereotypes.");
+        form.add(typesLabel, gbc);
         gbc.gridy = row++; gbc.weighty = 1; gbc.fill = GridBagConstraints.BOTH;
         form.add(typesField, gbc);
         gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Stereotypes
-        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
-        form.add(HelpIcon.labelWithHelp("Stereotypes:", "elementSet.stereotypes"), gbc);
+        gbc.gridy = row++; gbc.gridwidth = 2; gbc.weightx = 1;
+        JLabel stereoLabel = new JLabel("Stereotypes:");
+        stereoLabel.setToolTipText("Stereotypes elements must have (e.g. Block, ASIL_A). " +
+                "ANDed with Kinds and Types.");
+        form.add(stereoLabel, gbc);
         gbc.gridy = row++; gbc.weighty = 1; gbc.fill = GridBagConstraints.BOTH;
         form.add(stereoField, gbc);
         gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // Include / Exclude packages
-        addLabelRow(form, gbc, row++, "Include packages (regex CSV)", "elementSet.includePackages", inclField);
-        addLabelRow(form, gbc, row++, "Exclude packages (regex CSV)", "elementSet.excludePackages", exclField);
+        // Include packages
+        gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0; gbc.gridx = 0;
+        JLabel inclLabel = new JLabel("Include packages (regex CSV):");
+        inclLabel.setToolTipText("Regex patterns — only elements in matching packages are included.");
+        form.add(inclLabel, gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        form.add(inclField, gbc);
+        gbc.gridx = 0;
+
+        // Exclude packages
+        gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0;
+        JLabel exclLabel = new JLabel("Exclude packages (regex CSV):");
+        exclLabel.setToolTipText("Regex patterns — elements in matching packages are excluded.");
+        form.add(exclLabel, gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        form.add(exclField, gbc);
 
         // Prefill
         if (pre != null) {
             idField.setText(pre.id());
             pre.title().ifPresent(titleField::setText);
+            kindsField.setSelectedValues(pre.kinds());
             typesField.setSelectedValues(pre.types());
             stereoField.setSelectedValues(pre.stereotypes());
             inclField.setText(String.join(", ", pre.includePackages()));
             exclField.setText(String.join(", ", pre.excludePackages()));
         }
 
-        // Validare live: contur rosu + Save dezactivat cat timp ID e gol.
-        // Cancel ramane mereu activ - e singura iesire posibila fara sa completezi.
-        FieldValidation.onChange(idField, this::revalidateLive);
-        revalidateLive();
-
         // Buttons
+        JButton okBtn     = new JButton("Save");
         JButton cancelBtn = new JButton("Cancel");
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnRow.add(cancelBtn);
@@ -114,30 +154,6 @@ public final class ElementSetDialog extends JDialog {
         });
     }
 
-    private void addLabelRow(JPanel p, GridBagConstraints gbc,
-                             int row, String label, String helpKey, JTextField field) {
-        gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 1; gbc.weightx = 0;
-        p.add(HelpIcon.labelWithHelp(label + ":", helpKey), gbc);
-        gbc.gridx = 1; gbc.weightx = 1;
-        p.add(field, gbc);
-    }
-
-    /**
-     * Validare LIVE (fara popup): ruleaza la fiecare schimbare in idField,
-     * marcheaza contur rosu daca e gol si dezactiveaza Save. Cancel ramane
-     * mereu activ - userul nu poate iesi din dialog decat completand ID-ul
-     * sau apasand Cancel.
-     */
-    private void revalidateLive() {
-        boolean valid = !idField.getText().trim().isEmpty();
-        if (valid) {
-            FieldValidation.markValid(idField);
-        } else {
-            FieldValidation.markInvalid(idField);
-        }
-        okBtn.setEnabled(valid);
-    }
-
     private boolean validateForm() {
         if (idField.getText().trim().isEmpty()) {
             JOptionPane.showMessageDialog(this, "ID is required.",
@@ -151,6 +167,7 @@ public final class ElementSetDialog extends JDialog {
         return ElementSetDefinition.builder()
                 .id(idField.getText().trim())
                 .title(nullable(titleField.getText()))
+                .kinds(kindsField.getSelectedValues())
                 .types(typesField.getSelectedValues())
                 .stereotypes(stereoField.getSelectedValues())
                 .includePackages(splitCsv(inclField.getText()))

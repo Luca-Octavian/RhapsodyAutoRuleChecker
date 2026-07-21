@@ -1,7 +1,7 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/ui/MainFrame.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui;
 
-import com.formdev.flatlaf.intellijthemes.FlatNordIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatArcOrangeIJTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.*;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ConfigLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
@@ -16,7 +16,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.detection.DetectionFacade;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.rhapsody.PortProbeService;
 import org.rhapsodychecker.rhapsodyruleverifier.export.ExcelReportExporter;
-import org.rhapsodychecker.rhapsodyruleverifier.prefs.ModelFreshnessChecker;
 import org.rhapsodychecker.rhapsodyruleverifier.prefs.RecentFilesStore;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.LoadingStep;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
@@ -32,7 +31,7 @@ import java.util.Vector;
 @SuppressWarnings("serial")
 public class MainFrame extends JFrame {
 
-    // Top panel: file paths (JComboBox editabil = camp text + dropdown cu ultimele 5 folosite)
+    // Top panel: file paths
     private final JComboBox<String> modelPathField  = new JComboBox<>();
     private final JComboBox<String> configPathField = new JComboBox<>();
     private final JButton    modelBrowseBtn  = new JButton("Browse...");
@@ -44,6 +43,18 @@ public class MainFrame extends JFrame {
     private final JButton exportBtn          = new JButton("Export Excel");
     private final JButton newConfigWizardBtn  = new JButton("New Config (Wizard)");
     private final JButton editConfigWizardBtn = new JButton("Edit Config (Wizard)");
+    private final JButton updateModelBtn      = new JButton("Update Model");
+
+    // Secondary accent (purple) — used to visually set the config-wizard
+    // workflow apart from the orange-accented load/run pipeline actions.
+    private static final String WIZARD_ACCENT_STYLE =
+            "background: #4827af;"
+          + "foreground: #ffffff;"
+          + "hoverBackground: #5b3ac9;"
+          + "pressedBackground: #3a1f8a;"
+          + "focusedBackground: #4827af;"
+          + "borderColor: #4827af;"
+          + "focusedBorderColor: #5b3ac9;";
 
     // Main panels
     private final PackageTreePanel  treePanel    = new PackageTreePanel();
@@ -53,15 +64,11 @@ public class MainFrame extends JFrame {
     private final JLabel       statusBar   = new JLabel("  Ready");
     private final JProgressBar progressBar = new JProgressBar();
 
-    // Drives progressBar/statusBar from background work (loadModel / runEvaluation).
-    // Not passed into the backend classes yet (they don't accept one) — steps are
-    // reported manually around each backend call below, which is enough for a
-    // simple per-phase indicator without changing scanner/loader/engine signatures.
-    private final ProgressReporter progressReporter = new SwingProgressReporter(progressBar, statusBar);
+    private final ProgressReporter progressReporter =
+            new SwingProgressReporter(progressBar, statusBar);
 
-    // Recent files / model freshness (persisted per-user via java.util.prefs)
-    private final RecentFilesStore     recentFiles      = new RecentFilesStore();
-    private final ModelFreshnessChecker freshnessChecker = new ModelFreshnessChecker(recentFiles);
+    // Recent files
+    private final RecentFilesStore recentFiles = new RecentFilesStore();
 
     // State
     private RhapsodyModelSnapshot snapshot;
@@ -81,21 +88,11 @@ public class MainFrame extends JFrame {
         updateButtonStates();
     }
 
-    /**
-     * Populeaza dropdown-urile cu ultimele cai folosite (cel mult 5, sau
-     * mai putine daca nu exista atatea in istoric) si preselecteaza cea
-     * mai recenta. Utilizatorul tot trebuie sa apese "Load Model" explicit --
-     * nu se conecteaza automat la deschiderea aplicatiei.
-     */
     private void prefillRecentPaths() {
         refreshRecentItems(modelPathField, recentFiles.recentModels());
         refreshRecentItems(configPathField, recentFiles.recentConfigs());
     }
 
-    /**
-     * Reincarca lista de itemi a unui combo din istoricul curent, pastrand
-     * textul curent selectat (daca exista) ca item selectat dupa refresh.
-     */
     private void refreshRecentItems(JComboBox<String> combo, List<String> recentPaths) {
         String current = textOf(combo);
         combo.setModel(new DefaultComboBoxModel<>(new Vector<>(recentPaths)));
@@ -106,13 +103,11 @@ public class MainFrame extends JFrame {
         }
     }
 
-    /** Citeste textul curent dintr-un JComboBox editabil (camp + dropdown). */
     private static String textOf(JComboBox<String> combo) {
         Object item = combo.getEditor().getItem();
         return item == null ? "" : item.toString().trim();
     }
 
-    /** Seteaza textul curent intr-un JComboBox editabil, fara sa fie nevoie ca valoarea sa existe deja in lista. */
     private static void setTextOf(JComboBox<String> combo, String text) {
         combo.getEditor().setItem(text);
         combo.setSelectedItem(text);
@@ -121,7 +116,7 @@ public class MainFrame extends JFrame {
     private void initLayout() {
         setLayout(new BorderLayout(5, 5));
 
-        // ── Top panel: file paths + buttons ──────────────────────────────────
+        // ── Top panel ────────────────────────────────────────────────────────
         JPanel topPanel = new JPanel(new GridBagLayout());
         topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 5, 10));
         GridBagConstraints gbc = new GridBagConstraints();
@@ -131,7 +126,6 @@ public class MainFrame extends JFrame {
         modelPathField.setEditable(true);
         configPathField.setEditable(true);
 
-        // Row 0: Model path
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
         topPanel.add(new JLabel("Model (.rpyx):"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
@@ -139,7 +133,6 @@ public class MainFrame extends JFrame {
         gbc.gridx = 2; gbc.weightx = 0;
         topPanel.add(modelBrowseBtn, gbc);
 
-        // Row 1: Config path
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
         topPanel.add(new JLabel("Config (.yaml):"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
@@ -147,26 +140,29 @@ public class MainFrame extends JFrame {
         gbc.gridx = 2; gbc.weightx = 0;
         topPanel.add(configBrowseBtn, gbc);
 
-        // Row 2: Buttons
+        newConfigWizardBtn.putClientProperty("FlatLaf.style", WIZARD_ACCENT_STYLE);
+        editConfigWizardBtn.putClientProperty("FlatLaf.style", WIZARD_ACCENT_STYLE);
+
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         buttonPanel.add(loadModelBtn);
         buttonPanel.add(runBtn);
         buttonPanel.add(exportBtn);
         buttonPanel.add(newConfigWizardBtn);
         buttonPanel.add(editConfigWizardBtn);
+        buttonPanel.add(updateModelBtn);
         gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 3; gbc.weightx = 1;
         topPanel.add(buttonPanel, gbc);
 
         add(topPanel, BorderLayout.NORTH);
 
-        // ── Center: tree + results ────────────────────────────────────────────
+        // ── Center ───────────────────────────────────────────────────────────
         JSplitPane splitPane = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT, treePanel, resultsPanel);
         splitPane.setDividerLocation(300);
         splitPane.setResizeWeight(0.3);
         add(splitPane, BorderLayout.CENTER);
 
-        // ── Bottom: status bar + loading progress ─────────────────────────────
+        // ── Bottom ───────────────────────────────────────────────────────────
         statusBar.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
                 BorderFactory.createEmptyBorder(3, 5, 3, 5)));
@@ -185,26 +181,26 @@ public class MainFrame extends JFrame {
                 browseFile(modelPathField, "Rhapsody Model", "rpyx", "rpy"));
         configBrowseBtn.addActionListener(e ->
                 browseFile(configPathField, "YAML Config", "yaml", "yml"));
-        loadModelBtn.addActionListener(e       -> loadModel());
-        runBtn.addActionListener(e             -> runEvaluation());
-        exportBtn.addActionListener(e          -> exportExcel());
+        loadModelBtn.addActionListener(e   -> loadModel());
+        runBtn.addActionListener(e         -> runEvaluation());
+        exportBtn.addActionListener(e      -> exportExcel());
         newConfigWizardBtn.addActionListener(e  -> openWizardNew());
         editConfigWizardBtn.addActionListener(e -> openWizardEdit());
 
-        // Double-click on result row -> navigate in Rhapsody
+        // Update Model = reload the model, no checks, user decides when
+        updateModelBtn.addActionListener(e -> loadModel());
+
         resultsPanel.setOnElementDoubleClick(this::navigateToElement);
     }
 
     private void navigateToElement(String guid) {
         if (snapshot == null || guid == null || guid.isEmpty()) return;
-
         com.telelogic.rhapsody.core.IRPModelElement elt =
                 snapshot.handleByGuid().get(guid);
         if (elt == null) {
             statusBar.setText("  Element not found in model: " + guid);
             return;
         }
-
         try {
             elt.locateInBrowser();
             statusBar.setText("  Navigated to: " + elt.getName());
@@ -219,7 +215,8 @@ public class MainFrame extends JFrame {
         }
     }
 
-    private void browseFile(JComboBox<String> target, String description, String... extensions) {
+    private void browseFile(JComboBox<String> target, String description,
+                            String... extensions) {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Select " + description);
         chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
@@ -261,15 +258,11 @@ public class MainFrame extends JFrame {
                     packageTree = scanner.scanPackages(conn.getProject());
                     progressReporter.onStepCompleted(LoadingStep.SCANNING_PACKAGES);
 
-                    // Loader reports its own LOADING_ELEMENTS / BUILDING_INDEX steps
-                    // internally (with real per-element onProgress counts), so we
-                    // just hand it the reporter instead of wrapping it ourselves.
                     RhapsodyModelLoader loader = new RhapsodyModelLoader(progressReporter);
                     snapshot = loader.loadModel(conn.getProject());
 
                     index = ElementIndex.build(snapshot.records());
 
-                    // Fast scan per wizard suggestions
                     progressReporter.onStepStarted(LoadingStep.FAST_DETECTION);
                     RhapsodyPortInfoResolver portResolver =
                             new RhapsodyPortInfoResolver(snapshot);
@@ -302,12 +295,7 @@ public class MainFrame extends JFrame {
                     treePanel.loadTree(packageTree);
                     statusBar.setText("  Model loaded: "
                             + snapshot.records().size() + " elements");
-
-                    // Reține calea + timestamp-ul fișierului la momentul acestei scanări
-                    // reușite, pentru verificarea rapidă "s-a schimbat modelul?" de mai
-                    // târziu (fără nicio reconectare la Rhapsody).
                     recentFiles.addRecentModel(modelPath);
-                    freshnessChecker.recordSuccessfulScan(modelPath);
                     refreshRecentItems(modelPathField, recentFiles.recentModels());
                 }
                 updateButtonStates();
@@ -332,24 +320,6 @@ public class MainFrame extends JFrame {
             return;
         }
 
-        // Verificare ieftină (doar File.lastModified(), fără conectare la Rhapsody):
-        // dacă fișierul modelului pare modificat de la ultima încărcare, avertizează
-        // utilizatorul înainte de a rula regulile pe date potențial vechi.
-        String modelPath = textOf(modelPathField);
-        if (!modelPath.isEmpty() && !freshnessChecker.isModelUnchangedSinceLastScan(modelPath)) {
-            int choice = JOptionPane.showConfirmDialog(this,
-                    "Fișierul modelului pare modificat de la ultima încărcare.\n"
-                            + "Rezultatele pot fi neactualizate. Reîncarci modelul acum?",
-                    "Model posibil modificat",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.WARNING_MESSAGE);
-            if (choice == JOptionPane.YES_OPTION) {
-                loadModel();
-                return; // utilizatorul apasă din nou "Run" după ce reîncărcarea se termină
-            }
-            // altfel: continuă cu snapshot-ul existent, la alegerea utilizatorului
-        }
-
         String selectedPath = treePanel.getSelectedPath();
         statusBar.setText("  Loading config & running evaluation...");
         setBusy(true);
@@ -372,15 +342,9 @@ public class MainFrame extends JFrame {
                             aliasResolver, snapshot, config, index, selector);
                     progressReporter.onStepCompleted(LoadingStep.SELECTING_ELEMENTS);
 
-                    // RuleEngine reports its own EVALUATING_RULES step internally
-                    // (with real candidate-count progress + onDone()), so we just
-                    // hand it the reporter instead of wrapping it ourselves.
                     RuleEngine engine = new RuleEngine(
                             config, selector, context, selectedPath, progressReporter);
-
-                    RuleEngine.EvaluationSummary summary =
-                            engine.evaluateWithSummary();
-                    lastResults = summary.allResults();
+                    lastResults = engine.evaluateWithSummary().allResults();
 
                 } catch (Throwable t) {
                     error = t.getMessage();
@@ -405,7 +369,6 @@ public class MainFrame extends JFrame {
                             + " failures"
                             + (selectedPath.isEmpty()
                                     ? "" : " (scope: " + selectedPath + ")"));
-
                     recentFiles.addRecentConfig(configPath);
                     refreshRecentItems(configPathField, recentFiles.recentConfigs());
                 }
@@ -432,7 +395,6 @@ public class MainFrame extends JFrame {
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             String path = chooser.getSelectedFile().getAbsolutePath();
             if (!path.endsWith(".xlsx")) path += ".xlsx";
-
             try {
                 ExcelReportExporter.exportFailures(lastResults, index, path);
                 statusBar.setText("  Exported to: " + path);
@@ -508,14 +470,6 @@ public class MainFrame extends JFrame {
         });
     }
 
-    /**
-     * Enables/disables every action button at once, used while a background
-     * operation (model load or rule evaluation) is running so the user can't
-     * trigger overlapping actions (e.g. browsing to a new model path, or
-     * running the wizard, while a load/run is still in flight).
-     * Once the operation finishes, callers should follow up with
-     * updateButtonStates() to restore the state-dependent buttons correctly.
-     */
     private void setBusy(boolean busy) {
         boolean enabled = !busy;
         modelBrowseBtn.setEnabled(enabled);
@@ -525,14 +479,9 @@ public class MainFrame extends JFrame {
         exportBtn.setEnabled(enabled);
         newConfigWizardBtn.setEnabled(enabled);
         editConfigWizardBtn.setEnabled(enabled);
+        updateModelBtn.setEnabled(enabled);
     }
 
-    /**
-     * Returns the progress bar to its idle look once a background operation
-     * finishes (success or failure) — the final outcome message goes on
-     * statusBar via the normal done() logic, not through the reporter, so
-     * it doesn't get overwritten by onDone()'s generic "Ready" text.
-     */
     private void resetProgressBar() {
         progressBar.setIndeterminate(false);
         progressBar.setValue(0);
@@ -545,11 +494,12 @@ public class MainFrame extends JFrame {
         exportBtn.setEnabled(lastResults != null && !lastResults.isEmpty());
         newConfigWizardBtn.setEnabled(modelLoaded);
         editConfigWizardBtn.setEnabled(modelLoaded && config != null);
+        updateModelBtn.setEnabled(modelLoaded);
     }
 
     // ── Entry point ───────────────────────────────────────────────────────────
     public static void main(String[] args) {
-        FlatNordIJTheme.setup();
+    	FlatArcOrangeIJTheme.setup();
         JFrame.setDefaultLookAndFeelDecorated(true);
         JDialog.setDefaultLookAndFeelDecorated(true);
         SwingUtilities.invokeLater(() -> {
