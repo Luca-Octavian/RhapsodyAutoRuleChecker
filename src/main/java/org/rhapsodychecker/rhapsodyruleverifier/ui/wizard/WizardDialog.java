@@ -4,6 +4,7 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.YamlPresetWriter;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 
 import javax.swing.*;
 import java.awt.*;
@@ -76,6 +77,10 @@ public final class WizardDialog extends JDialog {
         add(cardPanel, BorderLayout.CENTER);
 
         // ── Navigare ──────────────────────────────────────────────────────────
+        cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        backBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        nextBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+
         JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
         navPanel.add(cancelBtn);
         navPanel.add(backBtn);

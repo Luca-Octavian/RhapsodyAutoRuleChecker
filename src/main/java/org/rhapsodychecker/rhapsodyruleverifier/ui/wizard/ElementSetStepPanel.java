@@ -4,13 +4,11 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * Pasul 2: definește ElementSets.
- */
 public final class ElementSetStepPanel extends JPanel {
 
     private final WizardState         state;
@@ -22,10 +20,9 @@ public final class ElementSetStepPanel extends JPanel {
     private final JButton editBtn   = new JButton("Edit...");
     private final JButton removeBtn = new JButton("Remove");
 
-    // Card layout ca sa comutam intre lista propriu-zisa si un mesaj de "gol"
     private static final String CARD_LIST  = "list";
     private static final String CARD_EMPTY = "empty";
-    private final JPanel      centerPanel = new JPanel(new CardLayout());
+    private final JPanel centerPanel = new JPanel(new CardLayout());
 
     public ElementSetStepPanel(WizardState state, FastDetectionResult fast) {
         super(new BorderLayout(8, 8));
@@ -50,9 +47,16 @@ public final class ElementSetStepPanel extends JPanel {
         emptyLabel.setForeground(Color.GRAY);
         emptyLabel.setFont(emptyLabel.getFont().deriveFont(Font.ITALIC, 12f));
 
-        centerPanel.add(new JScrollPane(setList), CARD_LIST);
+        JScrollPane setListScroll = new JScrollPane(setList);
+        setListScroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        centerPanel.add(setListScroll, CARD_LIST);
         centerPanel.add(emptyLabel, CARD_EMPTY);
         add(centerPanel, BorderLayout.CENTER);
+
+        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        editBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        removeBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnPanel.add(addBtn);
@@ -83,25 +87,33 @@ public final class ElementSetStepPanel extends JPanel {
         cl.show(centerPanel, listModel.isEmpty() ? CARD_EMPTY : CARD_LIST);
     }
 
-    /**
-     * Formateaza un ElementSetDefinition pentru afisare in lista, fara sa
-     * expuna reprezentarea bruta List.toString() (cu paranteze patrate imbricate).
-     */
-    private static String formatEntry(ElementSetDefinition s) {
+    private String formatEntry(ElementSetDefinition s) {
         StringBuilder sb = new StringBuilder(s.id());
-        boolean hasTypes = !s.types().isEmpty();
+
+        boolean hasKinds   = !s.kinds().isEmpty();
+        boolean hasTypes   = !s.types().isEmpty();
         boolean hasStereos = !s.stereotypes().isEmpty();
 
-        if (hasTypes || hasStereos) {
+        if (hasKinds || hasTypes || hasStereos) {
             sb.append("  —  ");
+            if (hasKinds)   sb.append(String.join(", ", s.kinds()));
             if (hasTypes) {
+                if (hasKinds) sb.append("  |  ");
                 sb.append(String.join(", ", s.types()));
             }
             if (hasStereos) {
-                if (hasTypes) sb.append("  |  ");
+                if (hasKinds || hasTypes) sb.append("  |  ");
                 sb.append(String.join(", ", s.stereotypes()));
             }
         }
+
+        // Approximate count
+        int count = ElementSetCountEstimator.estimateTotal(
+                fast, s.kinds(), s.types(), s.stereotypes());
+        if (count >= 0) {
+            sb.append("    (~").append(count).append(" elements)");
+        }
+
         return sb.toString();
     }
 

@@ -3,6 +3,7 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 
 import javax.swing.*;
 import java.awt.*;
@@ -51,6 +52,10 @@ public final class RuleStepPanel extends JPanel {
         centerPanel.add(new JScrollPane(ruleList), CARD_LIST);
         centerPanel.add(emptyLabel, CARD_EMPTY);
         add(centerPanel, BorderLayout.CENTER);
+
+        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        editBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        removeBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnPanel.add(addBtn);

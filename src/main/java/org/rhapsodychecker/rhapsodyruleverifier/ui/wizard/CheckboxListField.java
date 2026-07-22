@@ -26,6 +26,7 @@ public final class CheckboxListField extends JPanel {
     private JScrollPane           scroll;
     private static final Color    NORMAL_BORDER_COLOR  = Color.LIGHT_GRAY;
     private static final Color    INVALID_BORDER_COLOR = new Color(200, 60, 60);
+    private final List<Runnable> changeListeners = new ArrayList<>();
 
     /**
      * @param suggestions  Lista de valori detectate in model (poate fi goala)
@@ -52,6 +53,7 @@ public final class CheckboxListField extends JPanel {
         } else {
             for (String suggestion : suggestions) {
                 JCheckBox cb = new JCheckBox(suggestion);
+                cb.addActionListener(e -> fireChange());
                 checkBoxes.add(cb);
                 checkPanel.add(cb);
             }
@@ -88,6 +90,11 @@ public final class CheckboxListField extends JPanel {
         customLabel.setForeground(Color.GRAY);
         customField.setToolTipText(
                 "Add values not detected in the model (comma separated)");
+        customField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { fireChange(); }
+            @Override public void removeUpdate(DocumentEvent e)  { fireChange(); }
+            @Override public void changedUpdate(DocumentEvent e) { fireChange(); }
+        });
         customPanel.add(customLabel,  BorderLayout.WEST);
         customPanel.add(customField,  BorderLayout.CENTER);
         add(customPanel, BorderLayout.SOUTH);
@@ -112,19 +119,18 @@ public final class CheckboxListField extends JPanel {
     }
 
     /**
-     * Ataseaza un callback care ruleaza la orice schimbare de selectie
-     * (bifare/debifare checkbox) sau la orice modificare a custom field-ului.
-     * Folosit pentru validare live (ex: "cel putin un stereotip selectat").
+     * Inregistreaza un callback apelat la orice schimbare de selectie
+     * (checkbox bifat/debifat sau custom field modificat). Poti inregistra
+     * oricati listeneri - toti sunt notificati la fiecare schimbare.
      */
-    public void addChangeListener(final Runnable callback) {
-        for (JCheckBox cb : checkBoxes) {
-            cb.addItemListener(e -> callback.run());
+    public void addChangeListener(Runnable listener) {
+        changeListeners.add(listener);
+    }
+
+    private void fireChange() {
+        for (Runnable r : changeListeners) {
+            r.run();
         }
-        customField.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent e)  { callback.run(); }
-            @Override public void removeUpdate(DocumentEvent e)  { callback.run(); }
-            @Override public void changedUpdate(DocumentEvent e) { callback.run(); }
-        });
     }
 
     /**

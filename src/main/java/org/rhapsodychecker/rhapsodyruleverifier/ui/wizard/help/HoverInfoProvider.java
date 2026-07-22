@@ -5,12 +5,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Dictionar central: cheie logica (nu numele intern din YAML/Rhapsody)
- * -> descriere prietenoasa pentru utilizator.
+ * Central dictionary: logical key (not the internal name from YAML/Rhapsody)
+ * -> user-friendly description.
  *
- * Cheile sunt grupate pe entitate: "alias.*", "elementSet.*", "rule.*",
- * "rule.params.<ruleType>.*". Un singur loc de editat descrierile,
- * indiferent in cate dialoguri apare campul.
+ * Keys are grouped by entity: "alias.*", "elementSet.*", "rule.*",
+ * "rule.params.<ruleType>.*". A single place to edit descriptions,
+ * no matter how many dialogs the field appears in.
  */
 public final class HoverInfoProvider {
 
@@ -43,120 +43,124 @@ public final class HoverInfoProvider {
     static {
         // ── Top-level ──────────────────────────────────────────────────────
         put("top.schemaVersion", "Schema Version",
-                "Versiunea schemei de configurare. Lasa 1 daca nu esti sigur.");
+                "The version of the configuration schema. Leave at 1 if unsure.");
         put("top.mode", "Mode",
-                "Comportamentul la erori: 'lenient' doar raporteaza problemele, "
-                        + "'strict' opreste evaluarea la prima eroare.");
+                "Behavior on errors: 'lenient' only reports issues, "
+                        + "'strict' stops evaluation at the first error.");
 
         // ── Alias ──────────────────────────────────────────────────────────
         put("alias.id", "Alias ID",
-                "Identificatorul folosit de reguli pentru a referi acest alias.",
-                "ex: ELEMENT_DESCRIPTION");
+                "The identifier used by rules to reference this alias.",
+                "e.g. ELEMENT_DESCRIPTION");
         put("alias.kind", "Kind",
-                "Sursa valorii: description, name, tagged value sau stereotip.");
+                "The source of the value: description, name, tagged value, or stereotype.");
         put("alias.title", "Title",
-                "Nume prietenos afisat in interfata (optional).");
+                "Friendly name shown in the interface (optional).");
         put("alias.help", "Help",
-                "Descriere scurta a acestui alias (optional).");
+                "Short description of this alias (optional).");
         put("alias.valueType", "Value Type",
-                "Tipul asteptat al valorii (string/int/enum/bool). "
-                        + "Relevant doar pentru taggedValue, implicit string.");
+                "The expected type of the value (string/int/enum/bool). "
+                        + "Only relevant for taggedValue, defaults to string.");
         put("alias.profileName", "Profile Name",
-                "Profilul Rhapsody care detine tag-ul sau stereotipurile.");
+                "The Rhapsody profile that owns the tag or stereotypes.");
         put("alias.tagName", "Tag Name",
-                "Numele tag-ului definit in profil.");
+                "The name of the tag defined in the profile.");
         put("alias.stereotypeOwner", "Stereotype Owner",
-                "Stereotipul care detine acest tag (optional, doar pentru taggedValue).");
+                "The stereotype that owns this tag (optional, only for taggedValue).");
         put("alias.stereotypeName", "Stereotype Name",
-                "Numele stereotipului cautat.");
+                "The name of the stereotype being searched for.");
         put("alias.stereotypeNames", "Stereotype Names",
-                "Lista de stereotipuri permise pentru acest alias.");
+                "The list of stereotypes allowed for this alias.");
         put("alias.values", "Allowed Values",
-                "Lista valorilor permise, daca value type-ul este enum.");
+                "The list of allowed values, if the value type is enum.");
 
         // ── Element Set ────────────────────────────────────────────────────
         put("elementSet.id", "Element Set ID",
-                "Identificatorul folosit de reguli pentru a referi acest set.",
-                "ex: ArchitectureBlocks");
+                "The identifier used by rules to reference this set.",
+                "e.g. ArchitectureBlocks");
         put("elementSet.title", "Title",
-                "Nume prietenos afisat in interfata (optional).");
+                "Friendly name shown in the interface (optional).");
         put("elementSet.kinds", "Kinds (advanced)",
-                "Categorii interne suplimentare de filtrare (avansat).");
+                "Additional internal categories for filtering (advanced).");
         put("elementSet.types", "Element Type",
-                "In Rhapsody, ce vezi in browser ca 'Block' este stocat intern "
-                        + "sub numele de metaclasa 'Class'. Selecteaza tipurile de elemente incluse.",
-                "ex: Class (= Block), Port, Requirement");
+                "Filters elements based on internal Rhapsody type classifications; "
+                        + "some model elements might not be internally named the same as "
+                        + "their commonly referred to name. e.g. a \"part\" is under the "
+                        + "umbrella \"Object\", while a block can be represented as a "
+                        + "\"Class\" with stereotype block. Please use Kinds wherever "
+                        + "possible to avoid confusion.",
+                "e.g. Class (= Block), Port, Requirement");
         put("elementSet.stereotypes", "Stereotype",
-                "Eticheta suplimentara pusa pe un element in model.",
-                "ex: Block");
+                "An additional label placed on an element in the model.",
+                "e.g. Block");
         put("elementSet.includePackages", "Include Packages",
-                "Limiteaza setul la elementele din pachetele ce se potrivesc cu aceste regex-uri. "
-                        + "Lasa gol pentru a include tot modelul.",
-                "ex: com\\.acme\\..*");
+                "Limits the set to elements from packages matching these regular expressions. "
+                        + "Leave empty to include the whole model.",
+                "e.g. com\\.acme\\..*");
         put("elementSet.excludePackages", "Exclude Packages",
-                "Elimina din set elementele din pachetele ce se potrivesc cu aceste regex-uri, "
-                        + "chiar daca s-ar potrivi cu Include Packages.",
-                "ex: .*\\.test\\..*");
+                "Removes from the set elements from packages matching these regular expressions, "
+                        + "even if they would match Include Packages.",
+                "e.g. .*\\.test\\..*");
 
-        // ── Rule (comun) ───────────────────────────────────────────────────
+        // ── Rule (common) ──────────────────────────────────────────────────
         put("rule.id", "Rule ID",
-                "Identificatorul unic al regulii.");
+                "The unique identifier of the rule.");
         put("rule.type", "Rule Type",
-                "Tipul de logica de verificare aplicata.");
+                "The type of verification logic applied.");
         put("rule.enabled", "Enabled",
-                "Activeaza sau dezactiveaza aceasta regula (implicit activa).");
+                "Enables or disables this rule (enabled by default).");
         put("rule.title", "Title",
-                "Titlu scurt afisat in rapoarte (optional).");
+                "Short title shown in reports (optional).");
         put("rule.message", "Message",
-                "Mesaj custom afisat la esec. Suporta placeholder-e precum "
+                "Custom message shown on failure. Supports placeholders such as "
                         + "{elementName}, {value}.");
         put("rule.appliesToSet", "Applies To Set",
-                "Element Set-ul caruia i se aplica aceasta regula.");
+                "The Element Set that this rule applies to.");
         put("rule.target", "Target Alias",
-                "Alias-ul verificat de aceasta regula (ex: Description, un Tag).");
+                "The alias checked by this rule (e.g. Description, a Tag).");
         put("rule.conditions", "Conditions (advanced)",
-                "Filtre suplimentare pe langa Element Set (avansat, optional).");
+                "Additional filters on top of the Element Set (advanced, optional).");
 
         // ── Rule params: RequiredValue ─────────────────────────────────────
         put("rule.params.requiredValue.nonEmpty", "Non-empty",
-                "Valoarea nu trebuie sa fie goala.");
+                "The value must not be empty.");
         put("rule.params.requiredValue.minLength", "Min Length",
-                "Lungimea minima acceptata a valorii.");
+                "The minimum accepted length of the value.");
         put("rule.params.requiredValue.maxLength", "Max Length",
-                "Lungimea maxima acceptata a valorii.");
+                "The maximum accepted length of the value.");
         put("rule.params.requiredValue.operator", "Operator",
-                "Operatorul de comparatie: eq, in, gte sau lte.");
+                "The comparison operator: eq, in, gte, or lte.");
         put("rule.params.requiredValue.value", "Value",
-                "Valoarea asteptata (pentru eq/gte/lte).");
+                "The expected value (for eq/gte/lte).");
         put("rule.params.requiredValue.values", "Values",
-                "Lista de valori acceptate (pentru operatorul 'in').");
+                "The list of accepted values (for the 'in' operator).");
 
         // ── Rule params: NamingPattern ──────────────────────────────────────
         put("rule.params.namingPattern.pattern", "Pattern",
-                "Expresie regulata pe care numele trebuie sa o respecte.",
-                "ex: ^[A-Z][a-zA-Z0-9]*$");
+                "Regular expression that the name must match.",
+                "e.g. ^[A-Z][a-zA-Z0-9]*$");
 
         // ── Rule params: RelationExists ─────────────────────────────────────
         put("rule.params.relationExists.relationKind", "Relation Kind",
-                "Tipul de relatie numarat (dependency, association, ...).");
+                "The type of relation being counted (dependency, association, ...).");
         put("rule.params.relationExists.direction", "Direction",
-                "Directia relatiei: any, outgoing sau incoming.");
+                "The direction of the relation: any, outgoing, or incoming.");
         put("rule.params.relationExists.relationStereotypes", "Relation Stereotypes",
-                "Stereotipurile necesare pe relatie.");
+                "The stereotypes required on the relation.");
         put("rule.params.relationExists.operator", "Operator",
-                "Operatorul de comparatie a numarului de relatii: gte, lte sau eq.");
+                "The comparison operator for the relation count: gte, lte, or eq.");
         put("rule.params.relationExists.value", "Value",
-                "Numarul de relatii necesar.");
+                "The required number of relations.");
         put("rule.params.relationExists.targetSet", "Target Set",
-                "Element Set-ul tinta al relatiei (optional).");
+                "The target Element Set of the relation (optional).");
 
         // ── Rule params: RequiredStereotype ──────────────────────────────────
         put("rule.params.requiredStereotype.stereotype", "Stereotype",
-                "Stereotipul necesar pe element.");
+                "The stereotype required on the element.");
 
         // ── Rule params: RequiredStereotypeOneOf ─────────────────────────────
         put("rule.params.requiredStereotypeOneOf.stereotypes", "Stereotypes",
-                "Cel putin unul dintre aceste stereotipuri trebuie sa fie prezent.");
+                "At least one of these stereotypes must be present.");
     }
 
     public static FieldHelp get(String key) {

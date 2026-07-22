@@ -7,6 +7,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.config.ValueType;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 
 import javax.swing.*;
 import java.awt.*;
@@ -21,7 +22,6 @@ public final class AliasDialog extends JDialog {
 
     // Campuri comune
     private final JTextField           idField    = new JTextField(20);
-    private final JTextField           titleField = new JTextField(30);
     private final JTextField           helpField  = new JTextField(30);
     private final JComboBox<AliasKind> kindCombo  = new JComboBox<>(AliasKind.values());
 
@@ -80,7 +80,6 @@ public final class AliasDialog extends JDialog {
 
         int row = 0;
         addFormRow(top, gbc, row++, "ID *",   "alias.id",   idField);
-        addFormRow(top, gbc, row++, "Title",  "alias.title", titleField);
         addFormRow(top, gbc, row++, "Help",   "alias.help",  helpField);
         addFormRow(top, gbc, row++, "Kind *", "alias.kind",  kindCombo);
         add(top, BorderLayout.NORTH);
@@ -104,6 +103,8 @@ public final class AliasDialog extends JDialog {
 
         // ── Butoane ───────────────────────────────────────────────────────────
         JButton cancelBtn = new JButton("Cancel");
+        okBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnRow.add(cancelBtn);
         btnRow.add(okBtn);
@@ -175,7 +176,6 @@ public final class AliasDialog extends JDialog {
 
     private void prefill(AliasDefinition a) {
         idField.setText(a.id());
-        a.title().ifPresent(titleField::setText);
         a.help().ifPresent(helpField::setText);
         kindCombo.setSelectedItem(a.kind());
         rebuildDynamic();
@@ -278,7 +278,6 @@ public final class AliasDialog extends JDialog {
         AliasDefinition.Builder b = AliasDefinition.builder()
                 .id(idField.getText().trim())
                 .kind(kind)
-                .title(nullable(titleField.getText()))
                 .help(nullable(helpField.getText()));
 
         switch (kind) {

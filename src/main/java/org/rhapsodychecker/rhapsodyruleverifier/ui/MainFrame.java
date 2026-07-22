@@ -1,7 +1,7 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/ui/MainFrame.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui;
 
-import com.formdev.flatlaf.intellijthemes.FlatArcOrangeIJTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.*;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ConfigLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
@@ -19,6 +19,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.export.ExcelReportExporter;
 import org.rhapsodychecker.rhapsodyruleverifier.prefs.RecentFilesStore;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.LoadingStep;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.WizardDialog;
 
 import javax.swing.*;
@@ -44,17 +45,6 @@ public class MainFrame extends JFrame {
     private final JButton newConfigWizardBtn  = new JButton("New Config (Wizard)");
     private final JButton editConfigWizardBtn = new JButton("Edit Config (Wizard)");
     private final JButton updateModelBtn      = new JButton("Update Model");
-
-    // Secondary accent (purple) — used to visually set the config-wizard
-    // workflow apart from the orange-accented load/run pipeline actions.
-    private static final String WIZARD_ACCENT_STYLE =
-            "background: #4827af;"
-          + "foreground: #ffffff;"
-          + "hoverBackground: #5b3ac9;"
-          + "pressedBackground: #3a1f8a;"
-          + "focusedBackground: #4827af;"
-          + "borderColor: #4827af;"
-          + "focusedBorderColor: #5b3ac9;";
 
     // Main panels
     private final PackageTreePanel  treePanel    = new PackageTreePanel();
@@ -140,8 +130,16 @@ public class MainFrame extends JFrame {
         gbc.gridx = 2; gbc.weightx = 0;
         topPanel.add(configBrowseBtn, gbc);
 
-        newConfigWizardBtn.putClientProperty("FlatLaf.style", WIZARD_ACCENT_STYLE);
-        editConfigWizardBtn.putClientProperty("FlatLaf.style", WIZARD_ACCENT_STYLE);
+        // Model / run side — orange outline
+        modelBrowseBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
+        loadModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
+        updateModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
+        runBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
+
+        // Config / wizard side — purple outline
+        configBrowseBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        newConfigWizardBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        editConfigWizardBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         buttonPanel.add(loadModelBtn);
@@ -499,9 +497,7 @@ public class MainFrame extends JFrame {
 
     // ── Entry point ───────────────────────────────────────────────────────────
     public static void main(String[] args) {
-    	FlatArcOrangeIJTheme.setup();
-        JFrame.setDefaultLookAndFeelDecorated(true);
-        JDialog.setDefaultLookAndFeelDecorated(true);
+        AppTheme.apply();
         SwingUtilities.invokeLater(() -> {
             MainFrame frame = new MainFrame();
             frame.setVisible(true);

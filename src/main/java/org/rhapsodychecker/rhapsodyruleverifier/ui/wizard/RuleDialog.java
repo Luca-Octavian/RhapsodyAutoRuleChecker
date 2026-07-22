@@ -8,6 +8,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 
 import javax.swing.*;
 import java.awt.*;
@@ -23,7 +24,6 @@ public final class RuleDialog extends JDialog {
 
     // Câmpuri comune
     private final JTextField          idField      = new JTextField(20);
-    private final JTextField          titleField   = new JTextField(30);
     private final JComboBox<RuleType> typeCombo    = new JComboBox<>(RuleType.values());
     private final JComboBox<String>   setCombo     = new JComboBox<>();
     private final JComboBox<String>   targetCombo  = new JComboBox<>();
@@ -103,7 +103,6 @@ public final class RuleDialog extends JDialog {
 
         int row = 0;
         addFormRow(top, gbc, row++, "ID *",          "rule.id",   idField);
-        addFormRow(top, gbc, row++, "Title",          "rule.title", titleField);
         addFormRow(top, gbc, row++, "Rule Type *",    "rule.type", typeCombo);
 
         // Populeaza setCombo din state.sets()
@@ -126,6 +125,7 @@ public final class RuleDialog extends JDialog {
         // ── Params dinamici ───────────────────────────────────────────────────
         paramsPanel.setBorder(BorderFactory.createTitledBorder("Rule Parameters"));
         JScrollPane paramsScroll = new JScrollPane(paramsPanel);
+        paramsScroll.getVerticalScrollBar().setUnitIncrement(16);
         paramsScroll.setPreferredSize(new Dimension(500, 260));
         add(paramsScroll, BorderLayout.CENTER);
 
@@ -145,6 +145,8 @@ public final class RuleDialog extends JDialog {
 
         // ── Butoane ───────────────────────────────────────────────────────────
         JButton cancelBtn = new JButton("Cancel");
+        okBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnRow.add(cancelBtn);
         btnRow.add(okBtn);
@@ -233,7 +235,6 @@ public final class RuleDialog extends JDialog {
     @SuppressWarnings("unchecked")
     private void prefill(WizardState.RuleRequest r) {
         idField.setText(r.id());
-        if (r.title() != null) titleField.setText(r.title());
 
         try { typeCombo.setSelectedItem(RuleType.valueOf(r.ruleType())); }
         catch (Exception ignored) {}
@@ -433,7 +434,7 @@ public final class RuleDialog extends JDialog {
 
         return new WizardState.RuleRequest(
                 idField.getText().trim(),
-                nullable(titleField.getText()),
+                null,
                 type.name(),
                 (targetId == null || targetId.isBlank()) ? null : targetId,
                 (setId    == null || setId.isBlank())    ? null : setId,
