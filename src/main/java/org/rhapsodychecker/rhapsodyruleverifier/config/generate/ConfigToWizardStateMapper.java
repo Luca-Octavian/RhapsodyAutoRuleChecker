@@ -73,7 +73,6 @@ public final class ConfigToWizardStateMapper {
 
         // ── Rules ─────────────────────────────────────────────────────────────
         for (RuleSpec spec : config.rules()) {
-            if (!spec.enabled()) continue;
 
             // Warn daca target alias nu exista
             if (spec.target().isPresent()
@@ -96,7 +95,8 @@ public final class ConfigToWizardStateMapper {
                     spec.target().orElse(null),
                     spec.appliesToSet().orElse(null),
                     spec.params(),
-                    spec.message().orElse(null)
+                    spec.message().orElse(null),
+                    spec.enabled()       
             );
             state.addRule(req);
         }

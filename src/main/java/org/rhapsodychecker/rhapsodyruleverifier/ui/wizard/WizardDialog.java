@@ -125,6 +125,7 @@ public final class WizardDialog extends JDialog {
     }
 
     private void saveConfig() {
+    	reviewPanel.applyToState();
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Save Config As");
         chooser.setSelectedFile(new File("rule-config.yaml"));

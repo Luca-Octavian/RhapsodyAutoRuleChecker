@@ -1,3 +1,4 @@
+// File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/adapter/rhapsody/RhapsodyModelLoader.java
 package org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody;
 
 import com.telelogic.rhapsody.core.*;
@@ -8,10 +9,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
 
 import java.util.*;
 
-/**
- * Loads a Rhapsody project into a neutral representation (ElementRecord).
- * Single responsibility: interact with Rhapsody API and build a stable snapshot.
- */
 public final class RhapsodyModelLoader {
 
     private final ProgressReporter reporter;
@@ -24,16 +21,12 @@ public final class RhapsodyModelLoader {
         this.reporter = reporter != null ? reporter : ProgressReporter.NOOP;
     }
 
-    /**
-     * Traverse the project and build a snapshot containing:
-     * - a list of ElementRecord (tool-agnostic)
-     * - a GUID -> IRPModelElement map (adapter use only)
-     */
     public RhapsodyModelSnapshot loadModel(IRPProject project) {
         Objects.requireNonNull(project, "project must not be null");
 
         List<ElementRecord> records = new ArrayList<>();
         Map<String, IRPModelElement> handleByGuid = new HashMap<>(4096);
+        Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> dependenciesByOwner = new HashMap<>();
 
         // ── Step 1: collect all elements ─────────────────────────────────────
         reporter.onStepStarted(LoadingStep.LOADING_ELEMENTS);
@@ -74,16 +67,64 @@ public final class RhapsodyModelLoader {
 
             ElementKind kind = classify(metaClass, stereotypes);
 
+            if ("Dependency".equals(metaClass)) {
+                // This is a Dependency element — record it for its owner
+                if (ownerGuid != null && !ownerGuid.isEmpty()) {
+                    String otherEndGuid = null;
+                    if (elt instanceof IRPDependency) {
+                        try {
+                            IRPModelElement dependsOn = ((IRPDependency) elt).getDependsOn();
+                            if (dependsOn != null) {
+                                otherEndGuid = safeStr(dependsOn.getGUID());
+                            }
+                        } catch (Throwable t) { /* ignore */ }
+                    }
+
+                    RhapsodyModelSnapshot.DependencyInfo depInfo =
+                            new RhapsodyModelSnapshot.DependencyInfo(guid, stereotypes, otherEndGuid);
+
+                    dependenciesByOwner
+                            .computeIfAbsent(ownerGuid, k -> new ArrayList<>())
+                            .add(depInfo);
+                }
+            }
+
+            // ── Pre-load port info to avoid COM calls during evaluation ──
+            String portDirection = null;
+            String portMultiplicity = null;
+
+            if (kind.isPortKind()) {
+                // Direction
+                portDirection = safeCallString(elt, "getPortDirection");
+                if (portDirection == null) portDirection = safeCallString(elt, "getDirection");
+
+                // Multiplicity
+                portMultiplicity = safeCallString(elt, "getMultiplicity");
+
+                // Type fallback: for SysMLPort, getType() works but getOtherClass() doesn't
+                if (typeGuid == null || typeGuid.isEmpty()) {
+                    try {
+                        java.lang.reflect.Method getType = elt.getClass().getMethod("getType");
+                        Object cls = getType.invoke(elt);
+                        if (cls instanceof IRPModelElement) {
+                            typeGuid = safeStr(((IRPModelElement) cls).getGUID());
+                            typeName = safeStr(((IRPModelElement) cls).getName());
+                        }
+                    } catch (Throwable t) { /* ignore */ }
+                }
+            }
+
             records.add(ElementRecord.builder()
                     .guid(guid).name(name).metaClass(metaClass).kind(kind)
                     .ownerGuid(ownerGuid).ownerPath(ownerPath)
                     .stereotypes(stereotypes)
                     .typeGuid(typeGuid).typeName(typeName)
                     .description(description)
+                    .portDirection(portDirection)
+                    .portMultiplicity(portMultiplicity)
                     .build());
             handleByGuid.put(guid, elt);
 
-            // Report progress every 50 elements to avoid flooding EDT
             if (i % 50 == 0 || i == count) {
                 reporter.onProgress(i, count);
             }
@@ -130,7 +171,22 @@ public final class RhapsodyModelLoader {
 
         return new RhapsodyModelSnapshot(
                 Collections.unmodifiableList(records),
-                Collections.unmodifiableMap(handleByGuid));
+                Collections.unmodifiableMap(handleByGuid),
+                Collections.unmodifiableMap(dependenciesByOwner));
+    }
+
+    // ---- Helpers ----
+
+    private String safeCallString(IRPModelElement elt, String methodName) {
+        try {
+            java.lang.reflect.Method m = elt.getClass().getMethod(methodName);
+            Object val = m.invoke(elt);
+            if (val != null) {
+                String s = val.toString().trim();
+                return s.isEmpty() ? null : s;
+            }
+        } catch (Throwable t) { /* ignore */ }
+        return null;
     }
 
     private IRPCollection safeGetNestedElementsRecursive(IRPProject project) {

@@ -124,6 +124,9 @@ public final class YamlPresetWriter {
         if (r.message() != null && !r.message().isEmpty()) {
             out.add("    message: \"" + escape(r.message()) + "\"");
         }
+        if (!r.isEnabled()) {
+            out.add("    enabled: false");
+        }
         out.add("");
     }
 

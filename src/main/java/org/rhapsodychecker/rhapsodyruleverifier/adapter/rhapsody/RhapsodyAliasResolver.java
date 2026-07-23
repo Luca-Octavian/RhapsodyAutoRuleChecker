@@ -160,27 +160,52 @@ public final class RhapsodyAliasResolver implements AliasResolver {
 
 
     private ResolvedValue resolvePortDirection(ElementRecord element) {
-        if (!element.kind().isPortKind()) {
-            return DefaultResolvedValue.absent();
+        if (!element.kind().isPortKind()) return DefaultResolvedValue.absent();
+
+        // Fast path: pre-loaded on ElementRecord during model loading
+        String dir = element.portDirection().orElse(null);
+        if (dir != null && !dir.trim().isEmpty()) {
+            String mapped = mapDirectionString(dir);
+            if (!"UNKNOWN".equals(mapped) && !"NONE".equals(mapped)) {
+                return DefaultResolvedValue.of(mapped, "preloaded:portDirection");
+            }
         }
+
+        // Slow fallback: only if not pre-loaded
         PortInfo info = portInfoResolver.resolve(element);
-        String dir = info.direction().name();
-        if ("UNKNOWN".equals(dir) || "NONE".equals(dir)) {
+        String dirName = info.direction().name();
+        if ("UNKNOWN".equals(dirName) || "NONE".equals(dirName)) {
             return DefaultResolvedValue.absent();
         }
-        return DefaultResolvedValue.of(dir, info.directionSource());
+        return DefaultResolvedValue.of(dirName, info.directionSource());
     }
 
     private ResolvedValue resolvePortMultiplicity(ElementRecord element) {
-        if (!element.kind().isPortKind()) {
-            return DefaultResolvedValue.absent();
+        if (!element.kind().isPortKind()) return DefaultResolvedValue.absent();
+
+        // Fast path: pre-loaded on ElementRecord during model loading
+        String mult = element.portMultiplicity().orElse(null);
+        if (mult != null && !mult.trim().isEmpty()) {
+            return DefaultResolvedValue.of(mult.trim(), "preloaded:portMultiplicity");
         }
+
+        // Slow fallback
         PortInfo info = portInfoResolver.resolve(element);
-        String mult = info.multiplicity().toString();
-        if ("?..* ".equals(mult) || mult.contains("?")) {
-            return DefaultResolvedValue.absent();
+        String multStr = info.multiplicity().toString();
+        if (multStr.contains("?")) return DefaultResolvedValue.absent();
+        return DefaultResolvedValue.of(multStr, info.multiplicitySource());
+    }
+
+    private String mapDirectionString(String raw) {
+        if (raw == null) return "UNKNOWN";
+        String s = raw.trim().toLowerCase();
+        switch (s) {
+            case "in": case "input": return "IN";
+            case "out": case "output": return "OUT";
+            case "inout": case "in/out": case "in-out": return "INOUT";
+            case "none": return "NONE";
+            default: return "UNKNOWN";
         }
-        return DefaultResolvedValue.of(mult, info.multiplicitySource());
     }
 
     // ---- Rhapsody tag reading ----

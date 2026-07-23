@@ -6,11 +6,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 
 import java.util.*;
 
-/**
- * Starea acumulată a wizard-ului pe durata configurării.
- * Fiecare pas din wizard adaugă/modifică intrări.
- * ConfigBuilder.build(state) produce RuleCheckerConfig gata de execuție.
- */
 public final class WizardState {
 
     private String                           scopePath = "";
@@ -19,7 +14,7 @@ public final class WizardState {
     private final List<ElementSetDefinition> sets      = new ArrayList<>();
     private final List<RuleRequest>          rules     = new ArrayList<>();
 
-    // ── Getters (API original) ────────────────────────────────────────────────
+    // ── Getters ───────────────────────────────────────────────────────────────
 
     public String scopePath() { return scopePath; }
     public String mode()      { return mode; }
@@ -28,7 +23,7 @@ public final class WizardState {
     public List<ElementSetDefinition> sets()    { return Collections.unmodifiableList(sets); }
     public List<RuleRequest>          rules()   { return Collections.unmodifiableList(rules); }
 
-    // ── Fluent setters (API original) ────────────────────────────────────────
+    // ── Fluent setters ────────────────────────────────────────────────────────
 
     public WizardState scopePath(String p) { this.scopePath = p; return this; }
     public WizardState mode(String m)      { this.mode = m;      return this; }
@@ -37,59 +32,38 @@ public final class WizardState {
     public WizardState addSet(ElementSetDefinition s) { sets.add(s);    return this; }
     public WizardState addRule(RuleRequest r)         { rules.add(r);   return this; }
 
-    // ── Metode noi pentru UI ─────────────────────────────────────────────────
+    // ── UI helpers ────────────────────────────────────────────────────────────
 
-    /** Inlocuieste alias-ul cu acelasi id; il adauga la sfarsit daca nu exista. */
     public WizardState putAlias(AliasDefinition a) {
         for (int i = 0; i < aliases.size(); i++) {
-            if (aliases.get(i).id().equals(a.id())) {
-                aliases.set(i, a);
-                return this;
-            }
+            if (aliases.get(i).id().equals(a.id())) { aliases.set(i, a); return this; }
         }
         aliases.add(a);
         return this;
     }
 
-    /** Inlocuieste set-ul cu acelasi id; il adauga la sfarsit daca nu exista. */
     public WizardState putSet(ElementSetDefinition s) {
         for (int i = 0; i < sets.size(); i++) {
-            if (sets.get(i).id().equals(s.id())) {
-                sets.set(i, s);
-                return this;
-            }
+            if (sets.get(i).id().equals(s.id())) { sets.set(i, s); return this; }
         }
         sets.add(s);
         return this;
     }
 
-    public WizardState removeAlias(String id) {
-        aliases.removeIf(a -> a.id().equals(id));
-        return this;
-    }
+    public WizardState removeAlias(String id) { aliases.removeIf(a -> a.id().equals(id)); return this; }
+    public WizardState removeSet(String id)   { sets.removeIf(s -> s.id().equals(id));    return this; }
+    public WizardState removeRule(int index)  { rules.remove(index);                      return this; }
 
-    public WizardState removeSet(String id) {
-        sets.removeIf(s -> s.id().equals(id));
-        return this;
-    }
+    public WizardState replaceRule(int index, RuleRequest r) { rules.set(index, r); return this; }
 
-    public WizardState removeRule(int index) {
-        rules.remove(index);
-        return this;
-    }
-
-    public WizardState replaceRule(int index, RuleRequest r) {
-        rules.set(index, r);
+    /** Togglează enabled pe regula de la index, returnând starea. */
+    public WizardState setRuleEnabled(int index, boolean enabled) {
+        rules.set(index, rules.get(index).withEnabled(enabled));
         return this;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Cerere de regulă exprimată în termeni de utilizator (fără YAML).
-     * Ex: "vreau că Block-ul să aibă descriere" →
-     *     RuleRequest(type=RequiredValue, targetAlias=ELEMENT_DESCRIPTION, set=ArchitectureElements)
-     */
     public static final class RuleRequest {
 
         private final String              id;
@@ -99,7 +73,9 @@ public final class WizardState {
         private final String              elementSetId;
         private final Map<String, Object> params;
         private final String              message;
+        private final boolean             enabled;          // ← NOU (default true)
 
+        /** Constructor original — enabled = true implicit. */
         public RuleRequest(
                 String              id,
                 String              title,
@@ -108,6 +84,20 @@ public final class WizardState {
                 String              elementSetId,
                 Map<String, Object> params,
                 String              message
+        ) {
+            this(id, title, ruleType, targetAliasId, elementSetId, params, message, true);
+        }
+
+        /** Constructor complet cu enabled. */
+        public RuleRequest(
+                String              id,
+                String              title,
+                String              ruleType,
+                String              targetAliasId,
+                String              elementSetId,
+                Map<String, Object> params,
+                String              message,
+                boolean             enabled
         ) {
             this.id            = id;
             this.title         = title;
@@ -119,6 +109,7 @@ public final class WizardState {
                                              ? params
                                              : Collections.emptyMap()));
             this.message       = message;
+            this.enabled       = enabled;
         }
 
         public String              id()            { return id; }
@@ -128,6 +119,13 @@ public final class WizardState {
         public String              elementSetId()  { return elementSetId; }
         public Map<String, Object> params()        { return params; }
         public String              message()       { return message; }
+        public boolean             isEnabled()     { return enabled; }
+
+        /** Returnează o copie cu enabled modificat (imutabilitate păstrată). */
+        public RuleRequest withEnabled(boolean enabled) {
+            return new RuleRequest(id, title, ruleType, targetAliasId,
+                                   elementSetId, params, message, enabled);
+        }
 
         @Override
         public String toString() {

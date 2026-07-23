@@ -3,7 +3,6 @@ package org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody;
 
 import com.telelogic.rhapsody.core.*;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
-import org.rhapsodychecker.rhapsodyruleverifier.core.config.ConfigMode;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
@@ -13,10 +12,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 
 import java.util.*;
 
-/**
- * Rhapsody-specific implementation of EvaluationContext.
- * Provides alias resolution and relation counting via the Rhapsody API.
- */
 public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     private final RhapsodyAliasResolver aliasResolver;
@@ -24,6 +19,9 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
     private final RuleCheckerConfig config;
     private final ElementIndex index;
     private final ElementSelector selector;
+
+    // Fix 3: Cache relation info per element GUID to avoid repeated COM calls
+    private final Map<String, List<RelationInfo>> relationCache = new HashMap<>();
 
     public RhapsodyEvaluationContext(RhapsodyAliasResolver aliasResolver,
                                      RhapsodyModelSnapshot snapshot,
@@ -53,27 +51,23 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         }
 
         int count = 0;
-        List<RelationInfo> relations = collectRelations(handle, element.guid());
+
+        // Use cached relations instead of re-fetching from COM
+        List<RelationInfo> relations = getRelationsCached(handle, element.guid());
 
         for (RelationInfo rel : relations) {
-            // Filter by relation kind
             if (query.kind() != null && query.kind() != org.rhapsodychecker.rhapsodyruleverifier.core.config.RelationKind.ANY) {
                 if (!matchesKind(rel.metaClass, query.kind())) continue;
             }
 
-            // Filter by direction
             if (query.direction() != null && query.direction() != org.rhapsodychecker.rhapsodyruleverifier.core.config.RelationDirection.ANY) {
                 if (!matchesDirection(rel, element.guid(), query.direction())) continue;
             }
 
-            // Filter by relation stereotypes
             if (query.relationStereotypes() != null && !query.relationStereotypes().isEmpty()) {
                 if (!matchesAnyStereotype(rel.stereotypes, query.relationStereotypes())) continue;
             }
 
-            // If we have a target set/type filter AND we have the other end GUID, check it
-            // If otherEndGuid is null (external link like Jazz), the relation still counts
-            // as long as the stereotype filter passed
             if (rel.otherEndGuid != null && !rel.otherEndGuid.isEmpty()) {
                 if (targetGuids != null && !targetGuids.contains(rel.otherEndGuid)) continue;
 
@@ -96,7 +90,6 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         return count;
     }
 
-
     @Override
     public Optional<Object> getOption(String key) {
         if ("mode".equalsIgnoreCase(key)) {
@@ -104,20 +97,25 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         }
         return Optional.empty();
     }
-    
+
     @Override
     public Optional<ElementRecord> findElementByGuid(String guid) {
         if (guid == null || guid.isEmpty()) return Optional.empty();
         return index.repository().get(guid);
     }
-    
+
+    // ---- Cached relation lookup ----
+
+    private List<RelationInfo> getRelationsCached(IRPModelElement handle, String elementGuid) {
+        return relationCache.computeIfAbsent(elementGuid, k -> collectRelations(handle, k));
+    }
 
     // ---- Relation collection from Rhapsody ----
 
     private List<RelationInfo> collectRelations(IRPModelElement handle, String elementGuid) {
         List<RelationInfo> relations = new ArrayList<>();
 
-        // Method 1: getDependencies() — outgoing dependencies owned by this element
+        // Method 1: getDependencies() — outgoing (direct API call, usually fast/empty)
         try {
             IRPCollection deps = handle.getDependencies();
             if (deps != null) {
@@ -142,44 +140,35 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
             }
         } catch (Throwable t) { /* ignore */ }
 
-        // Method 2: search nested Dependency elements owned by this element
-        // These are satisfy/refine links stored as children of the block
-        try {
-            IRPCollection nested = handle.getNestedElements();
-            if (nested != null) {
-                for (int i = 1; i <= nested.getCount(); i++) {
-                    Object o = nested.getItem(i);
-                    if (!(o instanceof IRPModelElement)) continue;
-                    IRPModelElement nestedElt = (IRPModelElement) o;
-                    String meta = safeStr(nestedElt.getMetaClass());
-                    if (!"Dependency".equals(meta)) continue;
-
-                    RelationInfo info = new RelationInfo();
-                    info.metaClass = meta;
-                    info.stereotypes = readStereotypes(nestedElt);
-                    info.sourceGuid = elementGuid;
-                    info.direction = "outgoing";
-
-                    // Try to get the other end
-                    if (nestedElt instanceof IRPDependency) {
-                        try {
-                            IRPModelElement dependsOn = ((IRPDependency) nestedElt).getDependsOn();
-                            if (dependsOn != null) {
-                                info.otherEndGuid = safeStr(dependsOn.getGUID());
-                            }
-                        } catch (Throwable t) {
-                            info.otherEndGuid = null;
-                        }
+        // Method 2: PRE-INDEXED nested Dependencies (satisfy/refine etc.)
+        // No COM call needed — read from snapshot's pre-built index
+        List<RhapsodyModelSnapshot.DependencyInfo> preIndexed =
+                snapshot.dependenciesByOwner().get(elementGuid);
+        if (preIndexed != null) {
+            for (RhapsodyModelSnapshot.DependencyInfo dep : preIndexed) {
+                // Avoid duplicates with Method 1
+                boolean alreadyFound = false;
+                for (RelationInfo existing : relations) {
+                    if (dep.guid().equals(existing.sourceGuid) ||
+                        (dep.otherEndGuid() != null && dep.otherEndGuid().equals(existing.otherEndGuid)
+                         && existing.stereotypes.equals(dep.stereotypes()))) {
+                        alreadyFound = true;
+                        break;
                     }
-
-                    // If we couldn't get otherEndGuid via getDependsOn,
-                    // the relation still counts (e.g., external Jazz requirement links)
-                    relations.add(info);
                 }
-            }
-        } catch (Throwable t) { /* ignore */ }
+                if (alreadyFound) continue;
 
-        // Method 3: getReferences() — incoming references
+                RelationInfo info = new RelationInfo();
+                info.metaClass = "Dependency";
+                info.stereotypes = dep.stereotypes();
+                info.sourceGuid = elementGuid;
+                info.otherEndGuid = dep.otherEndGuid();
+                info.direction = "outgoing";
+                relations.add(info);
+            }
+        }
+
+        // Method 3: getReferences() — incoming
         try {
             IRPCollection refs = handle.getReferences();
             if (refs != null) {
@@ -202,10 +191,7 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         return relations;
     }
 
-
-
     private String tryGetOtherEnd(IRPModelElement relElt, String thisGuid) {
-        // Try common methods to find the other end of a relation
         String[] methods = {"getDependsOn", "getOtherClass", "getDerived", "getBaseClass"};
         for (String m : methods) {
             try {
@@ -290,13 +276,11 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         return s == null ? "" : s.trim();
     }
 
-    // ---- Internal data holder ----
-
     private static final class RelationInfo {
         String metaClass;
         Set<String> stereotypes = Collections.emptySet();
         String sourceGuid;
         String otherEndGuid;
-        String direction; // "outgoing", "incoming", "any"
+        String direction;
     }
 }

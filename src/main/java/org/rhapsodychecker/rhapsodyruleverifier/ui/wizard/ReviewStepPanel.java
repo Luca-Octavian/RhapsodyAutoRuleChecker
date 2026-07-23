@@ -1,99 +1,187 @@
 // ui/wizard/ReviewStepPanel.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 
+import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
+import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState.RuleRequest;
 import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
-import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
+
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Pasul 5: sumar al configurației înainte de salvare.
- * refresh() trebuie apelat de WizardDialog înainte de a afișa pasul.
+ * Pasul final de review:
+ *  - Scope + Mode (text read-only)
+ *  - Aliases (text read-only)
+ *  - Element Sets (text read-only)
+ *  - Rules — câte un JCheckBox per regulă; debifat = disabled
  */
-public final class ReviewStepPanel extends JPanel {
+public class ReviewStepPanel extends JPanel {
 
     private final WizardState state;
-    private final JTextArea   summaryArea = new JTextArea();
+
+    // checkbox-urile corespund 1:1 cu state.rules()
+    private final List<JCheckBox> ruleCheckBoxes = new ArrayList<>();
 
     public ReviewStepPanel(WizardState state) {
-        super(new BorderLayout(8, 8));
         this.state = state;
-        setBorder(BorderFactory.createEmptyBorder(20, 30, 20, 30));
-        build();
+        setLayout(new BorderLayout(0, 8));
+        setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        rebuild();
     }
 
-    private void build() {
-        JLabel title = new JLabel("Review Configuration");
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 15f));
-        add(title, BorderLayout.NORTH);
+    // ── API public ────────────────────────────────────────────────────────────
 
-        summaryArea.setEditable(false);
-        summaryArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        summaryArea.setLineWrap(false);
-        add(new JScrollPane(summaryArea), BorderLayout.CENTER);
-
-        add(new JLabel("  Click \"Save & Close\" to write the YAML file."),
-                BorderLayout.SOUTH);
+    /**
+     * Apelat de WizardDialog înainte de a afișa panelul.
+     * Reconstruiește întregul conținut pe baza stării curente.
+     */
+    public void refresh() {
+        removeAll();
+        ruleCheckBoxes.clear();
+        rebuild();
+        revalidate();
+        repaint();
     }
 
     /**
-     * Apelat de WizardDialog la fiecare intrare pe pasul Review,
-     * pentru a afișa starea curenta a wizard-ului.
+     * Sincronizează starea checkbox-urilor înapoi în WizardState.
+     * Apelat de WizardDialog înainte de Finish / Save.
      */
-    public void refresh() {
-        StringBuilder sb = new StringBuilder();
+    public void applyToState() {
+        List<RuleRequest> rules = state.rules();
+        for (int i = 0; i < ruleCheckBoxes.size() && i < rules.size(); i++) {
+            state.setRuleEnabled(i, ruleCheckBoxes.get(i).isSelected());
+        }
+    }
 
-        sb.append("Mode: ").append(state.mode()).append("\n");
-        sb.append("Scope: ")
-          .append(state.scopePath().isEmpty() ? "(entire model)" : state.scopePath())
-          .append("\n\n");
+    // ── Construcție UI ────────────────────────────────────────────────────────
 
-        // ── Aliases ───────────────────────────────────────────────────────────
-        sb.append("=== Aliases (").append(state.aliases().size()).append(") ===\n");
+    private void rebuild() {
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+
+        content.add(buildScopeSection());
+        content.add(Box.createVerticalStrut(6));
+        content.add(buildAliasesSection());
+        content.add(Box.createVerticalStrut(6));
+        content.add(buildSetsSection());
+        content.add(Box.createVerticalStrut(6));
+        content.add(buildRulesSection());
+
+        JScrollPane scroll = new JScrollPane(content);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        add(scroll, BorderLayout.CENTER);
+    }
+
+    private JPanel buildScopeSection() {
+        JPanel p = titledPanel("Configuration");
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        p.add(scopeRow("Scope path:", state.scopePath()));
+        p.add(scopeRow("Mode:", state.mode()));
+        return p;
+    }
+
+    private JPanel scopeRow(String labelText, String value) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        row.setOpaque(false);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.add(label(labelText));
+        row.add(readOnly(value));
+        return row;
+    }
+
+    private JPanel buildAliasesSection() {
+        JPanel p = titledPanel("Aliases (" + state.aliases().size() + ")");
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+
         if (state.aliases().isEmpty()) {
-            sb.append("  (none)\n");
+            p.add(readOnly("(none)"));
         } else {
-            for (AliasDefinition a : state.aliases()) {
-                sb.append("  ").append(a.id())
-                  .append("  [").append(a.kind().name().toLowerCase()).append("]");
-                a.title().ifPresent(t -> sb.append("  \"").append(t).append("\""));
-                sb.append("\n");
+            for (AliasDefinition alias : state.aliases()) {
+                p.add(readOnly(alias.id() + "  →  " + alias.kind()));
             }
         }
+        return p;
+    }
 
-        // ── Element Sets ──────────────────────────────────────────────────────
-        sb.append("\n=== Element Sets (").append(state.sets().size()).append(") ===\n");
+    private JPanel buildSetsSection() {
+        JPanel p = titledPanel("Element Sets (" + state.sets().size() + ")");
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+
         if (state.sets().isEmpty()) {
-            sb.append("  (none)\n");
+            p.add(readOnly("(none)"));
         } else {
-            for (ElementSetDefinition s : state.sets()) {
-                sb.append("  ").append(s.id());
-                if (!s.types().isEmpty())       sb.append("  types=").append(s.types());
-                if (!s.stereotypes().isEmpty()) sb.append("  stereos=").append(s.stereotypes());
-                if (!s.includePackages().isEmpty()) sb.append("  include=").append(s.includePackages());
-                if (!s.excludePackages().isEmpty()) sb.append("  exclude=").append(s.excludePackages());
-                sb.append("\n");
+            for (ElementSetDefinition set : state.sets()) {
+                int filterCount = set.kinds().size() + set.types().size() + set.stereotypes().size();
+                p.add(readOnly(set.id() + "  —  " + filterCount + " filter(s)"));
             }
         }
+        return p;
+    }
 
-        // ── Rules ─────────────────────────────────────────────────────────────
-        sb.append("\n=== Rules (").append(state.rules().size()).append(") ===\n");
+
+    private JPanel buildRulesSection() {
+        JPanel p = titledPanel("Rules (" + state.rules().size() + ")  —  uncheck to disable");
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+
         if (state.rules().isEmpty()) {
-            sb.append("  (none)\n");
+            p.add(readOnly("(none)"));
         } else {
-            for (WizardState.RuleRequest r : state.rules()) {
-                sb.append("  ").append(r.id())
-                  .append("  [").append(r.ruleType()).append("]");
-                if (r.elementSetId()  != null) sb.append("  → ").append(r.elementSetId());
-                if (r.targetAliasId() != null) sb.append("  target=").append(r.targetAliasId());
-                if (!r.params().isEmpty())      sb.append("  params=").append(r.params());
-                sb.append("\n");
+            List<RuleRequest> rules = state.rules();
+            for (int i = 0; i < rules.size(); i++) {
+                RuleRequest r = rules.get(i);
+                JCheckBox cb = new JCheckBox(r.toString(), r.isEnabled());
+                cb.setToolTipText("Type: " + r.ruleType()
+                        + "  |  Set: " + r.elementSetId()
+                        + (r.message() != null && !r.message().isBlank()
+                                ? "  |  " + r.message() : ""));
+                cb.setAlignmentX(Component.LEFT_ALIGNMENT);
+                ruleCheckBoxes.add(cb);
+                p.add(cb);
             }
         }
+        return p;
+    }
 
-        summaryArea.setText(sb.toString());
-        summaryArea.setCaretPosition(0);
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static JPanel titledPanel(String title) {
+        JPanel p = new JPanel() {
+            @Override
+            public Dimension getMaximumSize() {
+                // BoxLayout never stretches a child wider than its preferred
+                // size unless maximumSize says otherwise — without this
+                // override, a section with just 1-2 short rows shrinks to a
+                // narrow box instead of filling the available width.
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        p.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createEtchedBorder(),
+                title,
+                TitledBorder.LEFT,
+                TitledBorder.TOP));
+        p.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return p;
+    }
+
+    private static JLabel label(String text) {
+        return new JLabel(text);
+    }
+
+    private static JTextField readOnly(String text) {
+        JTextField tf = new JTextField(text);
+        tf.setEditable(false);
+        tf.setBorder(null);
+        tf.setBackground(null);
+        tf.setOpaque(false);
+        tf.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return tf;
     }
 }

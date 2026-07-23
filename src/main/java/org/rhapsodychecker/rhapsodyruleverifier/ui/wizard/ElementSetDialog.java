@@ -105,17 +105,13 @@ public final class ElementSetDialog extends JDialog {
 
         // ── Include / Exclude packages ────────────────────────────────────────
         gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0; gbc.gridx = 0;
-        JLabel inclLabel = new JLabel("Include packages (regex CSV):");
-        inclLabel.setToolTipText("Only elements in matching packages are included.");
-        form.add(inclLabel, gbc);
+        form.add(HelpIcon.labelWithHelp("Include packages (regex CSV):", "elementSet.includePackages"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
         form.add(inclField, gbc);
         gbc.gridx = 0;
 
         gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0;
-        JLabel exclLabel = new JLabel("Exclude packages (regex CSV):");
-        exclLabel.setToolTipText("Elements in matching packages are excluded.");
-        form.add(exclLabel, gbc);
+        form.add(HelpIcon.labelWithHelp("Exclude packages (regex CSV):", "elementSet.excludePackages"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
         form.add(exclField, gbc);
 
@@ -169,11 +165,9 @@ public final class ElementSetDialog extends JDialog {
 
     // ── Section header: label + count on right ────────────────────────────────
 
-    private JPanel buildSectionHeader(String text, JLabel countLabel, String tooltip) {
+    private JPanel buildSectionHeader(String text, JLabel countLabel, String helpKey) {
         JPanel header = new JPanel(new BorderLayout());
-        JLabel label = new JLabel(text);
-        label.setToolTipText(tooltip);
-        header.add(label, BorderLayout.WEST);
+        header.add(HelpIcon.labelWithHelp(text, helpKey), BorderLayout.WEST);
         header.add(countLabel, BorderLayout.EAST);
         return header;
     }
