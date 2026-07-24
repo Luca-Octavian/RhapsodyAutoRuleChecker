@@ -2,6 +2,7 @@
 package org.rhapsodychecker.rhapsodyruleverifier.detection.api;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -31,9 +32,9 @@ public final class FastDetectionResult {
             ProfileSummary    profile,
             PortCapabilities  ports
     ) {
-        this.countsByMetaClass       = Map.copyOf(countsByMetaClass);
-        this.countsByStereotype      = Map.copyOf(countsByStereotype);
-        this.countsByKind            = Map.copyOf(countsByKind);
+    	this.countsByMetaClass  = Collections.unmodifiableMap(new LinkedHashMap<>(countsByMetaClass));
+    	this.countsByStereotype = Collections.unmodifiableMap(new LinkedHashMap<>(countsByStereotype));
+    	this.countsByKind       = Collections.unmodifiableMap(new LinkedHashMap<>(countsByKind));
         this.topOwnerPaths           = Collections.unmodifiableSet(new TreeSet<>(topOwnerPaths));
         this.totalElements           = totalElements;
         this.elementsWithDescription = elementsWithDescription;

@@ -18,17 +18,17 @@ public final class SuggestionsService {
 
     private static final double DESCRIPTION_FILL_THRESHOLD = 0.6;
 
-    private static final Set<String> ASIL_TAG_KEYWORDS = Set.of(
+    private static final Set<String> ASIL_TAG_KEYWORDS = new LinkedHashSet<>(Arrays.asList(
             "asil", "safetylevel", "safety", "hara", "safetygoal", "qs"
-    );
+    ));
 
-    private static final Set<String> ASIL_STEREO_KEYWORDS = Set.of(
+    private static final Set<String> ASIL_STEREO_KEYWORDS = new LinkedHashSet<>(Arrays.asList(
             "asil", "asil_qm", "asil_a", "asil_b", "asil_c", "asil_d", "qm"
-    );
+    ));
 
-    private static final Set<String> DESCRIPTION_TAG_KEYWORDS = Set.of(
+    private static final Set<String> DESCRIPTION_TAG_KEYWORDS = new LinkedHashSet<>(Arrays.asList(
             "description", "desc", "comment", "text", "documentation", "note"
-    );
+    ));
 
     // ── Alias guessing ────────────────────────────────────────────────────────
 

@@ -38,7 +38,7 @@ public final class ModelUpdateController {
      *                      rulata doar daca fisierul chiar pare modificat
      */
     public void handleUpdateRequest(Component dialogParent, String modelPath, Runnable reloadAction) {
-        if (modelPath == null || modelPath.isBlank()) {
+        if (modelPath == null || modelPath.trim().isEmpty()) {
             JOptionPane.showMessageDialog(dialogParent,
                     "No model path selected yet.",
                     "Update Model", JOptionPane.WARNING_MESSAGE);

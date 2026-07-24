@@ -76,7 +76,7 @@ public final class RecentFilesStore {
     }
 
     private void addToList(String key, String path) {
-        if (path == null || path.isBlank()) return;
+        if (path == null || path.trim().isEmpty()) return;
 
         List<String> current = new ArrayList<>(readList(key));
         // Elimina duplicat daca exista deja (indiferent de pozitie), apoi il pune primul

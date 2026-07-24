@@ -318,7 +318,7 @@ public final class RuleDialog extends JDialog {
             switch (type) {
                 case REQUIRED_VALUE:
                     String target = (String) targetCombo.getSelectedItem();
-                    boolean targetOk = target != null && !target.isBlank();
+                    boolean targetOk = target != null && !target.trim().isEmpty();
                     if (targetOk) FieldValidation.markValid(targetCombo); else FieldValidation.markInvalid(targetCombo);
                     valid = valid && targetOk;
                     break;
@@ -358,7 +358,7 @@ public final class RuleDialog extends JDialog {
         switch (type) {
             case REQUIRED_VALUE:
                 String target = (String) targetCombo.getSelectedItem();
-                if (target == null || target.isBlank()) {
+                if (target == null || target.trim().isEmpty()) {
                     warn("Target Alias is required for RequiredValue."); return false;
                 }
                 break;
@@ -436,8 +436,8 @@ public final class RuleDialog extends JDialog {
                 idField.getText().trim(),
                 null,
                 type.name(),
-                (targetId == null || targetId.isBlank()) ? null : targetId,
-                (setId    == null || setId.isBlank())    ? null : setId,
+                (targetId == null || targetId.trim().isEmpty()) ? null : targetId,
+                (setId    == null || setId.trim().isEmpty())    ? null : setId,
                 params,
                 nullable(messageField.getText())
         );

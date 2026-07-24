@@ -65,7 +65,9 @@ public class FullPipelineSmokeTest {
             // 7) Per-rule breakdown
             System.out.println("── Per-rule breakdown ────────────────────────────────────────");
             System.out.printf("  %-40s %7s %7s %7s %7s%n", "Rule ID", "Total", "Pass", "Fail", "Skip");
-            System.out.println("  " + "─".repeat(68));
+            char[] tmp = new char[68];
+            java.util.Arrays.fill(tmp, '─');
+            System.out.println("  " + new String(tmp));
 
             Map<String, int[]> perRule = new LinkedHashMap<>();
             for (RuleResult r : summary.allResults()) {

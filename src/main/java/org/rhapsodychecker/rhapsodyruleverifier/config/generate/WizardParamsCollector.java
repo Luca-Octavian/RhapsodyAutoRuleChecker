@@ -45,7 +45,7 @@ public final class WizardParamsCollector {
 
     private static boolean isMissing(Object value) {
         if (value == null) return true;
-        if (value instanceof String)  return ((String) value).isBlank();
+        if (value instanceof String)  return ((String) value).trim().isEmpty();
         if (value instanceof List)    return ((List<?>) value).isEmpty();
         return false;
     }

@@ -129,7 +129,7 @@ public final class WizardState {
 
         @Override
         public String toString() {
-            return "[" + ruleType + "] " + (title != null && !title.isBlank() ? title : id);
+            return "[" + ruleType + "] " + (title != null && !title.trim().isEmpty() ? title : id);
         }
     }
 }

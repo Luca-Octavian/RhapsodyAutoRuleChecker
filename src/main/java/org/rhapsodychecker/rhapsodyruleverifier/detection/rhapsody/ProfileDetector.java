@@ -8,6 +8,7 @@ import com.telelogic.rhapsody.core.IRPProfile;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.SuggestionsService;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.ProfileSummary;
 
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.logging.Level;
@@ -23,9 +24,10 @@ public final class ProfileDetector {
     private static final Logger LOG = Logger.getLogger(ProfileDetector.class.getName());
 
     // Cuvinte cheie care sugerează că modelul folosește profil de siguranță funcțională
-    private static final Set<String> ASIL_HINT_KEYWORDS = Set.of(
-            "iso26262", "asil","asil_stereotypes", "safetygoal", "hara", "fmea", "safety"
-    );
+    private static final Set<String> ASIL_HINT_KEYWORDS = new LinkedHashSet<>(Arrays.asList(
+            "iso26262", "asil", "asil_stereotypes", "safetygoal", "hara", "fmea", "safety"
+    ));
+
 
 
     public ProfileSummary detect(IRPApplication app) {
@@ -37,7 +39,7 @@ public final class ProfileDetector {
             for (int i = 1; i <= profiles.getCount(); i++) {
                 IRPProfile profile = (IRPProfile) profiles.getItem(i);
                 String name = profile.getName();
-                if (name != null && !name.isBlank()) {
+                if (name != null && !name.trim().isEmpty()) {
                     names.add(name);
                     // Folosim SuggestionsService.isAsilProfileName pentru consistenta
                     if (SuggestionsService.isAsilProfileName(name)) {

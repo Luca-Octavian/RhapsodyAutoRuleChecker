@@ -255,7 +255,7 @@ public class DetectionPipelineSmokeTest {
 
             // Caz VALID: RequiredStereotypeOneOf cu anyOf populat
             Map<String, Object> stereoParams = new LinkedHashMap<>();
-            stereoParams.put("anyOf", List.of("Block", "Component"));
+            stereoParams.put("anyOf", Arrays.asList("Block", "Component"));
             WizardParamsCollector.ValidationResult r3 =
                     WizardParamsCollector.validate(RuleType.REQUIRED_STEREOTYPE_ONE_OF, stereoParams);
             System.out.println("  [RequiredStereotypeOneOf - anyOf ok] valid=" + r3.isValid()
@@ -270,7 +270,7 @@ public class DetectionPipelineSmokeTest {
             // Caz VALID: OwnerStereotypeConstraint complet
             Map<String, Object> ownerParams = new LinkedHashMap<>();
             ownerParams.put("ownerStereotype", "Block");
-            ownerParams.put("allowedKinds", List.of("PORT_FLOW", "PORT"));
+            ownerParams.put("allowedKinds", Arrays.asList("PORT_FLOW", "PORT"));
             WizardParamsCollector.ValidationResult r5 =
                     WizardParamsCollector.validate(RuleType.OWNER_STEREOTYPE_CONSTRAINT, ownerParams);
             System.out.println("  [OwnerStereotypeConstraint - ok] valid=" + r5.isValid()
@@ -288,8 +288,8 @@ public class DetectionPipelineSmokeTest {
                     .addSet(ElementSetDefinition.builder()
                             .id("AllBlocks")
                             .title("All Block elements")
-                            .types(List.of("Class"))
-                            .stereotypes(List.of("Block"))
+                            .types(Arrays.asList("Class"))
+                            .stereotypes(Arrays.asList("Block"))
                             .build())
                     .addRule(new WizardState.RuleRequest(
                             "BLOCK_MUST_HAVE_DESCRIPTION",
@@ -297,7 +297,10 @@ public class DetectionPipelineSmokeTest {
                             "RequiredValue",
                             "ELEMENT_DESCRIPTION",
                             "AllBlocks",
-                            Map.of("nonEmpty", true, "minLength", 5),
+                            new LinkedHashMap<String, Object>() {{
+                                put("nonEmpty", true);
+                                put("minLength", 5);
+                            }},
                             "Description missing or too short for {elementName}"
                     ));
 
@@ -326,13 +329,19 @@ public class DetectionPipelineSmokeTest {
 
     // ── Helpers de formatare ──────────────────────────────────────────────────
 
+    private static String repeatChar(char c, int count) {
+        char[] arr = new char[Math.max(0, count)];
+        java.util.Arrays.fill(arr, c);
+        return new String(arr);
+    }
+
     private static void sep(String title) {
-        System.out.println("\n" + "=".repeat(70));
+        System.out.println("\n" + repeatChar('=', 70));
         System.out.println("  " + title);
-        System.out.println("=".repeat(70));
+        System.out.println(repeatChar('=', 70));
     }
 
     private static void step(String title) {
-        System.out.println("\n── " + title + " " + "─".repeat(Math.max(0, 60 - title.length())));
+        System.out.println("\n── " + title + " " + repeatChar('─', Math.max(0, 60 - title.length())));
     }
 }

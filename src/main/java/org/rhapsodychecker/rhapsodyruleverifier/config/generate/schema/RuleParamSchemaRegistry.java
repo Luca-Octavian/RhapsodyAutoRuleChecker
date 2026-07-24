@@ -3,8 +3,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.config.generate.schema;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 
+import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,7 +49,7 @@ public final class RuleParamSchemaRegistry {
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRequiredValueSchema() {
-        return new RuleParamSchema(RuleType.REQUIRED_VALUE, List.of(
+        return new RuleParamSchema(RuleType.REQUIRED_VALUE, Arrays.asList(
 
                 FieldSpec.builder()
                         .paramKey("nonEmpty")
@@ -86,7 +86,7 @@ public final class RuleParamSchemaRegistry {
                         .label("Comparison operator")
                         .fieldType(FieldType.DROPDOWN)
                         .required(false)
-                        .fixedOptions(List.of("eq", "neq", "gt", "gte", "lt", "lte",
+                        .fixedOptions(Arrays.asList("eq", "neq", "gt", "gte", "lt", "lte",
                                               "in", "not_in", "between", "matches"))
                         .build(),
 
@@ -134,7 +134,7 @@ public final class RuleParamSchemaRegistry {
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRequiredStereotypeSchema() {
-        return new RuleParamSchema(RuleType.REQUIRED_STEREOTYPE, List.of(
+        return new RuleParamSchema(RuleType.REQUIRED_STEREOTYPE, Arrays.asList(
 
                 FieldSpec.builder()
                         .paramKey("requiredStereotypes")
@@ -152,7 +152,7 @@ public final class RuleParamSchemaRegistry {
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRequiredStereotypeOneOfSchema() {
-        return new RuleParamSchema(RuleType.REQUIRED_STEREOTYPE_ONE_OF, List.of(
+        return new RuleParamSchema(RuleType.REQUIRED_STEREOTYPE_ONE_OF, Arrays.asList(
 
                 FieldSpec.builder()
                         .paramKey("anyOf")
@@ -172,14 +172,14 @@ public final class RuleParamSchemaRegistry {
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRelationExistsSchema() {
-        return new RuleParamSchema(RuleType.RELATION_EXISTS, List.of(
+        return new RuleParamSchema(RuleType.RELATION_EXISTS, Arrays.asList(
 
                 FieldSpec.builder()
                         .paramKey("relationKind")
                         .label("Relation kind")
                         .fieldType(FieldType.DROPDOWN)
                         .required(false)
-                        .fixedOptions(List.of("any", "dependency", "association",
+                        .fixedOptions(Arrays.asList("any", "dependency", "association",
                                               "generalization", "realization"))
                         .defaultValue("dependency")
                         .build(),
@@ -189,7 +189,7 @@ public final class RuleParamSchemaRegistry {
                         .label("Relation direction")
                         .fieldType(FieldType.DROPDOWN)
                         .required(false)
-                        .fixedOptions(List.of("any", "outgoing", "incoming"))
+                        .fixedOptions(Arrays.asList("any", "outgoing", "incoming"))
                         .defaultValue("any")
                         .build(),
 
@@ -213,7 +213,7 @@ public final class RuleParamSchemaRegistry {
                         .label("Count operator")
                         .fieldType(FieldType.DROPDOWN)
                         .required(false)
-                        .fixedOptions(List.of("eq", "neq", "gt", "gte", "lt", "lte"))
+                        .fixedOptions(Arrays.asList("eq", "neq", "gt", "gte", "lt", "lte"))
                         .defaultValue("gte")
                         .build(),
 
@@ -233,7 +233,7 @@ public final class RuleParamSchemaRegistry {
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildOwnerStereotypeConstraintSchema() {
-        return new RuleParamSchema(RuleType.OWNER_STEREOTYPE_CONSTRAINT, List.of(
+        return new RuleParamSchema(RuleType.OWNER_STEREOTYPE_CONSTRAINT, Arrays.asList(
 
                 FieldSpec.builder()
                         .paramKey("ownerStereotype")
@@ -252,4 +252,5 @@ public final class RuleParamSchemaRegistry {
                         .build()
         ));
     }
+
 }

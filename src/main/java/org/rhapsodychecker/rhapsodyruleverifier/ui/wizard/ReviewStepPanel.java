@@ -139,7 +139,7 @@ public class ReviewStepPanel extends JPanel {
                 JCheckBox cb = new JCheckBox(r.toString(), r.isEnabled());
                 cb.setToolTipText("Type: " + r.ruleType()
                         + "  |  Set: " + r.elementSetId()
-                        + (r.message() != null && !r.message().isBlank()
+                        + (r.message() != null && !r.message().trim().isEmpty()
                                 ? "  |  " + r.message() : ""));
                 cb.setAlignmentX(Component.LEFT_ALIGNMENT);
                 ruleCheckBoxes.add(cb);

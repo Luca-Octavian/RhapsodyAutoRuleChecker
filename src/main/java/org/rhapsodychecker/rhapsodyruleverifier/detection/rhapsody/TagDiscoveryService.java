@@ -78,7 +78,7 @@ public final class TagDiscoveryService {
                 String name  = tryGetString(tag, "getName");
                 String value = tryGetString(tag, "getValue");
 
-                if (name != null && !name.isBlank()) {
+                if (name != null && !name.trim().isEmpty()) {
                     accumulator
                             .computeIfAbsent(name, k -> new TreeSet<>())
                             .add(value != null ? value : "");
