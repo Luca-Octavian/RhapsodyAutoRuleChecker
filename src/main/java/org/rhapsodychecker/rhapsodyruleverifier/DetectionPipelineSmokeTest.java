@@ -30,7 +30,6 @@ public class DetectionPipelineSmokeTest {
             "C:\\Users\\uik11305\\Downloads\\Rhapsody Model 2\\Rhapsody Model 2\\L2_PECU_SYS-Architecture.rpyx";
 
     private static final int PORT_SAMPLE_LIMIT = 50;
-    private static final int TAG_MAX_PER_KIND  = 100;
 
     // ─────────────────────────────────────────────────────────────────────────
 

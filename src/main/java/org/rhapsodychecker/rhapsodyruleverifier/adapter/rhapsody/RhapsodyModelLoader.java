@@ -30,6 +30,9 @@ public final class RhapsodyModelLoader {
         Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> dependenciesByOwner = new HashMap<>();
         Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> referencesByElement = new HashMap<>();
 
+        // Owner path cache: avoids re-walking the same owner chain for siblings
+        Map<String, String> ownerPathCache = new HashMap<>(2048);
+
         // ── Step 1: collect all elements ─────────────────────────────────────
         reporter.onStepStarted(LoadingStep.LOADING_ELEMENTS);
 
@@ -45,7 +48,7 @@ public final class RhapsodyModelLoader {
             if (guid.isEmpty() || name.isEmpty()) continue;
 
             String metaClass  = safeStr(elt.getMetaClass());
-            String ownerPath  = computeOwnerPath(elt);
+            String ownerPath  = computeOwnerPathCached(elt, ownerPathCache);
             String ownerGuid  = null;
             try {
                 IRPModelElement owner = elt.getOwner();
@@ -71,7 +74,6 @@ public final class RhapsodyModelLoader {
             ElementKind kind = classify(metaClass, stereotypes);
 
             if ("Dependency".equals(metaClass)) {
-                // This is a Dependency element — record it for its owner
                 if (ownerGuid != null && !ownerGuid.isEmpty()) {
                     String otherEndGuid = null;
                     if (elt instanceof IRPDependency) {
@@ -97,14 +99,11 @@ public final class RhapsodyModelLoader {
             String portMultiplicity = null;
 
             if (kind.isPortKind()) {
-                // Direction
                 portDirection = safeCallString(elt, "getPortDirection");
                 if (portDirection == null) portDirection = safeCallString(elt, "getDirection");
 
-                // Multiplicity
                 portMultiplicity = safeCallString(elt, "getMultiplicity");
 
-                // Type fallback: for SysMLPort, getType() works but getOtherClass() doesn't
                 if (typeGuid == null || typeGuid.isEmpty()) {
                     try {
                         java.lang.reflect.Method getType = elt.getClass().getMethod("getType");
@@ -129,7 +128,7 @@ public final class RhapsodyModelLoader {
                     .build());
             handleByGuid.put(guid, elt);
 
-            // ── Pre-index incoming references (for ARCH_MUST_BE_CONNECTED etc.) ──
+            // ── Pre-index incoming references ──
             try {
                 IRPCollection refs = elt.getReferences();
                 if (refs != null && refs.getCount() > 0) {
@@ -152,7 +151,7 @@ public final class RhapsodyModelLoader {
                         referencesByElement.put(guid, refList);
                     }
                 }
-            } catch (Throwable t) { /* ignore — some elements don't support getReferences() */ }
+            } catch (Throwable t) { /* ignore */ }
 
             if (i % 50 == 0 || i == count) {
                 reporter.onProgress(i, count);
@@ -235,8 +234,8 @@ public final class RhapsodyModelLoader {
         try {
             IRPCollection sts = elt.getStereotypes();
             if (sts != null) {
-                int count = sts.getCount();
-                for (int i = 1; i <= count; i++) {
+                int cnt = sts.getCount();
+                for (int i = 1; i <= cnt; i++) {
                     Object o = sts.getItem(i);
                     String n = null;
                     if (o instanceof IRPStereotype) {
@@ -252,6 +251,39 @@ public final class RhapsodyModelLoader {
             }
         } catch (Throwable t) {}
         return result.isEmpty() ? Collections.emptySet() : result;
+    }
+
+    /**
+     * Compute owner path with caching — avoids re-walking the same chain for siblings.
+     * Uses the owner's GUID as cache key.
+     */
+    private String computeOwnerPathCached(IRPModelElement elt,
+                                           Map<String, String> cache) {
+        try {
+            IRPModelElement owner = elt.getOwner();
+            if (owner == null || owner instanceof IRPProject) return null;
+
+            String ownerGuid = safeStr(owner.getGUID());
+            if (ownerGuid.isEmpty()) return computeOwnerPath(elt);
+
+            if (cache.containsKey(ownerGuid)) {
+                String cachedOwnerPath = cache.get(ownerGuid);
+                String ownerName = safeStr(owner.getName());
+                if (ownerName.isEmpty()) return cachedOwnerPath;
+                return cachedOwnerPath == null || cachedOwnerPath.isEmpty()
+                        ? ownerName : cachedOwnerPath + "::" + ownerName;
+            }
+
+            String fullPath = computeOwnerPath(elt);
+
+            if (fullPath != null) {
+                cache.put(ownerGuid, fullPath);
+            }
+
+            return fullPath;
+        } catch (Throwable t) {
+            return computeOwnerPath(elt);
+        }
     }
 
     private String computeOwnerPath(IRPModelElement elt) {
@@ -313,8 +345,8 @@ public final class RhapsodyModelLoader {
         try {
             IRPCollection nested = classifier.getNestedElements();
             if (nested == null) return result;
-            int count = nested.getCount();
-            for (int i = 1; i <= count; i++) {
+            int cnt = nested.getCount();
+            for (int i = 1; i <= cnt; i++) {
                 Object o = nested.getItem(i);
                 if (!(o instanceof IRPModelElement)) continue;
                 IRPModelElement elt = (IRPModelElement) o;
@@ -372,9 +404,6 @@ public final class RhapsodyModelLoader {
 
     /**
      * Reads all tagged values from a model element.
-     * Uses the same robust approach as RhapsodyAliasResolver.tryReadTag:
-     *   1. getTags() collection — handles IRPTag and IRPModelElement items
-     *   2. Falls back gracefully on any COM error
      */
     private Map<String, String> readAllTags(IRPModelElement elt) {
         Map<String, String> tags = new LinkedHashMap<String, String>();
@@ -420,7 +449,7 @@ public final class RhapsodyModelLoader {
                     }
                 }
             }
-        } catch (Throwable t) { /* ignore — element may not support getTags() */ }
+        } catch (Throwable t) { /* ignore */ }
 
         return tags.isEmpty() ? Collections.<String, String>emptyMap() : tags;
     }

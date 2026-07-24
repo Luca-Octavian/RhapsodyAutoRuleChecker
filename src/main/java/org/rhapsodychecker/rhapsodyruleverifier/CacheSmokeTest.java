@@ -73,12 +73,12 @@ public class CacheSmokeTest {
 
             // ── Phase 4: Compare element counts ──
             System.out.println("\n[Phase 4] Comparing element data...");
-            boolean match = true;
+            
 
             if (liveSnapshot.records().size() != cachedSnapshot.records().size()) {
                 System.out.println("  [MISMATCH] Element count: live=" + liveSnapshot.records().size()
                         + " cached=" + cachedSnapshot.records().size());
-                match = false;
+                
             } else {
                 System.out.println("  [MATCH] Element count: " + liveSnapshot.records().size());
             }

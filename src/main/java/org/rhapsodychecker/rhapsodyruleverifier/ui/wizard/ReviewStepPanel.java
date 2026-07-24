@@ -82,7 +82,6 @@ public class ReviewStepPanel extends JPanel {
     private JPanel buildScopeSection() {
         JPanel p = titledPanel("Configuration");
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.add(scopeRow("Scope path:", state.scopePath()));
         p.add(scopeRow("Mode:", state.mode()));
         return p;
     }

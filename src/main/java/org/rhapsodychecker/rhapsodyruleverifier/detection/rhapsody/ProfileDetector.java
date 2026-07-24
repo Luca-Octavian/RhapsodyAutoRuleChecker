@@ -22,14 +22,6 @@ import java.util.logging.Logger;
 public final class ProfileDetector {
 
     private static final Logger LOG = Logger.getLogger(ProfileDetector.class.getName());
-
-    // Cuvinte cheie care sugerează că modelul folosește profil de siguranță funcțională
-    private static final Set<String> ASIL_HINT_KEYWORDS = new LinkedHashSet<>(Arrays.asList(
-            "iso26262", "asil", "asil_stereotypes", "safetygoal", "hara", "fmea", "safety"
-    ));
-
-
-
     public ProfileSummary detect(IRPApplication app) {
         Set<String> names     = new LinkedHashSet<>();
         boolean     asilHints = false;

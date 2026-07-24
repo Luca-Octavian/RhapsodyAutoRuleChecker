@@ -9,7 +9,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.rule.ResultFormatter;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleEngine;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
-import org.rhapsodychecker.rhapsodyruleverifier.export.ExcelReportExporter;
 
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
