@@ -7,6 +7,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.LoadingStep;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
 
+import java.lang.reflect.Method;
 import java.util.*;
 
 public final class RhapsodyModelLoader {
@@ -27,6 +28,7 @@ public final class RhapsodyModelLoader {
         List<ElementRecord> records = new ArrayList<>();
         Map<String, IRPModelElement> handleByGuid = new HashMap<>(4096);
         Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> dependenciesByOwner = new HashMap<>();
+        Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> referencesByElement = new HashMap<>();
 
         // ── Step 1: collect all elements ─────────────────────────────────────
         reporter.onStepStarted(LoadingStep.LOADING_ELEMENTS);
@@ -54,6 +56,7 @@ public final class RhapsodyModelLoader {
 
             Set<String> stereotypes = readStereotypeNames(elt);
             String description      = safeGetDescription(elt);
+            Map<String, String> tagValues = readAllTags(elt);
 
             String typeGuid = null;
             String typeName = null;
@@ -122,8 +125,34 @@ public final class RhapsodyModelLoader {
                     .description(description)
                     .portDirection(portDirection)
                     .portMultiplicity(portMultiplicity)
+                    .tagValues(tagValues)
                     .build());
             handleByGuid.put(guid, elt);
+
+            // ── Pre-index incoming references (for ARCH_MUST_BE_CONNECTED etc.) ──
+            try {
+                IRPCollection refs = elt.getReferences();
+                if (refs != null && refs.getCount() > 0) {
+                    List<RhapsodyModelSnapshot.ReferenceInfo> refList =
+                            new ArrayList<RhapsodyModelSnapshot.ReferenceInfo>();
+                    for (int ri = 1; ri <= refs.getCount(); ri++) {
+                        Object ro = refs.getItem(ri);
+                        if (ro instanceof IRPModelElement) {
+                            IRPModelElement refElt = (IRPModelElement) ro;
+                            String refGuid = safeStr(refElt.getGUID());
+                            if (!refGuid.isEmpty()) {
+                                String refMeta = safeStr(refElt.getMetaClass());
+                                Set<String> refStereos = readStereotypeNames(refElt);
+                                refList.add(new RhapsodyModelSnapshot.ReferenceInfo(
+                                        refGuid, refMeta, refStereos));
+                            }
+                        }
+                    }
+                    if (!refList.isEmpty()) {
+                        referencesByElement.put(guid, refList);
+                    }
+                }
+            } catch (Throwable t) { /* ignore — some elements don't support getReferences() */ }
 
             if (i % 50 == 0 || i == count) {
                 reporter.onProgress(i, count);
@@ -172,7 +201,8 @@ public final class RhapsodyModelLoader {
         return new RhapsodyModelSnapshot(
                 Collections.unmodifiableList(records),
                 Collections.unmodifiableMap(handleByGuid),
-                Collections.unmodifiableMap(dependenciesByOwner));
+                Collections.unmodifiableMap(dependenciesByOwner),
+                Collections.unmodifiableMap(referencesByElement));
     }
 
     // ---- Helpers ----
@@ -311,6 +341,8 @@ public final class RhapsodyModelLoader {
                     } catch (Throwable t) {}
                 }
 
+                Map<String, String> partTagValues = readAllTags(elt);
+
                 result.add(ElementRecord.builder()
                         .guid(guid).name(name).metaClass(safeStr(elt.getMetaClass()))
                         .kind(ElementKind.PART)
@@ -318,6 +350,7 @@ public final class RhapsodyModelLoader {
                         .stereotypes(stereotypes)
                         .typeGuid(typeGuid).typeName(typeName)
                         .description(description)
+                        .tagValues(partTagValues)
                         .build());
             }
         } catch (Throwable t) {}
@@ -335,6 +368,61 @@ public final class RhapsodyModelLoader {
             }
         } catch (Throwable t) {}
         return null;
+    }
+
+    /**
+     * Reads all tagged values from a model element.
+     * Uses the same robust approach as RhapsodyAliasResolver.tryReadTag:
+     *   1. getTags() collection — handles IRPTag and IRPModelElement items
+     *   2. Falls back gracefully on any COM error
+     */
+    private Map<String, String> readAllTags(IRPModelElement elt) {
+        Map<String, String> tags = new LinkedHashMap<String, String>();
+
+        try {
+            Method getTags = elt.getClass().getMethod("getTags");
+            Object tagsObj = getTags.invoke(elt);
+            if (tagsObj instanceof IRPCollection) {
+                IRPCollection tagColl = (IRPCollection) tagsObj;
+                for (int i = 1; i <= tagColl.getCount(); i++) {
+                    Object item = tagColl.getItem(i);
+                    if (item == null) continue;
+
+                    String tagName = null;
+                    String tagValue = null;
+
+                    if (item instanceof IRPTag) {
+                        IRPTag tag = (IRPTag) item;
+                        try { tagName = tag.getName(); } catch (Throwable t) { continue; }
+                        try { tagValue = tag.getValue(); } catch (Throwable t) { /* no value */ }
+                    } else if (item instanceof IRPModelElement) {
+                        IRPModelElement tagElt = (IRPModelElement) item;
+                        try { tagName = tagElt.getName(); } catch (Throwable t) { continue; }
+                        try {
+                            Method getVal = tagElt.getClass().getMethod("getValue");
+                            Object v = getVal.invoke(tagElt);
+                            if (v instanceof String) {
+                                tagValue = (String) v;
+                            }
+                        } catch (Throwable t) { /* no value */ }
+                    } else {
+                        try { tagName = (String) item.getClass().getMethod("getName").invoke(item); }
+                        catch (Throwable t) { continue; }
+                        try {
+                            Object v = item.getClass().getMethod("getValue").invoke(item);
+                            tagValue = v != null ? v.toString() : null;
+                        } catch (Throwable t) { /* no value */ }
+                    }
+
+                    if (tagName != null && !tagName.trim().isEmpty()) {
+                        String trimmedValue = (tagValue != null) ? tagValue.trim() : "";
+                        tags.put(tagName.trim(), trimmedValue);
+                    }
+                }
+            }
+        } catch (Throwable t) { /* ignore — element may not support getTags() */ }
+
+        return tags.isEmpty() ? Collections.<String, String>emptyMap() : tags;
     }
 
     private String safeGetDescription(IRPModelElement elt) {

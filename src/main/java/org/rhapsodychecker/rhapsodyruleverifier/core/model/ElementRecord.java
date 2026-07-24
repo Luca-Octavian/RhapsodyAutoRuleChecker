@@ -3,7 +3,9 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.model;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -36,6 +38,9 @@ public final class ElementRecord {
     // Stereotypes applied to this element
     private final Set<String> stereotypes;
 
+    // Pre-loaded tagged values (tagName -> value)
+    private final Map<String, String> tagValues;
+
     private ElementRecord(Builder b) {
         this.guid = requireNonBlank(b.guid, "guid");
         this.name = requireNonBlank(b.name, "name");
@@ -54,6 +59,10 @@ public final class ElementRecord {
 
         Set<String> st = (b.stereotypes == null) ? Collections.emptySet() : defensiveCopySet(b.stereotypes);
         this.stereotypes = st.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(st);
+
+        this.tagValues = b.tagValues != null && !b.tagValues.isEmpty()
+                ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(b.tagValues))
+                : Collections.<String, String>emptyMap();
     }
 
     public String guid() { return guid; }
@@ -69,6 +78,8 @@ public final class ElementRecord {
     public Optional<String> portMultiplicity() { return Optional.ofNullable(portMultiplicity); }
 
     public Set<String> stereotypes() { return stereotypes; }
+
+    public Map<String, String> tagValues() { return tagValues; }
 
     public boolean hasStereotype(String stereotype) {
         if (stereotype == null) return false;
@@ -122,6 +133,7 @@ public final class ElementRecord {
         private String portDirection;
         private String portMultiplicity;
         private Set<String> stereotypes;
+        private Map<String, String> tagValues;
 
         private Builder() {}
 
@@ -136,6 +148,11 @@ public final class ElementRecord {
         public Builder description(String description) { this.description = description; return this; }
         public Builder portDirection(String portDirection) { this.portDirection = portDirection; return this; }
         public Builder portMultiplicity(String portMultiplicity) { this.portMultiplicity = portMultiplicity; return this; }
+
+        public Builder tagValues(Map<String, String> tagValues) {
+            this.tagValues = tagValues;
+            return this;
+        }
 
         public Builder stereotypes(Collection<String> stereotypes) {
             if (stereotypes == null) {

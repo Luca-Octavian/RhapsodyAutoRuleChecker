@@ -72,17 +72,25 @@ public final class RhapsodyAliasResolver implements AliasResolver {
     }
 
     private ResolvedValue resolveTaggedValue(ElementRecord element, AliasDefinition alias) {
-        IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
-        if (handle == null) return DefaultResolvedValue.absent();
-
         String tagName = alias.tagName().orElse(null);
         if (tagName == null) return DefaultResolvedValue.absent();
 
-        String value = tryReadTag(handle, tagName);
-        if (value != null && !value.trim().isEmpty()) {
-            return DefaultResolvedValue.of(value.trim(), "taggedValue:" + tagName);
+        // Fast path: pre-loaded tags on ElementRecord (works for both live and cached mode)
+        String preloaded = element.tagValues().get(tagName);
+        if (preloaded == null) {
+            // Try case-insensitive match
+            for (Map.Entry<String, String> entry : element.tagValues().entrySet()) {
+                if (entry.getKey().equalsIgnoreCase(tagName)) {
+                    preloaded = entry.getValue();
+                    break;
+                }
+            }
+        }
+        if (preloaded != null && !preloaded.trim().isEmpty()) {
+            return DefaultResolvedValue.of(preloaded.trim(), "preloaded:tag:" + tagName);
         }
 
+        // Stereotype fallback for ASIL-style tags (stored as stereotypes like ASIL_A)
         if (!alias.values().isEmpty()) {
             for (String allowed : alias.values()) {
                 if (element.hasStereotypeIgnoreCase(allowed)
@@ -90,6 +98,15 @@ public final class RhapsodyAliasResolver implements AliasResolver {
                     return DefaultResolvedValue.of(allowed, "stereotype-fallback:" + allowed);
                 }
             }
+        }
+
+        // Slow fallback: live COM call (only when not cached — handle will be null in cache mode)
+        IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
+        if (handle == null) return DefaultResolvedValue.absent();
+
+        String value = tryReadTag(handle, tagName);
+        if (value != null && !value.trim().isEmpty()) {
+            return DefaultResolvedValue.of(value.trim(), "liveApi:tag:" + tagName);
         }
 
         return DefaultResolvedValue.absent();

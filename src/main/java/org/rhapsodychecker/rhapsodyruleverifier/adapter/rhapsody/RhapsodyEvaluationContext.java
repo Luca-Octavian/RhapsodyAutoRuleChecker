@@ -42,8 +42,19 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     @Override
     public int countMatchingRelations(ElementRecord element, RelationQuery query) {
-        IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
-        if (handle == null) return 0;
+        // First: use pre-indexed dependencies (works from both live and cache)
+        List<RelationInfo> relations = getRelationsCached(element.guid());
+
+        // If pre-indexed returned nothing AND we have live handles, try live COM
+        if (relations.isEmpty()) {
+            IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
+            if (handle != null) {
+                relations = collectRelationsLive(handle, element.guid());
+                relationCache.put(element.guid(), relations);
+            }
+        }
+
+        if (relations.isEmpty()) return 0;
 
         Set<String> targetGuids = null;
         if (query.targetSet() != null) {
@@ -51,9 +62,6 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         }
 
         int count = 0;
-
-        // Use cached relations instead of re-fetching from COM
-        List<RelationInfo> relations = getRelationsCached(handle, element.guid());
 
         for (RelationInfo rel : relations) {
             if (query.kind() != null && query.kind() != org.rhapsodychecker.rhapsodyruleverifier.core.config.RelationKind.ANY) {
@@ -106,16 +114,109 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     // ---- Cached relation lookup ----
 
-    private List<RelationInfo> getRelationsCached(IRPModelElement handle, String elementGuid) {
-        return relationCache.computeIfAbsent(elementGuid, k -> collectRelations(handle, k));
+    private List<RelationInfo> getRelationsCached(String elementGuid) {
+        return relationCache.computeIfAbsent(elementGuid, k -> buildRelationsFromIndex(k));
     }
 
-    // ---- Relation collection from Rhapsody ----
-
-    private List<RelationInfo> collectRelations(IRPModelElement handle, String elementGuid) {
+    /**
+     * Build relation info from the pre-indexed dependency data in the snapshot.
+     * This works for both live and cached snapshots — no COM calls needed.
+     */
+    private List<RelationInfo> buildRelationsFromIndex(String elementGuid) {
         List<RelationInfo> relations = new ArrayList<>();
 
-        // Method 1: getDependencies() — outgoing (direct API call, usually fast/empty)
+        // Outgoing: dependencies owned by this element
+        List<RhapsodyModelSnapshot.DependencyInfo> preIndexed =
+                snapshot.dependenciesByOwner().get(elementGuid);
+        if (preIndexed != null) {
+            for (RhapsodyModelSnapshot.DependencyInfo dep : preIndexed) {
+                RelationInfo info = new RelationInfo();
+                info.metaClass = "Dependency";
+                info.stereotypes = dep.stereotypes();
+                info.sourceGuid = elementGuid;
+                info.otherEndGuid = dep.otherEndGuid();
+                info.direction = "outgoing";
+                relations.add(info);
+            }
+        }
+
+        // Incoming: find dependencies where THIS element is the otherEnd
+        for (Map.Entry<String, List<RhapsodyModelSnapshot.DependencyInfo>> entry
+                : snapshot.dependenciesByOwner().entrySet()) {
+            String ownerGuid = entry.getKey();
+            if (ownerGuid.equals(elementGuid)) continue; // skip self (already handled above)
+            for (RhapsodyModelSnapshot.DependencyInfo dep : entry.getValue()) {
+                if (elementGuid.equals(dep.otherEndGuid())) {
+                    RelationInfo info = new RelationInfo();
+                    info.metaClass = "Dependency";
+                    info.stereotypes = dep.stereotypes();
+                    info.sourceGuid = ownerGuid;
+                    info.otherEndGuid = ownerGuid;
+                    info.direction = "incoming";
+                    relations.add(info);
+                }
+            }
+        }
+
+        // Incoming: pre-indexed references (getReferences() captured during model loading)
+        // This covers non-dependency relations like diagrams, parts, connectors, etc.
+        List<RhapsodyModelSnapshot.ReferenceInfo> preIndexedRefs =
+                snapshot.referencesByElement().get(elementGuid);
+        if (preIndexedRefs != null) {
+            for (RhapsodyModelSnapshot.ReferenceInfo ref : preIndexedRefs) {
+                // Avoid duplicates with dependency-based incoming relations
+                boolean alreadyFound = false;
+                for (RelationInfo existing : relations) {
+                    if (ref.guid().equals(existing.otherEndGuid)
+                            && "incoming".equals(existing.direction)) {
+                        alreadyFound = true;
+                        break;
+                    }
+                }
+                if (alreadyFound) continue;
+
+                RelationInfo info = new RelationInfo();
+                info.metaClass = ref.metaClass();
+                info.stereotypes = ref.stereotypes();
+                info.otherEndGuid = ref.guid();
+                info.sourceGuid = elementGuid;
+                info.direction = "incoming";
+                relations.add(info);
+            }
+        }
+
+        // If live handles are available, augment with COM data
+        IRPModelElement handle = snapshot.handleByGuid().get(elementGuid);
+        if (handle != null) {
+            List<RelationInfo> liveRelations = collectRelationsLive(handle, elementGuid);
+            // Merge live relations, avoiding duplicates with pre-indexed ones
+            for (RelationInfo liveRel : liveRelations) {
+                boolean alreadyFound = false;
+                for (RelationInfo existing : relations) {
+                    if (liveRel.otherEndGuid != null && liveRel.otherEndGuid.equals(existing.otherEndGuid)
+                            && liveRel.direction.equals(existing.direction)
+                            && liveRel.stereotypes.equals(existing.stereotypes)) {
+                        alreadyFound = true;
+                        break;
+                    }
+                }
+                if (!alreadyFound) {
+                    relations.add(liveRel);
+                }
+            }
+        }
+
+        return relations;
+    }
+
+    /**
+     * Collect relations via live Rhapsody COM calls.
+     * Only used when live handles are available (not in cache mode).
+     */
+    private List<RelationInfo> collectRelationsLive(IRPModelElement handle, String elementGuid) {
+        List<RelationInfo> relations = new ArrayList<>();
+
+        // Method 1: getDependencies() — outgoing
         try {
             IRPCollection deps = handle.getDependencies();
             if (deps != null) {
@@ -140,35 +241,7 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
             }
         } catch (Throwable t) { /* ignore */ }
 
-        // Method 2: PRE-INDEXED nested Dependencies (satisfy/refine etc.)
-        // No COM call needed — read from snapshot's pre-built index
-        List<RhapsodyModelSnapshot.DependencyInfo> preIndexed =
-                snapshot.dependenciesByOwner().get(elementGuid);
-        if (preIndexed != null) {
-            for (RhapsodyModelSnapshot.DependencyInfo dep : preIndexed) {
-                // Avoid duplicates with Method 1
-                boolean alreadyFound = false;
-                for (RelationInfo existing : relations) {
-                    if (dep.guid().equals(existing.sourceGuid) ||
-                        (dep.otherEndGuid() != null && dep.otherEndGuid().equals(existing.otherEndGuid)
-                         && existing.stereotypes.equals(dep.stereotypes()))) {
-                        alreadyFound = true;
-                        break;
-                    }
-                }
-                if (alreadyFound) continue;
-
-                RelationInfo info = new RelationInfo();
-                info.metaClass = "Dependency";
-                info.stereotypes = dep.stereotypes();
-                info.sourceGuid = elementGuid;
-                info.otherEndGuid = dep.otherEndGuid();
-                info.direction = "outgoing";
-                relations.add(info);
-            }
-        }
-
-        // Method 3: getReferences() — incoming
+        // Method 2: getReferences() — incoming
         try {
             IRPCollection refs = handle.getReferences();
             if (refs != null) {

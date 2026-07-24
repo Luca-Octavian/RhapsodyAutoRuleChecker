@@ -10,7 +10,6 @@
 
   <name>rhapsodyruleverifier</name>
   <description>A simple rhapsodyruleverifier.</description>
-  <!-- FIXME change it to the project's website -->
   <url>http://www.example.com</url>
 
   <properties>
@@ -46,14 +45,19 @@
       <version>10.0.2</version>
     </dependency>
     <dependency>
-        <groupId>com.formdev</groupId>
-        <artifactId>flatlaf-intellij-themes</artifactId>
-        <version>3.7.1</version>
+      <groupId>com.formdev</groupId>
+      <artifactId>flatlaf-intellij-themes</artifactId>
+      <version>3.7.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.15.3</version>
     </dependency>
   </dependencies>
 
   <build>
-    <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->
+    <pluginManagement>
       <plugins>
         <plugin>
           <artifactId>maven-clean-plugin</artifactId>
@@ -67,7 +71,6 @@
           <artifactId>maven-project-info-reports-plugin</artifactId>
           <version>3.6.1</version>
         </plugin>
-        <!-- see http://maven.apache.org/ref/current/maven-core/default-bindings.html#Plugin_bindings_for_jar_packaging -->
         <plugin>
           <artifactId>maven-resources-plugin</artifactId>
           <version>3.3.1</version>
@@ -79,6 +82,9 @@
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.3.0</version>
+          <configuration>
+            <argLine>-Djava.library.path="C:\LegacyApp\Rhapsody_1002_64bit\Share\JavaAPI"</argLine>
+          </configuration>
         </plugin>
         <plugin>
           <artifactId>maven-jar-plugin</artifactId>
@@ -95,8 +101,6 @@
       </plugins>
     </pluginManagement>
 
-    <!-- IMPORTANT: acest bloc <plugins> este in afara lui <pluginManagement>,
-         deci pluginul chiar RULEAZA la 'mvn package', nu doar e declarat. -->
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -111,7 +115,6 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>org.rhapsodychecker.rhapsodyruleverifier.ui.MainFrame</mainClass>
                 </transformer>
-                <!-- Necesar pentru POI/Log4j, care folosesc service loader -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
