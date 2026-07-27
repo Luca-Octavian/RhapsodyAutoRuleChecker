@@ -19,6 +19,11 @@ public final class AppTheme {
         FlatGrayIJTheme.setup();
         UIManager.put("Component.focusWidth", 0);
         UIManager.put("Button.focusedBorderColor", UIManager.getColor("Button.borderColor"));
+
+        // Enable tree connector/branching lines
+        UIManager.put("Tree.paintLines", Boolean.TRUE);
+        UIManager.put("Tree.showsRootHandles", Boolean.TRUE);
+
         JFrame.setDefaultLookAndFeelDecorated(true);
         JDialog.setDefaultLookAndFeelDecorated(true);
     }

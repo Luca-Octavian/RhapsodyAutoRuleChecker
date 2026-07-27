@@ -3,7 +3,11 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.service;
 
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.*;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.CacheMetadata;
+import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCache;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCacheManager;
+import org.rhapsodychecker.rhapsodyruleverifier.cache.update.DiffResult;
+import org.rhapsodychecker.rhapsodyruleverifier.cache.update.IncrementalCacheUpdater;
+import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
@@ -71,6 +75,9 @@ public final class ModelLoadService {
 
         FastDetectionResult detectionResult = buildDetectionFromRecords(snapshot.records());
 
+        AppLogger.logCacheLoad(cacheFile.getAbsolutePath(),
+                snapshot.records().size(), metadata.getCachedAt());
+
         String status = "Loaded from cache (" + metadata.getCachedAt()
                 + ") \u2014 " + snapshot.records().size() + " elements";
         return new LoadResult(snapshot, index, packageTree, detectionResult, true, status);
@@ -108,9 +115,15 @@ public final class ModelLoadService {
             String projectGuid = conn.getProject().getGUID();
             File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
             ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile);
+            AppLogger.logCacheWrite(cacheFile.getAbsolutePath(),
+                    snapshot.records().size(), cacheFile.length() / 1024);
         } catch (Throwable cacheErr) {
-            System.err.println("Warning: cache write failed: " + cacheErr.getMessage());
+            AppLogger.warn("Cache write failed: " + cacheErr.getMessage());
         }
+
+        AppLogger.logModelLoad(snapshot.records().size(),
+                snapshot.dependenciesByOwner().size(),
+                snapshot.referencesByElement().size(), 0);
 
         String status = "Model loaded from Rhapsody (cache updated): "
                 + snapshot.records().size() + " elements";
@@ -198,6 +211,71 @@ public final class ModelLoadService {
     }
 
     /**
+     * Load model via incremental update: scan live Rhapsody, diff against cache,
+     * only fully read changed/new elements.
+     */
+    public static LoadResult loadIncrementalUpdate(String modelPath, File cacheFile,
+                                                    ProgressReporter reporter) throws Exception {
+        // Read existing cache
+        ModelCache existingCache = ModelCacheManager.readCacheRaw(cacheFile);
+
+        // Connect to Rhapsody
+        reporter.onStepStarted(LoadingStep.CONNECTING);
+        RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
+        conn.connect(modelPath);
+        reporter.onStepCompleted(LoadingStep.CONNECTING);
+
+        // Warm up: scan packages so Rhapsody finishes internal model loading.
+        // Without this, getNestedElementsRecursive() may return incomplete results
+        // on a cold start (first connection after app launch / cache-only load).
+        reporter.onStepStarted(LoadingStep.SCANNING_PACKAGES);
+        RhapsodyPackageScanner scanner = new RhapsodyPackageScanner();
+        PackageNode packageTree = scanner.scanPackages(conn.getProject());
+        reporter.onStepCompleted(LoadingStep.SCANNING_PACKAGES);
+
+        // Run incremental update
+        IncrementalCacheUpdater updater = new IncrementalCacheUpdater(
+                conn.getProject(), existingCache, reporter);
+        IncrementalCacheUpdater.UpdateResult updateResult = updater.update();
+
+        RhapsodyModelSnapshot snapshot = updateResult.snapshot();
+        DiffResult diff = updateResult.diff();
+
+        ElementIndex index = ElementIndex.build(snapshot.records());
+        String projectName = conn.getProject().getName();
+
+        // Use the live-scanned package tree (already built during warm-up)
+        // instead of rebuilding from records, since we have it from the scanner
+        FastDetectionResult detectionResult = buildDetectionFromRecords(snapshot.records());
+
+        // Write updated cache
+        try {
+            String projectGuid = conn.getProject().getGUID();
+            ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile);
+            AppLogger.logCacheWrite(cacheFile.getAbsolutePath(),
+                    snapshot.records().size(), cacheFile.length() / 1024);
+        } catch (Throwable cacheErr) {
+            AppLogger.warn("Cache write failed after incremental update: " + cacheErr.getMessage());
+        }
+
+        AppLogger.logIncrementalUpdate(
+                diff.changedGuids().size(), diff.newGuids().size(),
+                diff.removedGuids().size(), diff.unchangedCount(),
+                diff.totalScanned(), updateResult.durationMs());
+
+        String status = "Smart Update: " + diff.summary()
+                + " (" + formatDuration(updateResult.durationMs()) + ")";
+        return new LoadResult(snapshot, index, packageTree, detectionResult, true, status);
+    }
+
+    private static String formatDuration(long ms) {
+        long secs = ms / 1000;
+        long mins = secs / 60;
+        if (mins > 0) return String.format("%dm %ds", mins, secs % 60);
+        return String.format("%ds", secs);
+    }
+
+    /**
      * Build package tree from element records (for cache mode).
      */
     public static PackageNode buildPackageTreeFromRecords(
@@ -205,28 +283,54 @@ public final class ModelLoadService {
         PackageNode root = new PackageNode("",
                 projectName != null ? projectName : "Project", "");
 
-        Map<String, PackageNode> nodesByPath = new LinkedHashMap<String, PackageNode>();
+        // Build GUID-based lookup of all package elements
+        Set<String> packageGuids = new HashSet<String>();
+        Map<String, ElementRecord> packagesByGuid = new LinkedHashMap<String, ElementRecord>();
         for (ElementRecord r : records) {
-            if (r.kind() != ElementKind.PACKAGE) continue;
+            if (r.kind() == ElementKind.PACKAGE) {
+                packageGuids.add(r.guid());
+                packagesByGuid.put(r.guid(), r);
+            }
+        }
+
+        // Build PackageNodes keyed by GUID
+        Map<String, PackageNode> nodesByGuid = new LinkedHashMap<String, PackageNode>();
+        for (ElementRecord r : packagesByGuid.values()) {
+            // Only include packages whose owner is the project root (no ownerGuid)
+            // or another package — skip packages nested inside Blocks/Classes/etc.
+            String ownerGuid = r.ownerGuid().orElse(null);
+            if (ownerGuid != null && !packageGuids.contains(ownerGuid)) {
+                continue;
+            }
+
             String ownerPath = r.ownerPath().orElse("");
             String qualifiedPath = ownerPath.isEmpty()
                     ? r.name() : ownerPath + "::" + r.name();
-            nodesByPath.put(qualifiedPath,
+            nodesByGuid.put(r.guid(),
                     new PackageNode(r.guid(), r.name(), qualifiedPath));
         }
 
-        for (Map.Entry<String, PackageNode> entry : nodesByPath.entrySet()) {
-            String path = entry.getKey();
+        // Link parent-child using ownerGuid (GUID-based, not path-based)
+        for (Map.Entry<String, PackageNode> entry : nodesByGuid.entrySet()) {
+            String guid = entry.getKey();
             PackageNode node = entry.getValue();
-            int lastSep = path.lastIndexOf("::");
-            if (lastSep < 0) {
+            ElementRecord rec = packagesByGuid.get(guid);
+            String ownerGuid = rec.ownerGuid().orElse(null);
+
+            if (ownerGuid == null) {
+                // Top-level package (owner is project)
                 root.addChild(node);
             } else {
-                PackageNode parent = nodesByPath.get(path.substring(0, lastSep));
-                if (parent != null) parent.addChild(node);
-                else root.addChild(node);
+                PackageNode parentNode = nodesByGuid.get(ownerGuid);
+                if (parentNode != null) {
+                    parentNode.addChild(node);
+                } else {
+                    // Parent was filtered out — attach to root as fallback
+                    root.addChild(node);
+                }
             }
         }
+
         return root;
     }
 }

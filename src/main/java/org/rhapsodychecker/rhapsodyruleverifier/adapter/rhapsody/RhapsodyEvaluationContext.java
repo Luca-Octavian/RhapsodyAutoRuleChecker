@@ -1,7 +1,6 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/adapter/rhapsody/RhapsodyEvaluationContext.java
 package org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody;
 
-import com.telelogic.rhapsody.core.*;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
@@ -42,17 +41,8 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     @Override
     public int countMatchingRelations(ElementRecord element, RelationQuery query) {
-        // First: use pre-indexed dependencies (works from both live and cache)
+        // Use pre-indexed dependencies (works from both live and cache)
         List<RelationInfo> relations = getRelationsCached(element.guid());
-
-        // If pre-indexed returned nothing AND we have live handles, try live COM
-        if (relations.isEmpty()) {
-            IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
-            if (handle != null) {
-                relations = collectRelationsLive(handle, element.guid());
-                relationCache.put(element.guid(), relations);
-            }
-        }
 
         if (relations.isEmpty()) return 0;
 
@@ -185,125 +175,13 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
             }
         }
 
-        // If live handles are available, augment with COM data
-        IRPModelElement handle = snapshot.handleByGuid().get(elementGuid);
-        if (handle != null) {
-            List<RelationInfo> liveRelations = collectRelationsLive(handle, elementGuid);
-            // Merge live relations, avoiding duplicates with pre-indexed ones
-            for (RelationInfo liveRel : liveRelations) {
-                boolean alreadyFound = false;
-                for (RelationInfo existing : relations) {
-                    if (liveRel.otherEndGuid != null && liveRel.otherEndGuid.equals(existing.otherEndGuid)
-                            && liveRel.direction.equals(existing.direction)
-                            && liveRel.stereotypes.equals(existing.stereotypes)) {
-                        alreadyFound = true;
-                        break;
-                    }
-                }
-                if (!alreadyFound) {
-                    relations.add(liveRel);
-                }
-            }
-        }
+        // Pre-indexed data (dependencies + references) is the primary source.
+        // No live COM calls needed — all data was captured during model loading.
 
         return relations;
-    }
-
-    /**
-     * Collect relations via live Rhapsody COM calls.
-     * Only used when live handles are available (not in cache mode).
-     */
-    private List<RelationInfo> collectRelationsLive(IRPModelElement handle, String elementGuid) {
-        List<RelationInfo> relations = new ArrayList<>();
-
-        // Method 1: getDependencies() — outgoing
-        try {
-            IRPCollection deps = handle.getDependencies();
-            if (deps != null) {
-                for (int i = 1; i <= deps.getCount(); i++) {
-                    Object o = deps.getItem(i);
-                    if (o instanceof IRPDependency) {
-                        IRPDependency dep = (IRPDependency) o;
-                        RelationInfo info = new RelationInfo();
-                        info.metaClass = safeStr(dep.getMetaClass());
-                        info.stereotypes = readStereotypes(dep);
-                        info.sourceGuid = elementGuid;
-                        try {
-                            IRPModelElement dependent = dep.getDependsOn();
-                            info.otherEndGuid = dependent != null ? safeStr(dependent.getGUID()) : null;
-                        } catch (Throwable t) {
-                            info.otherEndGuid = null;
-                        }
-                        info.direction = "outgoing";
-                        relations.add(info);
-                    }
-                }
-            }
-        } catch (Throwable t) { /* ignore */ }
-
-        // Method 2: getReferences() — incoming
-        try {
-            IRPCollection refs = handle.getReferences();
-            if (refs != null) {
-                for (int i = 1; i <= refs.getCount(); i++) {
-                    Object o = refs.getItem(i);
-                    if (o instanceof IRPModelElement) {
-                        IRPModelElement refElt = (IRPModelElement) o;
-                        RelationInfo info = new RelationInfo();
-                        info.metaClass = safeStr(refElt.getMetaClass());
-                        info.stereotypes = readStereotypes(refElt);
-                        info.otherEndGuid = safeStr(refElt.getGUID());
-                        info.sourceGuid = elementGuid;
-                        info.direction = "incoming";
-                        relations.add(info);
-                    }
-                }
-            }
-        } catch (Throwable t) { /* ignore */ }
-
-        return relations;
-    }
-
-    private String tryGetOtherEnd(IRPModelElement relElt, String thisGuid) {
-        String[] methods = {"getDependsOn", "getOtherClass", "getDerived", "getBaseClass"};
-        for (String m : methods) {
-            try {
-                java.lang.reflect.Method method = relElt.getClass().getMethod(m);
-                Object result = method.invoke(relElt);
-                if (result instanceof IRPModelElement) {
-                    String guid = safeStr(((IRPModelElement) result).getGUID());
-                    if (!guid.isEmpty() && !guid.equals(thisGuid)) {
-                        return guid;
-                    }
-                }
-            } catch (Throwable t) { /* try next */ }
-        }
-        return null;
     }
 
     // ---- Helpers ----
-
-    private Set<String> readStereotypes(IRPModelElement elt) {
-        Set<String> result = new LinkedHashSet<>();
-        try {
-            IRPCollection sts = elt.getStereotypes();
-            if (sts != null) {
-                for (int i = 1; i <= sts.getCount(); i++) {
-                    Object o = sts.getItem(i);
-                    String name = null;
-                    if (o instanceof IRPStereotype) {
-                        name = ((IRPStereotype) o).getName();
-                    } else if (o instanceof IRPModelElement) {
-                        name = ((IRPModelElement) o).getName();
-                    }
-                    if (name != null && !name.trim().isEmpty()) {
-                        result.add(name.trim());
-                    }
-                }
-            }
-        } catch (Throwable t) { /* ignore */ }
-        return result;
-    }
 
     private boolean matchesKind(String metaClass, org.rhapsodychecker.rhapsodyruleverifier.core.config.RelationKind kind) {
         if (metaClass == null) return false;
@@ -343,10 +221,6 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
             if (item.equalsIgnoreCase(value)) return true;
         }
         return false;
-    }
-
-    private String safeStr(String s) {
-        return s == null ? "" : s.trim();
     }
 
     private static final class RelationInfo {

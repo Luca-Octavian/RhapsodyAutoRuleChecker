@@ -1,6 +1,7 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/ui/MainFrame.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui;
 
+import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.controller.MainFrameController;
@@ -265,6 +266,8 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     // ── Entry point ─────────────────────────────────────────────────────────
 
     public static void main(String[] args) {
+        AppLogger.init();
+        Runtime.getRuntime().addShutdownHook(new Thread(AppLogger::close));
         AppTheme.apply();
         SwingUtilities.invokeLater(() -> new MainFrame().setVisible(true));
     }

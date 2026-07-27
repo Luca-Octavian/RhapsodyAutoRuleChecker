@@ -128,6 +128,20 @@ public final class ModelCacheManager {
     }
 
     /**
+     * Read cache from file and return the raw ModelCache (for incremental updates).
+     */
+    public static ModelCache readCacheRaw(File cacheFile) throws IOException {
+        ModelCache cache = MAPPER.readValue(cacheFile, ModelCache.class);
+
+        if (cache.getMetadata().getCacheVersion() != CacheMetadata.CURRENT_VERSION) {
+            throw new IOException("Cache version mismatch: expected "
+                    + CacheMetadata.CURRENT_VERSION + ", got " + cache.getMetadata().getCacheVersion());
+        }
+
+        return cache;
+    }
+
+    /**
      * Check if a cache file exists and is readable.
      */
     public static boolean cacheExists(File cacheFile) {

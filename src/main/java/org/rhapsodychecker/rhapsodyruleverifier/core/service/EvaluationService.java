@@ -1,6 +1,7 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/core/service/EvaluationService.java
 package org.rhapsodychecker.rhapsodyruleverifier.core.service;
 
+import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyAliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyEvaluationContext;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
@@ -75,6 +76,9 @@ public final class EvaluationService {
         String source = fromCache ? " (from cache)" : "";
         String status = "Evaluation complete" + source + ": " + failCount + " failures"
                 + (scopePath.isEmpty() ? "" : " (scope: " + scopePath + ")");
+
+        AppLogger.logEvaluation(config.enabledRules().size(), results.size(),
+                (int) (results.size() - failCount), (int) failCount, 0, 0);
 
         return new EvalResult(config, results, status);
     }

@@ -16,6 +16,11 @@ public final class LoadingStep {
     public static final String BUILDING_INDEX    = "Building index";
     public static final String FAST_DETECTION    = "Detecting stereotypes & types";
 
+    // ── Incremental update steps ──────────────────────────────────────────────
+    public static final String INCREMENTAL_SCANNING = "Scanning for changes";
+    public static final String INCREMENTAL_DIFFING  = "Comparing with cache";
+    public static final String INCREMENTAL_UPDATING = "Updating changed elements";
+
     // ── Rule evaluation steps ─────────────────────────────────────────────────
     public static final String LOADING_CONFIG    = "Loading config";
     public static final String SELECTING_ELEMENTS = "Selecting elements";

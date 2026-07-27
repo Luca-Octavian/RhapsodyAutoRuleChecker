@@ -26,12 +26,23 @@ public final class NavigationService {
                                             boolean loadedFromCache) {
         if (snapshot == null || guid == null || guid.isEmpty()) return null;
 
-        if (loadedFromCache) {
-            return "  Navigation requires live Rhapsody connection (loaded from cache)";
+        // Try live handle first (available when loaded from Rhapsody)
+        IRPModelElement elt = snapshot.handleByGuid().get(guid);
+
+        // If no handle (cache mode or incremental update), try to find via Rhapsody API
+        if (elt == null) {
+            RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
+            if (conn.isConnected()) {
+                try {
+                    elt = conn.getProject().findElementByGUID(guid);
+                } catch (Throwable t) { /* ignore */ }
+            }
         }
 
-        IRPModelElement elt = snapshot.handleByGuid().get(guid);
         if (elt == null) {
+            if (loadedFromCache) {
+                return "  Navigation requires Rhapsody connection. Use 'Update Model' first.";
+            }
             return "  Element not found in model: " + guid;
         }
 

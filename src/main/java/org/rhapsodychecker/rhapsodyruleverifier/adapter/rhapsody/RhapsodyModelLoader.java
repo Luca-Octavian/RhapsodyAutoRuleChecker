@@ -204,9 +204,9 @@ public final class RhapsodyModelLoader {
                 Collections.unmodifiableMap(referencesByElement));
     }
 
-    // ---- Helpers ----
+    // ---- Public helpers (reused by IncrementalCacheUpdater) ----
 
-    private String safeCallString(IRPModelElement elt, String methodName) {
+    public static String safeCallString(IRPModelElement elt, String methodName) {
         try {
             java.lang.reflect.Method m = elt.getClass().getMethod(methodName);
             Object val = m.invoke(elt);
@@ -218,18 +218,18 @@ public final class RhapsodyModelLoader {
         return null;
     }
 
-    private IRPCollection safeGetNestedElementsRecursive(IRPProject project) {
+    public static IRPCollection safeGetNestedElementsRecursive(IRPProject project) {
         try { return project.getNestedElementsRecursive(); } catch (Throwable t) { return null; }
     }
 
-    private IRPModelElement safeGetItem(IRPCollection c, int index1Based) {
+    public static IRPModelElement safeGetItem(IRPCollection c, int index1Based) {
         try {
             Object o = c.getItem(index1Based);
             return (o instanceof IRPModelElement) ? (IRPModelElement) o : null;
         } catch (Throwable t) { return null; }
     }
 
-    private Set<String> readStereotypeNames(IRPModelElement elt) {
+    public static Set<String> readStereotypeNames(IRPModelElement elt) {
         Set<String> result = new LinkedHashSet<>();
         try {
             IRPCollection sts = elt.getStereotypes();
@@ -257,8 +257,8 @@ public final class RhapsodyModelLoader {
      * Compute owner path with caching — avoids re-walking the same chain for siblings.
      * Uses the owner's GUID as cache key.
      */
-    private String computeOwnerPathCached(IRPModelElement elt,
-                                           Map<String, String> cache) {
+    public String computeOwnerPathCached(IRPModelElement elt,
+                                          Map<String, String> cache) {
         try {
             IRPModelElement owner = elt.getOwner();
             if (owner == null || owner instanceof IRPProject) return null;
@@ -286,7 +286,7 @@ public final class RhapsodyModelLoader {
         }
     }
 
-    private String computeOwnerPath(IRPModelElement elt) {
+    public static String computeOwnerPath(IRPModelElement elt) {
         Deque<String> parts = new ArrayDeque<>();
         try {
             IRPModelElement curr = elt.getOwner();
@@ -299,17 +299,17 @@ public final class RhapsodyModelLoader {
         return parts.isEmpty() ? null : String.join("::", parts);
     }
 
-    private IRPClassifier safeAttributeType(IRPAttribute a) {
+    public static IRPClassifier safeAttributeType(IRPAttribute a) {
         try { return a.getType(); } catch (Throwable t) { return null; }
     }
 
-    private IRPClassifier safePortType(IRPPort p) {
+    public static IRPClassifier safePortType(IRPPort p) {
         try { return p.getOtherClass(); } catch (Throwable t) { return null; }
     }
 
-    private String safeStr(String s) { return s == null ? "" : s.trim(); }
+    public static String safeStr(String s) { return s == null ? "" : s.trim(); }
 
-    private ElementKind classify(String metaClass, Set<String> stereotypes) {
+    public static ElementKind classify(String metaClass, Set<String> stereotypes) {
         String mc = metaClass == null ? "" : metaClass.trim();
         if ("Class".equals(mc)) {
             if (containsStereo(stereotypes, "Block"))          return ElementKind.BLOCK;
@@ -405,7 +405,7 @@ public final class RhapsodyModelLoader {
     /**
      * Reads all tagged values from a model element.
      */
-    private Map<String, String> readAllTags(IRPModelElement elt) {
+    public static Map<String, String> readAllTags(IRPModelElement elt) {
         Map<String, String> tags = new LinkedHashMap<String, String>();
 
         try {
@@ -454,16 +454,16 @@ public final class RhapsodyModelLoader {
         return tags.isEmpty() ? Collections.<String, String>emptyMap() : tags;
     }
 
-    private String safeGetDescription(IRPModelElement elt) {
+    public static String safeGetDescription(IRPModelElement elt) {
         try { String d = elt.getDescription(); return d == null ? null : d.trim(); }
         catch (Throwable t) { return null; }
     }
 
-    private boolean containsStereo(Set<String> set, String exact) {
+    private static boolean containsStereo(Set<String> set, String exact) {
         return set != null && set.contains(exact);
     }
 
-    private boolean containsStereoAnyCase(Set<String> set, String name) {
+    private static boolean containsStereoAnyCase(Set<String> set, String name) {
         if (set == null || name == null) return false;
         for (String s : set) { if (s.equalsIgnoreCase(name)) return true; }
         return false;

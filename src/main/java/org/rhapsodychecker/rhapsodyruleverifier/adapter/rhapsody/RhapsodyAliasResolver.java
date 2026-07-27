@@ -1,28 +1,22 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/adapter/rhapsody/RhapsodyAliasResolver.java
 package org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody;
 
-import com.telelogic.rhapsody.core.*;
 import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.DefaultResolvedValue;
-import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.PortInfo;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.ResolvedValue;
 
-import java.lang.reflect.Method;
 import java.util.*;
 
 public final class RhapsodyAliasResolver implements AliasResolver {
 
     private final RuleCheckerConfig config;
-    private final RhapsodyModelSnapshot snapshot;
-    private final RhapsodyPortInfoResolver portInfoResolver;
 
     public RhapsodyAliasResolver(RuleCheckerConfig config, RhapsodyModelSnapshot snapshot) {
         this.config = Objects.requireNonNull(config, "config");
-        this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
-        this.portInfoResolver = new RhapsodyPortInfoResolver(snapshot);
+        // snapshot kept in signature for API compatibility but no longer used during evaluation
     }
 
     @Override
@@ -100,15 +94,6 @@ public final class RhapsodyAliasResolver implements AliasResolver {
             }
         }
 
-        // Slow fallback: live COM call (only when not cached — handle will be null in cache mode)
-        IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
-        if (handle == null) return DefaultResolvedValue.absent();
-
-        String value = tryReadTag(handle, tagName);
-        if (value != null && !value.trim().isEmpty()) {
-            return DefaultResolvedValue.of(value.trim(), "liveApi:tag:" + tagName);
-        }
-
         return DefaultResolvedValue.absent();
     }
 
@@ -137,39 +122,10 @@ public final class RhapsodyAliasResolver implements AliasResolver {
         if (!element.kind().isPortKind()) {
             return DefaultResolvedValue.absent();
         }
-        // Check ElementRecord first
+        // All port type info is pre-loaded on ElementRecord during model loading
         String typeName = element.typeName().orElse(null);
         if (typeName != null && !typeName.trim().isEmpty()) {
             return DefaultResolvedValue.of(typeName.trim(), "portType:elementRecord");
-        }
-
-        // Fallback: try via Rhapsody API
-        IRPModelElement handle = snapshot.handleByGuid().get(element.guid());
-        if (handle == null) return DefaultResolvedValue.absent();
-
-        // Try getType() first (works for SysMLPort / FlowPort)
-        try {
-            java.lang.reflect.Method getType = handle.getClass().getMethod("getType");
-            Object cls = getType.invoke(handle);
-            if (cls instanceof IRPModelElement) {
-                String name = ((IRPModelElement) cls).getName();
-                if (name != null && !name.trim().isEmpty()) {
-                    return DefaultResolvedValue.of(name.trim(), "portType:getType");
-                }
-            }
-        } catch (Throwable t) { /* ignore */ }
-
-        // Try getOtherClass() (works for standard Port)
-        if (handle instanceof IRPPort) {
-            try {
-                IRPClassifier cls = ((IRPPort) handle).getOtherClass();
-                if (cls != null) {
-                    String name = cls.getName();
-                    if (name != null && !name.trim().isEmpty()) {
-                        return DefaultResolvedValue.of(name.trim(), "portType:getOtherClass");
-                    }
-                }
-            } catch (Throwable t) { /* ignore */ }
         }
 
         return DefaultResolvedValue.absent();
@@ -179,7 +135,7 @@ public final class RhapsodyAliasResolver implements AliasResolver {
     private ResolvedValue resolvePortDirection(ElementRecord element) {
         if (!element.kind().isPortKind()) return DefaultResolvedValue.absent();
 
-        // Fast path: pre-loaded on ElementRecord during model loading
+        // All port direction info is pre-loaded on ElementRecord during model loading
         String dir = element.portDirection().orElse(null);
         if (dir != null && !dir.trim().isEmpty()) {
             String mapped = mapDirectionString(dir);
@@ -188,29 +144,19 @@ public final class RhapsodyAliasResolver implements AliasResolver {
             }
         }
 
-        // Slow fallback: only if not pre-loaded
-        PortInfo info = portInfoResolver.resolve(element);
-        String dirName = info.direction().name();
-        if ("UNKNOWN".equals(dirName) || "NONE".equals(dirName)) {
-            return DefaultResolvedValue.absent();
-        }
-        return DefaultResolvedValue.of(dirName, info.directionSource());
+        return DefaultResolvedValue.absent();
     }
 
     private ResolvedValue resolvePortMultiplicity(ElementRecord element) {
         if (!element.kind().isPortKind()) return DefaultResolvedValue.absent();
 
-        // Fast path: pre-loaded on ElementRecord during model loading
+        // All port multiplicity info is pre-loaded on ElementRecord during model loading
         String mult = element.portMultiplicity().orElse(null);
         if (mult != null && !mult.trim().isEmpty()) {
             return DefaultResolvedValue.of(mult.trim(), "preloaded:portMultiplicity");
         }
 
-        // Slow fallback
-        PortInfo info = portInfoResolver.resolve(element);
-        String multStr = info.multiplicity().toString();
-        if (multStr.contains("?")) return DefaultResolvedValue.absent();
-        return DefaultResolvedValue.of(multStr, info.multiplicitySource());
+        return DefaultResolvedValue.absent();
     }
 
     private String mapDirectionString(String raw) {
@@ -225,57 +171,4 @@ public final class RhapsodyAliasResolver implements AliasResolver {
         }
     }
 
-    // ---- Rhapsody tag reading ----
-
-    private String tryReadTag(IRPModelElement elt, String tagName) {
-        try {
-            IRPTag tag = elt.getTag(tagName);
-            if (tag != null) {
-                String val = tag.getValue();
-                if (val != null && !val.trim().isEmpty()) {
-                    return val.trim();
-                }
-            }
-        } catch (Throwable t) { /* ignore */ }
-
-        try {
-            Method getTags = elt.getClass().getMethod("getTags");
-            Object tagsObj = getTags.invoke(elt);
-            if (tagsObj instanceof IRPCollection) {
-                IRPCollection tags = (IRPCollection) tagsObj;
-                for (int i = 1; i <= tags.getCount(); i++) {
-                    Object item = tags.getItem(i);
-                    if (item instanceof IRPTag) {
-                        IRPTag tag = (IRPTag) item;
-                        if (tagName.equalsIgnoreCase(tag.getName())) {
-                            String val = tag.getValue();
-                            if (val != null && !val.trim().isEmpty()) {
-                                return val.trim();
-                            }
-                        }
-                    } else if (item instanceof IRPModelElement) {
-                        IRPModelElement tagElt = (IRPModelElement) item;
-                        if (tagName.equalsIgnoreCase(tagElt.getName())) {
-                            try {
-                                Method getVal = tagElt.getClass().getMethod("getValue");
-                                Object v = getVal.invoke(tagElt);
-                                if (v instanceof String && !((String) v).trim().isEmpty()) {
-                                    return ((String) v).trim();
-                                }
-                            } catch (Throwable ignore) {}
-                        }
-                    }
-                }
-            }
-        } catch (Throwable t) { /* ignore */ }
-
-        try {
-            String val = elt.getPropertyValue(tagName);
-            if (val != null && !val.trim().isEmpty()) {
-                return val.trim();
-            }
-        } catch (Throwable t) { /* ignore */ }
-
-        return null;
-    }
 }

@@ -1,8 +1,10 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/ui/controller/MainFrameController.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui.controller;
 
+import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCacheManager;
+import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ConfigLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.ConfigToWizardStateMapper;
@@ -115,7 +117,18 @@ public final class MainFrameController {
             view.showWarning("Please select a model file.", "Missing Model");
             return;
         }
-        doLoadFromRhapsody(modelPath);
+
+        // Only use incremental update if Rhapsody is already connected (warm start).
+        // On cold start (loaded from cache, no prior Rhapsody connection),
+        // do a full reload to avoid incomplete scan results.
+        RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
+        File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
+
+        if (conn.isConnected() && ModelCacheManager.cacheExists(cacheFile)) {
+            doIncrementalUpdate(modelPath, cacheFile);
+        } else {
+            doLoadFromRhapsody(modelPath);
+        }
     }
 
     public void onRunEvaluation() {
@@ -154,6 +167,7 @@ public final class MainFrameController {
                 view.setBusy(false);
                 view.resetProgress();
                 if (error != null) {
+                    AppLogger.error("Evaluation failed: " + error);
                     view.setStatus("  Evaluation error");
                     view.showError("Error: " + error, "Run Failed");
                 } else {
@@ -277,10 +291,48 @@ public final class MainFrameController {
                 view.setBusy(false);
                 view.resetProgress();
                 if (error != null) {
+                    AppLogger.error("Cache load failed: " + error);
                     loadedFromCache = false;
                     view.setStatus("  Error loading cache");
                     view.showError("Cache load failed: " + error
                             + "\n\nTry reloading from Rhapsody.", "Cache Error");
+                } else {
+                    applyLoadResult(loadResult, modelPath);
+                }
+                updateButtonStates();
+            }
+        }.execute();
+    }
+
+    private void doIncrementalUpdate(String modelPath, File cacheFile) {
+        view.setBusy(true);
+        view.setStatus("  Smart Update: scanning for changes...");
+        view.clearResults();
+
+        new SwingWorker<ModelLoadService.LoadResult, Void>() {
+            private String error;
+            private ModelLoadService.LoadResult loadResult;
+
+            @Override
+            protected ModelLoadService.LoadResult doInBackground() {
+                try {
+                    loadResult = ModelLoadService.loadIncrementalUpdate(
+                            modelPath, cacheFile, progressReporter);
+                } catch (Throwable t) {
+                    error = t.getMessage();
+                }
+                return loadResult;
+            }
+
+            @Override
+            protected void done() {
+                view.setBusy(false);
+                view.resetProgress();
+                if (error != null) {
+                    AppLogger.error("Incremental update failed: " + error);
+                    view.setStatus("  Smart Update failed, falling back to full reload");
+                    // Fallback to full reload
+                    doLoadFromRhapsody(modelPath);
                 } else {
                     applyLoadResult(loadResult, modelPath);
                 }
@@ -314,6 +366,7 @@ public final class MainFrameController {
                 view.setBusy(false);
                 view.resetProgress();
                 if (error != null) {
+                    AppLogger.error("Model load from Rhapsody failed: " + error);
                     view.setStatus("  Error loading model");
                     view.showError("Error: " + error, "Load Failed");
                 } else {
