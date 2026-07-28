@@ -8,7 +8,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public final class RuleEngine {
 
@@ -42,25 +41,50 @@ public final class RuleEngine {
         List<RuleResult> allResults  = new ArrayList<>();
         List<RuleSpec>   enabledSpecs = config.enabledRules();
 
-        // Count total candidates upfront for accurate progress
-        int totalCandidates = countTotalCandidates(enabledSpecs);
-        int processed = 0;
+        // ── Single pass: select candidates once per rule, count total, then evaluate ──
+        // This eliminates the old double-call pattern (countTotalCandidates + evaluateAll
+        // both calling selectCandidates for every rule).
 
-        reporter.onStepStarted(LoadingStep.EVALUATING_RULES);
+        // Phase 1: collect all candidate lists and count total
+        List<List<ElementRecord>> allCandidates = new ArrayList<>(enabledSpecs.size());
+        int totalCandidates = 0;
 
         for (RuleSpec spec : enabledSpecs) {
             try {
-                Rule rule = RuleFactory.createRule(spec);
                 List<ElementRecord> candidates = selector.selectCandidates(spec);
 
                 if (!scopePath.isEmpty()) {
-                    candidates = candidates.stream()
-                            .filter(c -> c.ownerPath()
-                                    .map(p -> p.equals(scopePath)
-                                            || p.startsWith(scopePath + "::"))
-                                    .orElse(false))
-                            .collect(Collectors.toList());
+                    List<ElementRecord> filtered = new ArrayList<>();
+                    for (ElementRecord c : candidates) {
+                        String p = c.ownerPath().orElse(null);
+                        if (p != null && (p.equals(scopePath) || p.startsWith(scopePath + "::"))) {
+                            filtered.add(c);
+                        }
+                    }
+                    candidates = filtered;
                 }
+
+                allCandidates.add(candidates);
+                totalCandidates += candidates.size();
+            } catch (Throwable t) {
+                allCandidates.add(Collections.<ElementRecord>emptyList());
+                allResults.add(DefaultRuleResult.skipped(spec.id(), "N/A",
+                        "Rule could not select candidates: " + t.getMessage()));
+            }
+        }
+
+        // Phase 2: evaluate using pre-collected candidate lists
+        int processed = 0;
+        reporter.onStepStarted(LoadingStep.EVALUATING_RULES);
+
+        for (int i = 0; i < enabledSpecs.size(); i++) {
+            RuleSpec spec = enabledSpecs.get(i);
+            List<ElementRecord> candidates = allCandidates.get(i);
+
+            if (candidates.isEmpty()) continue;
+
+            try {
+                Rule rule = RuleFactory.createRule(spec);
 
                 for (ElementRecord candidate : candidates) {
                     try {
@@ -92,31 +116,6 @@ public final class RuleEngine {
 
     public EvaluationSummary evaluateWithSummary() {
         return new EvaluationSummary(evaluateAll());
-    }
-
-    /**
-     * Pre-counts total candidates across all rules for accurate progress %.
-     * Lightweight — just calls selectCandidates without evaluating.
-     */
-    private int countTotalCandidates(List<RuleSpec> specs) {
-        int total = 0;
-        for (RuleSpec spec : specs) {
-            try {
-                List<ElementRecord> candidates = selector.selectCandidates(spec);
-                if (!scopePath.isEmpty()) {
-                    for (ElementRecord c : candidates) {
-                        if (c.ownerPath()
-                                .map(p -> p.equals(scopePath) || p.startsWith(scopePath + "::"))
-                                .orElse(false)) {
-                            total++;
-                        }
-                    }
-                } else {
-                    total += candidates.size();
-                }
-            } catch (Throwable t) { /* ignore, best effort */ }
-        }
-        return total;
     }
 
     // ── EvaluationSummary — unchanged ─────────────────────────────────────────

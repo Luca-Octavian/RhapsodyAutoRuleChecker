@@ -10,6 +10,8 @@ import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCache;
 import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
+import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.PhaseTimer;
+import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.PipelineProfiler;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.LoadingStep;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
 
@@ -44,8 +46,11 @@ public final class IncrementalCacheUpdater {
      */
     public UpdateResult update() {
         long startMs = System.currentTimeMillis();
+        PipelineProfiler profiler = new PipelineProfiler("IncrementalCacheUpdate");
+        profiler.startPipeline();
 
         // ── Phase 1: Quick scan ─────────────────────────────────────────────
+        PhaseTimer tScan = profiler.startPhase("Phase 1: Quick scan (COM)");
         reporter.onStepStarted(LoadingStep.INCREMENTAL_SCANNING);
 
         Map<String, ElementFingerprint> fingerprints = new LinkedHashMap<String, ElementFingerprint>();
@@ -67,10 +72,12 @@ public final class IncrementalCacheUpdater {
             String metaClass = RhapsodyModelLoader.safeStr(elt.getMetaClass());
             Set<String> stereotypes = RhapsodyModelLoader.readStereotypeNames(elt);
             String description = RhapsodyModelLoader.safeGetDescription(elt);
-            Map<String, String> tagValues = RhapsodyModelLoader.readAllTags(elt);
+            // NOTE: readAllTags() deliberately SKIPPED here to reduce COM calls.
+            // Tags are preserved from cache for unchanged elements, and read fresh
+            // during Phase 3 full-read for changed/new elements.
 
             fingerprints.put(guid, new ElementFingerprint(
-                    guid, name, metaClass, stereotypes, description, tagValues));
+                    guid, name, metaClass, stereotypes, description));
             scannedHandles.put(guid, elt);
 
             // Collect dependency info (free — already reading metaClass)
@@ -156,18 +163,21 @@ public final class IncrementalCacheUpdater {
 
                     Set<String> partStereos = RhapsodyModelLoader.readStereotypeNames(partElt);
                     String partDesc = RhapsodyModelLoader.safeGetDescription(partElt);
-                    Map<String, String> partTags = RhapsodyModelLoader.readAllTags(partElt);
+                    // Tags skipped — same as main scan
 
                     fingerprints.put(partGuid, new ElementFingerprint(
-                            partGuid, partName, partMeta, partStereos, partDesc, partTags));
+                            partGuid, partName, partMeta, partStereos, partDesc));
                     scannedHandles.put(partGuid, partElt);
                 }
             } catch (Throwable t) { /* ignore */ }
         }
 
         reporter.onStepCompleted(LoadingStep.INCREMENTAL_SCANNING);
+        tScan.stop().items(fingerprints.size());
+        profiler.record(tScan);
 
         // ── Phase 2: Diff ───────────────────────────────────────────────────
+        PhaseTimer tDiff = profiler.startPhase("Phase 2: Diff");
         reporter.onStepStarted(LoadingStep.INCREMENTAL_DIFFING);
 
         // Build lookup of cached elements by GUID
@@ -198,26 +208,97 @@ public final class IncrementalCacheUpdater {
             }
         }
 
-        // Check for removed elements (in cache but not in scan)
-        for (String cachedGuid : cachedByGuid.keySet()) {
-            if (!fingerprints.containsKey(cachedGuid)) {
-                removedGuids.add(cachedGuid);
-                CachedElement removed = cachedByGuid.get(cachedGuid);
-                AppLogger.debug("Removed: " + (removed != null ? removed.getName() : cachedGuid));
+        // Build name-based lookup of freshly scanned OSLC elements.
+        // OSLC proxy elements get new GUIDs on every Rhapsody model load (GUID rotation),
+        // so GUID-based matching will ALWAYS see cached OSLC elements as "missing".
+        // We use name-based matching to determine if the element is truly absent
+        // (cold start, not resolved) vs just got a new GUID (warm start, normal rotation).
+        Set<String> freshOslcNameSet = new HashSet<String>();
+        for (ElementFingerprint fp : fingerprints.values()) {
+            if (RhapsodyModelLoader.isRemoteOslcResource(fp.guid(), fp.name())) {
+                freshOslcNameSet.add(fp.name());
             }
         }
 
-        // Check if dependency changes affect additional elements
-        // If a dependency's owner or target changed, mark those elements too
-        checkDependencyChanges(freshDeps, existingCache.getDependenciesByOwner(),
-                cachedByGuid, fingerprints, changedGuids);
+        // Check for removed elements (in cache but not in scan)
+        // OSLC proxies are handled specially due to GUID rotation.
+        int missingOslcCount = 0;   // OSLC elements NOT in scan at all (by name)
+        int rotatedOslcCount = 0;   // OSLC elements in scan with new GUID (normal)
+        List<String> candidateRemovals = new ArrayList<String>();
+        for (String cachedGuid : cachedByGuid.keySet()) {
+            if (!fingerprints.containsKey(cachedGuid)) {
+                CachedElement cachedEl = cachedByGuid.get(cachedGuid);
+                String cachedName = cachedEl != null ? cachedEl.getName() : null;
+                if (RhapsodyModelLoader.isRemoteOslcResource(cachedGuid, cachedName)) {
+                    // This OSLC element's GUID is not in the scan — check if the
+                    // same element appeared with a new GUID (name-based match)
+                    if (cachedName != null && freshOslcNameSet.contains(cachedName)) {
+                        rotatedOslcCount++; // normal GUID rotation, not missing
+                    } else {
+                        missingOslcCount++; // truly missing from scan
+                    }
+                    continue; // never add OSLC proxies to removal candidates
+                }
+                candidateRemovals.add(cachedGuid);
+            }
+        }
+
+        if (rotatedOslcCount > 0) {
+            AppLogger.info("OSLC GUID rotation: " + rotatedOslcCount
+                    + " elements re-appeared with new GUIDs (normal behavior)");
+        }
+
+        // Determine if the scan is incomplete:
+        // - Any OSLC proxy elements truly missing from the scan (not just rotated)
+        //   → cold start, not fully resolved
+        // - Too many non-OSLC removals relative to scan size → also suspect
+        boolean scanIncomplete = missingOslcCount > 0;
+        int deferredRemovalCount = 0;
+
+        int removalThreshold = Math.max(100, (int) (fingerprints.size() * 0.05));
+        if (scanIncomplete) {
+            // OSLC proxies are missing — the scan is incomplete.
+            // Defer ALL removals, not just OSLC ones, because non-OSLC elements
+            // might also be missing due to incomplete model initialization.
+            deferredRemovalCount = candidateRemovals.size() + missingOslcCount;
+            AppLogger.warn("Incremental scan appears incomplete: " + missingOslcCount
+                    + " OSLC proxy elements missing from scan. Deferring all "
+                    + deferredRemovalCount + " removals to preserve cached data.");
+            // removedGuids stays empty — no removals applied
+        } else if (candidateRemovals.size() > removalThreshold) {
+            deferredRemovalCount = candidateRemovals.size();
+            AppLogger.warn("Incremental scan: " + candidateRemovals.size()
+                    + " removals detected (threshold: " + removalThreshold
+                    + ") — deferring removals to avoid false deletions from incomplete scan");
+            // removedGuids stays empty
+        } else {
+            // Scan looks complete — apply removals normally
+            for (String guid : candidateRemovals) {
+                removedGuids.add(guid);
+                CachedElement removed = cachedByGuid.get(guid);
+                AppLogger.debug("Removed: " + (removed != null ? removed.getName() : guid));
+            }
+        }
+
+        // Check if dependency changes affect additional elements — but only if
+        // the scan is complete. On an incomplete scan, dependency lists will differ
+        // for owners whose OSLC targets are missing, producing false "changed" flags.
+        if (!scanIncomplete) {
+            checkDependencyChanges(freshDeps, existingCache.getDependenciesByOwner(),
+                    cachedByGuid, fingerprints, changedGuids);
+        } else {
+            AppLogger.info("Skipping dependency diff — scan is incomplete");
+        }
 
         DiffResult diff = new DiffResult(newGuids, removedGuids, changedGuids,
-                unchangedCount, fingerprints.size());
+                unchangedCount, fingerprints.size(), deferredRemovalCount);
 
         reporter.onStepCompleted(LoadingStep.INCREMENTAL_DIFFING);
+        tDiff.stop();
+        profiler.record(tDiff);
 
         // ── Phase 3: Targeted full read ─────────────────────────────────────
+        PhaseTimer tFullRead = profiler.startPhase("Phase 3: Full read (COM)");
         reporter.onStepStarted(LoadingStep.INCREMENTAL_UPDATING);
 
         Set<String> needsFullRead = new LinkedHashSet<String>();
@@ -265,13 +346,39 @@ public final class IncrementalCacheUpdater {
         List<ElementRecord> finalRecords = new ArrayList<ElementRecord>();
         Set<String> removedSet = new HashSet<String>(removedGuids);
 
+        // Build set of OSLC URL-format names that are in the fresh scan.
+        // OSLC proxy elements get new GUIDs every time Rhapsody loads the model,
+        // so we must deduplicate by name rather than GUID to avoid keeping both
+        // the old cached copy and the freshly scanned copy.
+        Set<String> freshOslcNames = new HashSet<String>();
+        for (ElementFingerprint fp : fingerprints.values()) {
+            if (RhapsodyModelLoader.isRemoteOslcResource(fp.guid(), fp.name())) {
+                freshOslcNames.add(fp.name());
+            }
+        }
+        int oslcDeduped = 0;
+
         // Add unchanged elements from cache (converting CachedElement → ElementRecord)
         for (CachedElement ce : existingCache.getElements()) {
             if (removedSet.contains(ce.getGuid())) continue;
             if (updatedByGuid.containsKey(ce.getGuid())) continue;
 
+            // Skip cached OSLC proxy elements whose name matches a freshly scanned
+            // element — the fresh version has a new GUID (OSLC GUID rotation) and
+            // will be added from updatedRecords below. Keeping both would duplicate.
+            String ceName = ce.getName();
+            if (ceName != null && freshOslcNames.contains(ceName)) {
+                oslcDeduped++;
+                continue;
+            }
+
             // Keep the cached version as-is
             finalRecords.add(toElementRecord(ce));
+        }
+
+        if (oslcDeduped > 0) {
+            AppLogger.info("OSLC dedup: replaced " + oslcDeduped
+                    + " cached elements with freshly scanned versions (GUID rotation)");
         }
 
         // Add updated/new elements
@@ -318,13 +425,55 @@ public final class IncrementalCacheUpdater {
         finalRefs.putAll(updatedRefs);
 
         reporter.onStepCompleted(LoadingStep.INCREMENTAL_UPDATING);
+        tFullRead.stop().items(needsFullRead.size());
+        profiler.record(tFullRead);
 
         // ── Phase 4: Build snapshot ─────────────────────────────────────────
+        PhaseTimer tBuild = profiler.startPhase("Phase 4: Build snapshot");
+
+        // Merge dependencies: when the scan is incomplete, fresh deps may be missing
+        // OSLC-related entries. Start with cached deps and overlay fresh on top.
+        Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> finalDeps;
+        if (scanIncomplete) {
+            finalDeps = new HashMap<String, List<RhapsodyModelSnapshot.DependencyInfo>>();
+            // Start with cached deps (converted to DependencyInfo)
+            Map<String, List<CachedDependency>> cachedDepsMap = existingCache.getDependenciesByOwner();
+            if (cachedDepsMap != null) {
+                for (Map.Entry<String, List<CachedDependency>> entry : cachedDepsMap.entrySet()) {
+                    List<RhapsodyModelSnapshot.DependencyInfo> infos =
+                            new ArrayList<RhapsodyModelSnapshot.DependencyInfo>();
+                    for (CachedDependency cd : entry.getValue()) {
+                        infos.add(new RhapsodyModelSnapshot.DependencyInfo(
+                                cd.getGuid(), cd.getStereotypes(), cd.getOtherEndGuid()));
+                    }
+                    finalDeps.put(entry.getKey(), infos);
+                }
+            }
+            // Overlay fresh deps for owners that WERE in the scan
+            // (their dep lists are reliable — it's only the missing owners that matter)
+            for (Map.Entry<String, List<RhapsodyModelSnapshot.DependencyInfo>> entry
+                    : freshDeps.entrySet()) {
+                if (fingerprints.containsKey(entry.getKey())) {
+                    finalDeps.put(entry.getKey(), entry.getValue());
+                }
+            }
+            AppLogger.info("Merged dependencies: " + finalDeps.size()
+                    + " owners (cached base + fresh overlay for scanned elements)");
+        } else {
+            finalDeps = freshDeps;
+        }
+
         RhapsodyModelSnapshot snapshot = new RhapsodyModelSnapshot(
                 Collections.unmodifiableList(finalRecords),
                 Collections.<String, IRPModelElement>emptyMap(), // no handles in cache mode
-                Collections.unmodifiableMap(freshDeps),
+                Collections.unmodifiableMap(finalDeps),
                 Collections.unmodifiableMap(finalRefs));
+
+        tBuild.stop().items(finalRecords.size());
+        profiler.record(tBuild);
+
+        profiler.stopPipeline();
+        AppLogger.info(profiler.summary());
 
         long durationMs = System.currentTimeMillis() - startMs;
 

@@ -5,6 +5,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
+import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
@@ -52,7 +53,7 @@ public final class RuleDialog extends JDialog {
 
     // RelationExists
     private static final List<String> KNOWN_RELATION_KINDS = Arrays.asList(
-            "dependency", "association", "generalization",
+            "any", "dependency", "association", "generalization",
             "usage", "realization", "abstraction", "link"
     );
     private CheckboxListField       relKindField;
@@ -61,7 +62,23 @@ public final class RuleDialog extends JDialog {
     private CheckboxListField       relStereoField;
     private final JTextField        relOpField    = new JTextField(8);
     private final JTextField        relValueField = new JTextField(8);
-    
+
+    // OwnerStereotypeConstraint
+    private CheckboxListField       ownerStereoField;
+    private CheckboxListField       allowedKindsField;
+    private static final List<String> ALL_ELEMENT_KINDS;
+    static {
+        List<String> kinds = new ArrayList<>();
+        for (ElementKind ek : ElementKind.values()) {
+            kinds.add(ek.name());
+        }
+        ALL_ELEMENT_KINDS = Collections.unmodifiableList(kinds);
+    }
+
+
+    // Stored references for target alias row (to show/hide based on rule type)
+    private JComponent targetLabel;
+    private JComponent targetField;
 
     private WizardState.RuleRequest result = null;
     private final JButton okBtn = new JButton("Save Rule");
@@ -117,7 +134,14 @@ public final class RuleDialog extends JDialog {
         for (AliasDefinition a : state.aliases()) {
             targetCombo.addItem(a.id());
         }
-        addFormRow(top, gbc, row++, "Target Alias",   "rule.target", targetCombo);
+        // Store the target alias row components so we can show/hide them
+        targetLabel = HelpIcon.labelWithHelp("Target Alias:", "rule.target");
+        targetField = targetCombo;
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 1;
+        top.add(targetLabel, gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        top.add(targetField, gbc);
+        row++;
         addFormRow(top, gbc, row++, "Message",        "rule.message", messageField);
 
         add(top, BorderLayout.NORTH);
@@ -129,8 +153,9 @@ public final class RuleDialog extends JDialog {
         paramsScroll.setPreferredSize(new Dimension(500, 260));
         add(paramsScroll, BorderLayout.CENTER);
 
-        typeCombo.addActionListener(e -> { rebuildParams(); revalidateLive(); });
+        typeCombo.addActionListener(e -> { rebuildParams(); updateTargetVisibility(); revalidateLive(); });
         rebuildParams();
+        updateTargetVisibility();
 
         // Prefill daca editam
         if (pre != null) prefill(pre);
@@ -226,6 +251,30 @@ public final class RuleDialog extends JDialog {
                 addFormRow(paramsPanel, gbc, row++, "Operator (gte/lte/eq)", "rule.params.relationExists.operator", relOpField);
                 addFormRow(paramsPanel, gbc, row++, "Value (count)",         "rule.params.relationExists.value",    relValueField);
                 break;
+
+            case OWNER_STEREOTYPE_CONSTRAINT:
+                // Owner stereotype — filterable checkbox list (pick one)
+                gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+                paramsPanel.add(HelpIcon.labelWithHelp("Owner Stereotype (pick 1) *:",
+                        "rule.params.ownerConstraint.ownerStereotype"), gbc);
+                ownerStereoField = new CheckboxListField(detectedStereos);
+                ownerStereoField.addChangeListener(this::revalidateLive);
+                gbc.gridy = row++; gbc.weighty = 0.5;
+                gbc.fill  = GridBagConstraints.BOTH;
+                paramsPanel.add(ownerStereoField, gbc);
+                gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
+
+                // Allowed ElementKinds checkboxes
+                gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+                paramsPanel.add(HelpIcon.labelWithHelp("Allowed Kinds (min 1) *:",
+                        "rule.params.ownerConstraint.allowedKinds"), gbc);
+                allowedKindsField = new CheckboxListField(ALL_ELEMENT_KINDS);
+                allowedKindsField.addChangeListener(this::revalidateLive);
+                gbc.gridy = row++; gbc.weighty = 1;
+                gbc.fill  = GridBagConstraints.BOTH;
+                paramsPanel.add(allowedKindsField, gbc);
+                gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
+                break;
         }
 
         paramsPanel.revalidate();
@@ -256,9 +305,17 @@ public final class RuleDialog extends JDialog {
                 if (p.get("operator")  != null) operatorField.setText(p.get("operator").toString());
                 if (p.get("values")    != null) {
                     Object v = p.get("values");
-                    valuesField.setText(v instanceof List
-                            ? String.join(", ", (List<String>) v)
-                            : v.toString());
+                    if (v instanceof List) {
+                        // Safely convert — list may contain Integer + String mix from YAML
+                        StringBuilder csv = new StringBuilder();
+                        for (Object item : (List<?>) v) {
+                            if (csv.length() > 0) csv.append(", ");
+                            csv.append(item != null ? item.toString() : "");
+                        }
+                        valuesField.setText(csv.toString());
+                    } else {
+                        valuesField.setText(v.toString());
+                    }
                 }
                 break;
 
@@ -298,7 +355,30 @@ public final class RuleDialog extends JDialog {
                 if (p.get("operator") != null) relOpField.setText(p.get("operator").toString());
                 if (p.get("value")    != null) relValueField.setText(p.get("value").toString());
                 break;
+
+            case OWNER_STEREOTYPE_CONSTRAINT:
+                if (ownerStereoField != null && p.get("ownerStereotype") != null)
+                    ownerStereoField.setSelectedValues(
+                            Collections.singletonList(p.get("ownerStereotype").toString()));
+                if (allowedKindsField != null && p.get("allowedKinds") != null) {
+                    Object v = p.get("allowedKinds");
+                    allowedKindsField.setSelectedValues(v instanceof List
+                            ? (List<String>) v
+                            : Collections.singletonList(v.toString()));
+                }
+                break;
         }
+    }
+
+    /**
+     * Show/hide the Target Alias field based on the selected rule type.
+     * Only REQUIRED_VALUE uses target aliases; other types don't need it.
+     */
+    private void updateTargetVisibility() {
+        RuleType type = (RuleType) typeCombo.getSelectedItem();
+        boolean needsTarget = type == RuleType.REQUIRED_VALUE;
+        if (targetLabel != null) targetLabel.setVisible(needsTarget);
+        if (targetField != null) targetField.setVisible(needsTarget);
     }
 
     /**
@@ -339,6 +419,15 @@ public final class RuleDialog extends JDialog {
                     if (patternOk) FieldValidation.markValid(patternField); else FieldValidation.markInvalid(patternField);
                     valid = valid && patternOk;
                     break;
+                case OWNER_STEREOTYPE_CONSTRAINT:
+                    boolean ownerOk = ownerStereoField != null
+                            && !ownerStereoField.getSelectedValues().isEmpty();
+                    if (ownerStereoField != null) ownerStereoField.setValid(ownerOk);
+                    boolean kindsOk = allowedKindsField != null
+                            && !allowedKindsField.getSelectedValues().isEmpty();
+                    if (allowedKindsField != null) allowedKindsField.setValid(kindsOk);
+                    valid = valid && ownerOk && kindsOk;
+                    break;
                 default:
                     break;
             }
@@ -377,6 +466,16 @@ public final class RuleDialog extends JDialog {
             case NAMING_PATTERN:
                 if (patternField.getText().trim().isEmpty()) {
                     warn("Pattern is required for NamingPattern."); return false;
+                }
+                break;
+            case OWNER_STEREOTYPE_CONSTRAINT:
+                if (ownerStereoField == null
+                        || ownerStereoField.getSelectedValues().isEmpty()) {
+                    warn("Owner Stereotype is required for OwnerStereotypeConstraint."); return false;
+                }
+                if (allowedKindsField == null
+                        || allowedKindsField.getSelectedValues().isEmpty()) {
+                    warn("At least one Allowed Kind is required for OwnerStereotypeConstraint."); return false;
                 }
                 break;
         }
@@ -426,6 +525,13 @@ public final class RuleDialog extends JDialog {
                     params.put("operator", relOpField.getText().trim());
                 if (!relValueField.getText().trim().isEmpty())
                     params.put("value", Integer.parseInt(relValueField.getText().trim()));
+                break;
+
+            case OWNER_STEREOTYPE_CONSTRAINT:
+                if (ownerStereoField != null && !ownerStereoField.getSelectedValues().isEmpty())
+                    params.put("ownerStereotype", ownerStereoField.getSelectedValues().get(0));
+                if (allowedKindsField != null && !allowedKindsField.getSelectedValues().isEmpty())
+                    params.put("allowedKinds", allowedKindsField.getSelectedValues());
                 break;
         }
 

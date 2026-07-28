@@ -8,7 +8,15 @@ import java.util.*;
 /**
  * Lightweight fingerprint of a live model element, captured during the Phase 1 scan.
  * Contains only the fields needed to detect changes against the cached version.
- * Does NOT include expensive-to-read fields (ownerPath, portInfo, typeInfo, references).
+ *
+ * <p>Does NOT include:
+ * <ul>
+ *   <li>tagValues — expensive to read (getTags() + getName()/getValue() per tag), skipped to reduce COM calls</li>
+ *   <li>ownerPath, portInfo, typeInfo, references — read only during Phase 3 full-read</li>
+ * </ul>
+ *
+ * <p>Tags are preserved from cache for unchanged elements. If name, metaClass, stereotypes,
+ * or description changed, a full read (including tags) is triggered in Phase 3.
  */
 public final class ElementFingerprint {
 
@@ -17,17 +25,14 @@ public final class ElementFingerprint {
     private final String metaClass;
     private final Set<String> stereotypes;
     private final String description;
-    private final Map<String, String> tagValues;
 
     public ElementFingerprint(String guid, String name, String metaClass,
-                              Set<String> stereotypes, String description,
-                              Map<String, String> tagValues) {
+                              Set<String> stereotypes, String description) {
         this.guid = guid;
         this.name = name;
         this.metaClass = metaClass;
         this.stereotypes = stereotypes != null ? stereotypes : Collections.<String>emptySet();
         this.description = description;
-        this.tagValues = tagValues != null ? tagValues : Collections.<String, String>emptyMap();
     }
 
     public String guid() { return guid; }
@@ -35,11 +40,14 @@ public final class ElementFingerprint {
     public String metaClass() { return metaClass; }
     public Set<String> stereotypes() { return stereotypes; }
     public String description() { return description; }
-    public Map<String, String> tagValues() { return tagValues; }
 
     /**
      * Compare this live fingerprint against a cached element.
      * Returns true if the element is unchanged (all checked fields match).
+     *
+     * <p>Note: tagValues are NOT compared — they are only read during full-read
+     * for elements where other fields changed. This saves the expensive getTags()
+     * COM call chain during the scan phase.
      */
     public boolean matches(CachedElement cached) {
         if (cached == null) return false;
@@ -56,11 +64,6 @@ public final class ElementFingerprint {
         // Compare description
         String cachedDesc = cached.getDescription();
         if (!safeEquals(normalizeEmpty(description), normalizeEmpty(cachedDesc))) return false;
-
-        // Compare tag values
-        Map<String, String> cachedTags = cached.getTagValues();
-        if (cachedTags == null) cachedTags = Collections.emptyMap();
-        if (!mapsEqual(tagValues, cachedTags)) return false;
 
         return true;
     }
@@ -89,12 +92,6 @@ public final class ElementFingerprint {
         String cachedDesc = cached.getDescription();
         if (!safeEquals(normalizeEmpty(description), normalizeEmpty(cachedDesc))) {
             diffs.add("description changed");
-        }
-
-        Map<String, String> cachedTags = cached.getTagValues();
-        if (cachedTags == null) cachedTags = Collections.emptyMap();
-        if (!mapsEqual(tagValues, cachedTags)) {
-            diffs.add("tagValues changed");
         }
 
         return diffs.isEmpty() ? "UNCHANGED" : String.join(", ", diffs);
@@ -126,14 +123,5 @@ public final class ElementFingerprint {
             bLower.add(s.toLowerCase());
         }
         return aLower.equals(bLower);
-    }
-
-    private static boolean mapsEqual(Map<String, String> a, Map<String, String> b) {
-        if (a.size() != b.size()) return false;
-        for (Map.Entry<String, String> entry : a.entrySet()) {
-            String bVal = b.get(entry.getKey());
-            if (!safeEquals(entry.getValue(), bVal)) return false;
-        }
-        return true;
     }
 }

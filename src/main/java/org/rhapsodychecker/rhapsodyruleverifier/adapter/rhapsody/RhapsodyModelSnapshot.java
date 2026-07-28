@@ -17,6 +17,9 @@ public final class RhapsodyModelSnapshot {
     // Pre-built: elementGuid -> list of incoming references to that element
     private final Map<String, List<ReferenceInfo>> referencesByElement;
 
+    // Reverse index: targetGuid -> list of dependencies pointing AT that element (lazy-built)
+    private volatile Map<String, List<DependencyInfo>> dependenciesByTarget;
+
     public RhapsodyModelSnapshot(List<ElementRecord> records,
                                  Map<String, IRPModelElement> handleByGuid,
                                  Map<String, List<DependencyInfo>> dependenciesByOwner,
@@ -46,6 +49,45 @@ public final class RhapsodyModelSnapshot {
     public Map<String, List<ReferenceInfo>> referencesByElement() { return referencesByElement; }
 
     /**
+     * Reverse index: targetGuid -> list of incoming dependencies.
+     * Built lazily on first access, then cached. O(1) lookup for incoming deps
+     * instead of scanning the entire dependenciesByOwner map.
+     */
+    public Map<String, List<DependencyInfo>> dependenciesByTarget() {
+        Map<String, List<DependencyInfo>> local = dependenciesByTarget;
+        if (local == null) {
+            synchronized (this) {
+                local = dependenciesByTarget;
+                if (local == null) {
+                    local = buildDependenciesByTarget();
+                    dependenciesByTarget = local;
+                }
+            }
+        }
+        return local;
+    }
+
+    private Map<String, List<DependencyInfo>> buildDependenciesByTarget() {
+        Map<String, List<DependencyInfo>> result = new HashMap<String, List<DependencyInfo>>();
+        for (Map.Entry<String, List<DependencyInfo>> entry : dependenciesByOwner.entrySet()) {
+            String ownerGuid = entry.getKey();
+            for (DependencyInfo dep : entry.getValue()) {
+                String target = dep.otherEndGuid();
+                if (target != null && !target.isEmpty()) {
+                    List<DependencyInfo> list = result.get(target);
+                    if (list == null) {
+                        list = new ArrayList<DependencyInfo>();
+                        result.put(target, list);
+                    }
+                    // Store with ownerGuid as the otherEndGuid (the source of the incoming dep)
+                    list.add(new DependencyInfo(dep.guid(), dep.stereotypes(), ownerGuid));
+                }
+            }
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
      * Lightweight pre-indexed dependency info collected during model loading.
      */
     public static final class DependencyInfo {
@@ -55,7 +97,7 @@ public final class RhapsodyModelSnapshot {
 
         public DependencyInfo(String guid, Set<String> stereotypes, String otherEndGuid) {
             this.guid = guid;
-            this.stereotypes = stereotypes != null ? stereotypes : Collections.emptySet();
+            this.stereotypes = stereotypes != null ? stereotypes : Collections.<String>emptySet();
             this.otherEndGuid = otherEndGuid;
         }
 

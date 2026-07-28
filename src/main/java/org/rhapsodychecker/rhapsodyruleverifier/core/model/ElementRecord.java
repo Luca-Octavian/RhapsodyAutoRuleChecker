@@ -38,8 +38,20 @@ public final class ElementRecord {
     // Stereotypes applied to this element
     private final Set<String> stereotypes;
 
+    // Pre-computed lowercase stereotypes for O(1) case-insensitive lookup
+    private final Set<String> stereotypesLower;
+
     // Pre-loaded tagged values (tagName -> value)
     private final Map<String, String> tagValues;
+
+    // Pre-cached Optional wrappers — avoids millions of Optional.ofNullable() allocations
+    private final Optional<String> ownerGuidOpt;
+    private final Optional<String> ownerPathOpt;
+    private final Optional<String> typeGuidOpt;
+    private final Optional<String> typeNameOpt;
+    private final Optional<String> descriptionOpt;
+    private final Optional<String> portDirectionOpt;
+    private final Optional<String> portMultiplicityOpt;
 
     private ElementRecord(Builder b) {
         this.guid = requireNonBlank(b.guid, "guid");
@@ -60,22 +72,42 @@ public final class ElementRecord {
         Set<String> st = (b.stereotypes == null) ? Collections.emptySet() : defensiveCopySet(b.stereotypes);
         this.stereotypes = st.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(st);
 
+        // Pre-compute lowercase stereotype set for O(1) case-insensitive lookup
+        if (st.isEmpty()) {
+            this.stereotypesLower = Collections.emptySet();
+        } else {
+            Set<String> lower = new LinkedHashSet<String>(st.size());
+            for (String s : st) {
+                lower.add(s.toLowerCase(java.util.Locale.ROOT));
+            }
+            this.stereotypesLower = Collections.unmodifiableSet(lower);
+        }
+
         this.tagValues = b.tagValues != null && !b.tagValues.isEmpty()
                 ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(b.tagValues))
                 : Collections.<String, String>emptyMap();
+
+        // Pre-cache Optional wrappers (constructed once, reused on every accessor call)
+        this.ownerGuidOpt = Optional.ofNullable(this.ownerGuid);
+        this.ownerPathOpt = Optional.ofNullable(this.ownerPath);
+        this.typeGuidOpt = Optional.ofNullable(this.typeGuid);
+        this.typeNameOpt = Optional.ofNullable(this.typeName);
+        this.descriptionOpt = Optional.ofNullable(this.description);
+        this.portDirectionOpt = Optional.ofNullable(this.portDirection);
+        this.portMultiplicityOpt = Optional.ofNullable(this.portMultiplicity);
     }
 
     public String guid() { return guid; }
     public String name() { return name; }
     public String metaClass() { return metaClass; }
     public ElementKind kind() { return kind; }
-    public Optional<String> ownerGuid() { return Optional.ofNullable(ownerGuid); }
-    public Optional<String> ownerPath() { return Optional.ofNullable(ownerPath); }
-    public Optional<String> typeGuid() { return Optional.ofNullable(typeGuid); }
-    public Optional<String> typeName() { return Optional.ofNullable(typeName); }
-    public Optional<String> description() { return Optional.ofNullable(description); }
-    public Optional<String> portDirection() { return Optional.ofNullable(portDirection); }
-    public Optional<String> portMultiplicity() { return Optional.ofNullable(portMultiplicity); }
+    public Optional<String> ownerGuid() { return ownerGuidOpt; }
+    public Optional<String> ownerPath() { return ownerPathOpt; }
+    public Optional<String> typeGuid() { return typeGuidOpt; }
+    public Optional<String> typeName() { return typeNameOpt; }
+    public Optional<String> description() { return descriptionOpt; }
+    public Optional<String> portDirection() { return portDirectionOpt; }
+    public Optional<String> portMultiplicity() { return portMultiplicityOpt; }
 
     public Set<String> stereotypes() { return stereotypes; }
 
@@ -88,10 +120,7 @@ public final class ElementRecord {
 
     public boolean hasStereotypeIgnoreCase(String stereotype) {
         if (stereotype == null) return false;
-        for (String s : stereotypes) {
-            if (s.equalsIgnoreCase(stereotype)) return true;
-        }
-        return false;
+        return stereotypesLower.contains(stereotype.toLowerCase(java.util.Locale.ROOT));
     }
 
     @Override

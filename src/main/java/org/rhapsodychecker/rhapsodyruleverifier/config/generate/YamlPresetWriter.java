@@ -147,16 +147,47 @@ public final class YamlPresetWriter {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < items.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append(items.get(i));
+            String val = items.get(i);
+            // Quote values that YAML might misinterpret as non-string types
+            // (integers, floats, booleans, or values with special characters)
+            if (needsQuoting(val)) {
+                sb.append("\"").append(escape(val)).append("\"");
+            } else {
+                sb.append(val);
+            }
         }
         sb.append("]");
         return sb.toString();
     }
 
+    /**
+     * Returns true if the value needs YAML quoting to prevent type coercion.
+     * Values like "1", "1.0", "true", "yes", "1..1" get quoted to stay as strings.
+     */
+    private static boolean needsQuoting(String val) {
+        if (val == null || val.isEmpty()) return true;
+        // Numeric values
+        try { Integer.parseInt(val); return true; } catch (NumberFormatException e) { /* not int */ }
+        try { Double.parseDouble(val); return true; } catch (NumberFormatException e) { /* not double */ }
+        // YAML boolean words
+        String lower = val.toLowerCase();
+        if ("true".equals(lower) || "false".equals(lower)
+                || "yes".equals(lower) || "no".equals(lower)
+                || "on".equals(lower) || "off".equals(lower)) return true;
+        // Contains dots between digits (e.g. "1..1") — YAML might parse oddly
+        if (val.contains("..")) return true;
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     private static String paramValueYaml(Object value) {
         if (value instanceof List) {
-            return toInlineList((List<String>) value);
+            // Safely convert all items to strings (List may contain Integer/String mix)
+            List<String> stringList = new ArrayList<>();
+            for (Object item : (List<?>) value) {
+                stringList.add(item != null ? item.toString() : "");
+            }
+            return toInlineList(stringList);
         }
         if (value instanceof Boolean || value instanceof Integer) {
             return value.toString();

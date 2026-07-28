@@ -130,18 +130,19 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
             }
         }
 
-        // Incoming: find dependencies where THIS element is the otherEnd
-        for (Map.Entry<String, List<RhapsodyModelSnapshot.DependencyInfo>> entry
-                : snapshot.dependenciesByOwner().entrySet()) {
-            String ownerGuid = entry.getKey();
-            if (ownerGuid.equals(elementGuid)) continue; // skip self (already handled above)
-            for (RhapsodyModelSnapshot.DependencyInfo dep : entry.getValue()) {
-                if (elementGuid.equals(dep.otherEndGuid())) {
+        // Incoming: use reverse index for O(1) lookup instead of full scan
+        List<RhapsodyModelSnapshot.DependencyInfo> incomingDeps =
+                snapshot.dependenciesByTarget().get(elementGuid);
+        if (incomingDeps != null) {
+            for (RhapsodyModelSnapshot.DependencyInfo dep : incomingDeps) {
+                // dep.otherEndGuid() is the ownerGuid of the source element
+                String sourceGuid = dep.otherEndGuid();
+                if (sourceGuid != null && !sourceGuid.equals(elementGuid)) {
                     RelationInfo info = new RelationInfo();
                     info.metaClass = "Dependency";
                     info.stereotypes = dep.stereotypes();
-                    info.sourceGuid = ownerGuid;
-                    info.otherEndGuid = ownerGuid;
+                    info.sourceGuid = sourceGuid;
+                    info.otherEndGuid = sourceGuid;
                     info.direction = "incoming";
                     relations.add(info);
                 }

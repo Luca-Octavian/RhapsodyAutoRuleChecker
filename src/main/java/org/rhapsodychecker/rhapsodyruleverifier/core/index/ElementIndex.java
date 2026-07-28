@@ -97,6 +97,19 @@ public final class ElementIndex {
         return Collections.unmodifiableList(out);
     }
 
+    /**
+     * Convert GUIDs to records WITHOUT sorting — faster for evaluation where
+     * order doesn't matter. Use {@link #toRecords(Set)} when display order is needed.
+     */
+    public List<ElementRecord> toRecordsUnsorted(Set<String> guids) {
+        if (guids == null || guids.isEmpty()) return Collections.emptyList();
+        List<ElementRecord> out = new ArrayList<>(guids.size());
+        for (String g : guids) {
+            repo.get(g).ifPresent(out::add);
+        }
+        return Collections.unmodifiableList(out);
+    }
+
     public List<ElementRecord> byKindAsRecords(ElementKind kind) {
         return toRecords(guidsByKind(kind));
     }

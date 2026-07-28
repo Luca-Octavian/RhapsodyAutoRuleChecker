@@ -12,6 +12,8 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
+import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.PhaseTimer;
+import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.PipelineProfiler;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.LoadingStep;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.DetectionFacade;
@@ -66,14 +68,34 @@ public final class ModelLoadService {
      * Load model from JSON cache.
      */
     public static LoadResult loadFromCache(File cacheFile) throws Exception {
+        PipelineProfiler profiler = new PipelineProfiler("loadFromCache");
+        profiler.startPipeline();
+
+        PhaseTimer tRead = profiler.startPhase("JSON deserialization");
         ModelCacheManager.CacheLoadResult result = ModelCacheManager.readCache(cacheFile);
         RhapsodyModelSnapshot snapshot = result.snapshot();
         CacheMetadata metadata = result.metadata();
+        tRead.stop().items(snapshot.records().size());
+        profiler.record(tRead);
+
+        PhaseTimer tIndex = profiler.startPhase("ElementIndex.build()");
         ElementIndex index = ElementIndex.build(snapshot.records());
+        tIndex.stop().items(snapshot.records().size());
+        profiler.record(tIndex);
+
+        PhaseTimer tTree = profiler.startPhase("buildPackageTree");
         PackageNode packageTree = buildPackageTreeFromRecords(
                 snapshot.records(), metadata.getProjectName());
+        tTree.stop();
+        profiler.record(tTree);
 
+        PhaseTimer tDetect = profiler.startPhase("buildDetectionFromRecords");
         FastDetectionResult detectionResult = buildDetectionFromRecords(snapshot.records());
+        tDetect.stop().items(snapshot.records().size());
+        profiler.record(tDetect);
+
+        profiler.stopPipeline();
+        AppLogger.info(profiler.summary());
 
         AppLogger.logCacheLoad(cacheFile.getAbsolutePath(),
                 snapshot.records().size(), metadata.getCachedAt());
@@ -88,20 +110,37 @@ public final class ModelLoadService {
      */
     public static LoadResult loadFromRhapsody(String modelPath,
                                                ProgressReporter reporter) throws Exception {
+        PipelineProfiler profiler = new PipelineProfiler("loadFromRhapsody");
+        profiler.startPipeline();
+
+        PhaseTimer tConn = profiler.startPhase("Rhapsody connect");
         reporter.onStepStarted(LoadingStep.CONNECTING);
         RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
         conn.connect(modelPath);
         reporter.onStepCompleted(LoadingStep.CONNECTING);
+        tConn.stop();
+        profiler.record(tConn);
 
+        PhaseTimer tScan = profiler.startPhase("Package scan (COM)");
         reporter.onStepStarted(LoadingStep.SCANNING_PACKAGES);
         RhapsodyPackageScanner scanner = new RhapsodyPackageScanner();
         PackageNode packageTree = scanner.scanPackages(conn.getProject());
         reporter.onStepCompleted(LoadingStep.SCANNING_PACKAGES);
+        tScan.stop();
+        profiler.record(tScan);
 
+        PhaseTimer tLoad = profiler.startPhase("loadModel (COM)");
         RhapsodyModelLoader loader = new RhapsodyModelLoader(reporter);
         RhapsodyModelSnapshot snapshot = loader.loadModel(conn.getProject());
-        ElementIndex index = ElementIndex.build(snapshot.records());
+        tLoad.stop().items(snapshot.records().size());
+        profiler.record(tLoad);
 
+        PhaseTimer tIndex = profiler.startPhase("ElementIndex.build()");
+        ElementIndex index = ElementIndex.build(snapshot.records());
+        tIndex.stop().items(snapshot.records().size());
+        profiler.record(tIndex);
+
+        PhaseTimer tDetect = profiler.startPhase("Fast detection");
         reporter.onStepStarted(LoadingStep.FAST_DETECTION);
         RhapsodyPortInfoResolver portResolver = new RhapsodyPortInfoResolver(snapshot);
         PortProbeService portProbeService = new PortProbeService(portResolver);
@@ -109,17 +148,27 @@ public final class ModelLoadService {
         FastDetectionResult detectionResult = detectionFacade.fastScan(
                 snapshot.records(), snapshot.handleByGuid(), conn.getApplication());
         reporter.onStepCompleted(LoadingStep.FAST_DETECTION);
+        tDetect.stop().items(snapshot.records().size());
+        profiler.record(tDetect);
 
+        PhaseTimer tCache = profiler.startPhase("Cache write (JSON)");
         try {
             String projectName = conn.getProject().getName();
             String projectGuid = conn.getProject().getGUID();
             File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
-            ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile);
+            ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile, modelPath);
+            tCache.stop();
+            profiler.record(tCache);
             AppLogger.logCacheWrite(cacheFile.getAbsolutePath(),
                     snapshot.records().size(), cacheFile.length() / 1024);
         } catch (Throwable cacheErr) {
+            tCache.stop();
+            profiler.record(tCache);
             AppLogger.warn("Cache write failed: " + cacheErr.getMessage());
         }
+
+        profiler.stopPipeline();
+        AppLogger.info(profiler.summary());
 
         AppLogger.logModelLoad(snapshot.records().size(),
                 snapshot.dependenciesByOwner().size(),
@@ -135,7 +184,7 @@ public final class ModelLoadService {
      * Aggregates stereotypes, metaClasses, kinds, ownerPaths, description stats,
      * and port capabilities from the pre-loaded element data.
      */
-    static FastDetectionResult buildDetectionFromRecords(List<ElementRecord> records) {
+    public static FastDetectionResult buildDetectionFromRecords(List<ElementRecord> records) {
         Map<String, Long> countsByMetaClass = new LinkedHashMap<String, Long>();
         Map<String, Long> countsByStereotype = new LinkedHashMap<String, Long>();
         Map<String, Long> countsByKind = new LinkedHashMap<String, Long>();
@@ -213,17 +262,35 @@ public final class ModelLoadService {
     /**
      * Load model via incremental update: scan live Rhapsody, diff against cache,
      * only fully read changed/new elements.
+     *
+     * <p>If Rhapsody is unavailable (not running, connection fails), falls back
+     * gracefully to loading from cache — preserving all data including OSLC proxies.
      */
     public static LoadResult loadIncrementalUpdate(String modelPath, File cacheFile,
                                                     ProgressReporter reporter) throws Exception {
+        // Always run the incremental scan — Rhapsody keeps changes in memory
+        // and may not flush to disk, so file timestamps are unreliable.
+        // The incremental scan is still fast: it only does full reads on changed elements.
+
         // Read existing cache
         ModelCache existingCache = ModelCacheManager.readCacheRaw(cacheFile);
 
-        // Connect to Rhapsody
-        reporter.onStepStarted(LoadingStep.CONNECTING);
+        // Connect to Rhapsody — if unavailable, fall back to cache
         RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
-        conn.connect(modelPath);
-        reporter.onStepCompleted(LoadingStep.CONNECTING);
+        try {
+            reporter.onStepStarted(LoadingStep.CONNECTING);
+            conn.connect(modelPath);
+            reporter.onStepCompleted(LoadingStep.CONNECTING);
+        } catch (Throwable connErr) {
+            reporter.onStepCompleted(LoadingStep.CONNECTING);
+            AppLogger.warn("Rhapsody unavailable for incremental update: " + connErr.getMessage()
+                    + " — falling back to cached data");
+            LoadResult cached = loadFromCache(cacheFile);
+            String fallbackStatus = "Loaded from cache (Rhapsody unavailable) \u2014 "
+                    + cached.snapshot().records().size() + " elements";
+            return new LoadResult(cached.snapshot(), cached.index(), cached.packageTree(),
+                    cached.detectionResult(), true, fallbackStatus);
+        }
 
         // Warm up: scan packages so Rhapsody finishes internal model loading.
         // Without this, getNestedElementsRecursive() may return incomplete results
@@ -248,14 +315,21 @@ public final class ModelLoadService {
         // instead of rebuilding from records, since we have it from the scanner
         FastDetectionResult detectionResult = buildDetectionFromRecords(snapshot.records());
 
-        // Write updated cache
-        try {
-            String projectGuid = conn.getProject().getGUID();
-            ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile);
-            AppLogger.logCacheWrite(cacheFile.getAbsolutePath(),
-                    snapshot.records().size(), cacheFile.length() / 1024);
-        } catch (Throwable cacheErr) {
-            AppLogger.warn("Cache write failed after incremental update: " + cacheErr.getMessage());
+        // Write updated cache (with file timestamps for fast-skip) — but only if
+        // the scan was complete. An incomplete scan should not overwrite the cache
+        // because it would lose the OSLC proxy elements that weren't scanned.
+        if (!diff.wasIncomplete()) {
+            try {
+                String projectGuid = conn.getProject().getGUID();
+                ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile, modelPath);
+                AppLogger.logCacheWrite(cacheFile.getAbsolutePath(),
+                        snapshot.records().size(), cacheFile.length() / 1024);
+            } catch (Throwable cacheErr) {
+                AppLogger.warn("Cache write failed after incremental update: " + cacheErr.getMessage());
+            }
+        } else {
+            AppLogger.info("Skipping cache write — scan was incomplete ("
+                    + diff.deferredRemovalCount() + " removals deferred)");
         }
 
         AppLogger.logIncrementalUpdate(
@@ -324,10 +398,9 @@ public final class ModelLoadService {
                 PackageNode parentNode = nodesByGuid.get(ownerGuid);
                 if (parentNode != null) {
                     parentNode.addChild(node);
-                } else {
-                    // Parent was filtered out — attach to root as fallback
-                    root.addChild(node);
                 }
+                // If parent was filtered out, skip this package entirely
+                // (matches live RhapsodyPackageScanner behavior)
             }
         }
 

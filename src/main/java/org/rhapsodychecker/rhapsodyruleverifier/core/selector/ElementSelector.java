@@ -52,7 +52,7 @@ public final class ElementSelector {
             }
         }
 
-        return index.toRecords(guids);
+        return index.toRecordsUnsorted(guids);
     }
 
     public Set<String> resolveElementSet(String setId) {

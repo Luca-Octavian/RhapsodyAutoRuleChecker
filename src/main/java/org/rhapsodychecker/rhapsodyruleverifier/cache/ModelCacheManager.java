@@ -8,6 +8,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -29,12 +30,28 @@ public final class ModelCacheManager {
     public static void writeCache(RhapsodyModelSnapshot snapshot,
                                   String projectName, String projectGuid,
                                   File cacheFile) throws IOException {
+        writeCache(snapshot, projectName, projectGuid, cacheFile, null);
+    }
+
+    /**
+     * Write snapshot to a cache file, optionally capturing model file timestamps.
+     *
+     * @param modelPath if non-null, captures .rpy and .sbs file timestamps for fast-skip
+     */
+    public static void writeCache(RhapsodyModelSnapshot snapshot,
+                                  String projectName, String projectGuid,
+                                  File cacheFile, String modelPath) throws IOException {
         String timestamp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(new Date());
 
         CacheMetadata metadata = new CacheMetadata(
                 projectName, projectGuid,
                 timestamp,
                 snapshot.records().size());
+
+        // Capture model file timestamps for fast-skip detection
+        if (modelPath != null) {
+            metadata.setFileTimestamps(captureFileTimestamps(modelPath));
+        }
 
         List<CachedElement> elements = new ArrayList<CachedElement>();
         for (ElementRecord r : snapshot.records()) {
@@ -146,6 +163,78 @@ public final class ModelCacheManager {
      */
     public static boolean cacheExists(File cacheFile) {
         return cacheFile.exists() && cacheFile.isFile() && cacheFile.canRead();
+    }
+
+    /**
+     * Capture file timestamps for the project and its unit files.
+     * Used for fast-skip: if no file has changed, the cache is definitely fresh.
+     */
+    public static Map<String, Long> captureFileTimestamps(String modelPath) {
+        Map<String, Long> timestamps = new LinkedHashMap<String, Long>();
+        File rpyFile = new File(modelPath);
+        if (rpyFile.exists()) {
+            timestamps.put(rpyFile.getAbsolutePath(), rpyFile.lastModified());
+
+            // Also capture .sbs unit files in the same directory
+            File dir = rpyFile.getParentFile();
+            if (dir != null && dir.isDirectory()) {
+                File[] sbsFiles = dir.listFiles(new FilenameFilter() {
+                    @Override
+                    public boolean accept(File d, String name) {
+                        return name.endsWith(".sbs");
+                    }
+                });
+                if (sbsFiles != null) {
+                    for (File sbs : sbsFiles) {
+                        timestamps.put(sbs.getAbsolutePath(), sbs.lastModified());
+                    }
+                }
+            }
+        }
+        return timestamps;
+    }
+
+    /**
+     * Check if model files have changed since the cache was written.
+     * Returns true if the cache is still fresh (no files changed).
+     *
+     * @param modelPath the .rpy file path
+     * @param cacheFile the cache file to check
+     * @return true if cache is fresh and can be reused without COM scan
+     */
+    public static boolean isCacheFresh(String modelPath, File cacheFile) {
+        if (!cacheExists(cacheFile)) return false;
+        try {
+            // Read just the metadata (fast — don't deserialize elements)
+            ModelCache cache = MAPPER.readValue(cacheFile, ModelCache.class);
+            if (cache.getMetadata() == null) return false;
+            if (cache.getMetadata().getCacheVersion() != CacheMetadata.CURRENT_VERSION) return false;
+
+            Map<String, Long> storedTimestamps = cache.getMetadata().getFileTimestamps();
+            if (storedTimestamps == null || storedTimestamps.isEmpty()) return false;
+
+            // Check current timestamps against stored
+            Map<String, Long> currentTimestamps = captureFileTimestamps(modelPath);
+
+            // All stored files must exist with same timestamp
+            for (Map.Entry<String, Long> entry : storedTimestamps.entrySet()) {
+                Long current = currentTimestamps.get(entry.getKey());
+                if (current == null || !current.equals(entry.getValue())) {
+                    return false;
+                }
+            }
+
+            // Check for new .sbs files not in stored timestamps
+            for (String currentPath : currentTimestamps.keySet()) {
+                if (!storedTimestamps.containsKey(currentPath)) {
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /**

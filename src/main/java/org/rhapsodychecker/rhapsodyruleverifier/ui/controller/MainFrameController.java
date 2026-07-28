@@ -2,6 +2,8 @@
 package org.rhapsodychecker.rhapsodyruleverifier.ui.controller;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
+import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyAliasResolver;
+import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyEvaluationContext;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCacheManager;
 import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
@@ -11,6 +13,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.generate.ConfigToWizardSt
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
+import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.EvaluationService;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.ExportService;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.ModelLoadService;
@@ -118,13 +121,13 @@ public final class MainFrameController {
             return;
         }
 
-        // Only use incremental update if Rhapsody is already connected (warm start).
-        // On cold start (loaded from cache, no prior Rhapsody connection),
-        // do a full reload to avoid incomplete scan results.
-        RhapsodyConnectionManager conn = RhapsodyConnectionManager.getInstance();
+        // Use incremental update whenever a cache exists — works for both warm start
+        // (Rhapsody already connected) and cold start (loaded from cache only).
+        // loadIncrementalUpdate() handles Rhapsody connection + package scan warm-up
+        // internally. File timestamp fast-skip avoids COM entirely when nothing changed.
         File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
 
-        if (conn.isConnected() && ModelCacheManager.cacheExists(cacheFile)) {
+        if (ModelCacheManager.cacheExists(cacheFile)) {
             doIncrementalUpdate(modelPath, cacheFile);
         } else {
             doLoadFromRhapsody(modelPath);
@@ -153,8 +156,16 @@ public final class MainFrameController {
             @Override
             protected EvaluationService.EvalResult doInBackground() {
                 try {
+                    // Adapter wiring: build Rhapsody-specific context via factory
+                    EvaluationService.ContextFactory contextFactory = (cfg, idx) -> {
+                        RhapsodyAliasResolver aliasResolver = new RhapsodyAliasResolver(cfg, snapshot);
+                        ElementSelector selector = new ElementSelector(idx, cfg);
+                        RhapsodyEvaluationContext context = new RhapsodyEvaluationContext(
+                                aliasResolver, snapshot, cfg, idx, selector);
+                        return new EvaluationService.ContextPair(context, selector);
+                    };
                     evalResult = EvaluationService.evaluate(
-                            configPath, snapshot, index, scopePath,
+                            configPath, contextFactory, index, scopePath,
                             loadedFromCache, progressReporter);
                 } catch (Throwable t) {
                     error = t.getMessage();

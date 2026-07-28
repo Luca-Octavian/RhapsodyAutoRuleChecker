@@ -309,6 +309,26 @@ public final class RhapsodyModelLoader {
 
     public static String safeStr(String s) { return s == null ? "" : s.trim(); }
 
+    /**
+     * Returns true if the GUID or name represents a remote OSLC/Jazz resource proxy
+     * rather than a normal persisted Rhapsody model element.
+     * These are lazily resolved by Rhapsody and may not appear consistently
+     * in getNestedElementsRecursive() across cold/warm starts.
+     */
+    public static boolean isRemoteOslcResource(String guid) {
+        return guid != null
+                && (guid.startsWith("http://") || guid.startsWith("https://"));
+    }
+
+    /**
+     * Check both GUID and name — OSLC proxies may have a normal GUID but a URL-format name.
+     */
+    public static boolean isRemoteOslcResource(String guid, String name) {
+        if (guid != null && (guid.startsWith("http://") || guid.startsWith("https://"))) return true;
+        if (name != null && (name.startsWith("http://") || name.startsWith("https://"))) return true;
+        return false;
+    }
+
     public static ElementKind classify(String metaClass, Set<String> stereotypes) {
         String mc = metaClass == null ? "" : metaClass.trim();
         if ("Class".equals(mc)) {

@@ -1,45 +1,67 @@
-
 package org.rhapsodychecker.rhapsodyruleverifier.core.rule;
 
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
+import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl.*;
 
 import java.util.*;
+import java.util.function.Supplier;
 
 /**
  * Creates configured Rule instances from RuleSpec (config).
+ *
+ * Uses a registry pattern: rule types are mapped to suppliers in a static
+ * registry. New rule types can be added via {@link #register(RuleType, Supplier)}
+ * without modifying this class (Open/Closed Principle).
  */
 public final class RuleFactory {
+
+    private static final Map<RuleType, Supplier<Rule>> REGISTRY = new LinkedHashMap<>();
+
+    static {
+        register(RuleType.REQUIRED_VALUE,              RequiredValueRule::new);
+        register(RuleType.OWNER_STEREOTYPE_CONSTRAINT, OwnerStereotypeConstraintRule::new);
+        register(RuleType.REQUIRED_STEREOTYPE,         RequiredStereotypeRule::new);
+        register(RuleType.REQUIRED_STEREOTYPE_ONE_OF,  RequiredStereotypeOneOfRule::new);
+        register(RuleType.RELATION_EXISTS,             RelationExistsRule::new);
+    }
 
     private RuleFactory() {}
 
     /**
+     * Register a rule supplier for a given type.
+     * Can be called at startup to add custom/plugin rule types.
+     *
+     * @param type     the rule type enum value
+     * @param supplier a factory that creates a fresh (unconfigured) Rule instance
+     */
+    public static void register(RuleType type, Supplier<Rule> supplier) {
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(supplier, "supplier");
+        REGISTRY.put(type, supplier);
+    }
+
+    /**
+     * Returns an unmodifiable view of the currently registered rule types.
+     */
+    public static Set<RuleType> registeredTypes() {
+        return Collections.unmodifiableSet(REGISTRY.keySet());
+    }
+
+    /**
      * Create a Rule from a RuleSpec. The rule is configured with all
      * necessary params from the spec.
+     *
+     * @throws IllegalArgumentException if no supplier is registered for the spec's type
      */
     public static Rule createRule(RuleSpec spec) {
-        Rule rule;
-        switch (spec.type()) {
-            case REQUIRED_VALUE:
-                rule = new RequiredValueRule();
-                break;
-            case OWNER_STEREOTYPE_CONSTRAINT:
-                rule = new OwnerStereotypeConstraintRule();
-                break;
-            case REQUIRED_STEREOTYPE:
-                rule = new RequiredStereotypeRule();
-                break;
-            case REQUIRED_STEREOTYPE_ONE_OF:
-                rule = new RequiredStereotypeOneOfRule();
-                break;
-            case RELATION_EXISTS:
-                rule = new RelationExistsRule();
-                break;
-            case NAMING_PATTERN:
-                throw new UnsupportedOperationException("NamingPattern not implemented");
-            default:
-                throw new IllegalArgumentException("Unknown rule type: " + spec.type());
+        Supplier<Rule> supplier = REGISTRY.get(spec.type());
+        if (supplier == null) {
+            throw new IllegalArgumentException(
+                    "No rule registered for type: " + spec.type()
+                    + ". Registered types: " + REGISTRY.keySet());
         }
+        Rule rule = supplier.get();
 
         // Build the configure map: merge spec-level fields + params
         Map<String, Object> configMap = new LinkedHashMap<>();

@@ -9,6 +9,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResul
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -36,34 +37,45 @@ public final class ConfigToWizardStateMapper {
 
         // ── Element Sets ──────────────────────────────────────────────────────
         for (ElementSetDefinition set : config.elementSets().values()) {
-        	if (!set.kinds().isEmpty() && set.stereotypes().isEmpty()) {
-                List<String> translatedStereos = translateKindsToStereotypes(set.kinds());
-                ElementSetDefinition translated = ElementSetDefinition.builder()
-                        .id(set.id())
-                        .title(set.title().orElse(null))
-                        .kinds(set.kinds())          // pastram kinds pentru engine
-                        .types(set.types())
-                        .stereotypes(translatedStereos)  // adaugam pentru UI
-                        .includePackages(set.includePackages())
-                        .excludePackages(set.excludePackages())
-                        .build();
-                state.addSet(translated);
-            } else {
-                state.addSet(set);
-            }
+            // Always preserve the original element set exactly as-is.
+            // Previously, auto-translated stereotypes were injected here for UI display,
+            // but they got written back to YAML and changed the engine's behavior
+            // (kinds + stereotypes = intersection, shrinking the candidate set).
+            state.addSet(set);
 
             if (fast != null) {
-                Set<String> detectedStereos = fast.countsByStereotype().keySet();
+                // Build case-insensitive lookup of detected stereotypes
+                Set<String> detectedStereosLower = new HashSet<String>();
+                for (String s : fast.countsByStereotype().keySet()) {
+                    detectedStereosLower.add(s.toLowerCase());
+                }
+
+                // Stereotypes that come from kind-to-stereotype auto-translation
+                // are structural markers, not real model stereotypes — skip them
+                Set<String> kindTranslatedLower = new HashSet<String>();
+                for (String k : set.kinds()) {
+                    for (String translated : translateKindsToStereotypes(
+                            Collections.singletonList(k))) {
+                        kindTranslatedLower.add(translated.toLowerCase());
+                    }
+                }
+
                 for (String stereo : set.stereotypes()) {
-                    if (!detectedStereos.contains(stereo)) {
+                    // Skip if this stereotype was auto-translated from a kind
+                    if (kindTranslatedLower.contains(stereo.toLowerCase())) continue;
+                    // Case-insensitive check against detected stereotypes
+                    if (!detectedStereosLower.contains(stereo.toLowerCase())) {
                         warnings.add("ElementSet '" + set.id() + "': stereotype '"
                                 + stereo + "' not detected in current model.");
                     }
                 }
 
-                Set<String> detectedMeta = fast.countsByMetaClass().keySet();
+                Set<String> detectedMetaLower = new HashSet<String>();
+                for (String m : fast.countsByMetaClass().keySet()) {
+                    detectedMetaLower.add(m.toLowerCase());
+                }
                 for (String type : set.types()) {
-                    if (!detectedMeta.contains(type)) {
+                    if (!detectedMetaLower.contains(type.toLowerCase())) {
                         warnings.add("ElementSet '" + set.id() + "': type '"
                                 + type + "' not detected in current model.");
                     }

@@ -117,11 +117,47 @@
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
-              <artifactSet>
-                <excludes>
-                  <exclude>com.ibm.rhapsody:rhapsody-api</exclude>
-                </excludes>
-              </artifactSet>
+              <!-- Rhapsody JAR is now included in the fat JAR for internal distribution -->
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.akathist.maven.plugins.launch4j</groupId>
+        <artifactId>launch4j-maven-plugin</artifactId>
+        <version>2.5.2</version>
+        <executions>
+          <execution>
+            <id>wrap-exe</id>
+            <phase>package</phase>
+            <goals><goal>launch4j</goal></goals>
+            <configuration>
+              <headerType>gui</headerType>
+              <outfile>${project.build.directory}/RhapsodyRuleVerifier.exe</outfile>
+              <jar>${project.build.directory}/${project.build.finalName}.jar</jar>
+              <errTitle>Rhapsody Rule Verifier</errTitle>
+              <classPath>
+                <mainClass>org.rhapsodychecker.rhapsodyruleverifier.ui.MainFrame</mainClass>
+              </classPath>
+              <jre>
+                <path></path>
+                <minVersion>1.8.0</minVersion>
+                <jdkPreference>preferJre</jdkPreference>
+                <opts>
+                  <opt>-Djava.library.path="C:\LegacyApp\Rhapsody_1002_64bit\Share\JavaAPI"</opt>
+                </opts>
+              </jre>
+              <versionInfo>
+                <fileVersion>1.0.0.0</fileVersion>
+                <txtFileVersion>1.0.0</txtFileVersion>
+                <fileDescription>Rhapsody Rule Verifier</fileDescription>
+                <copyright>Internal Use Only</copyright>
+                <productVersion>1.0.0.0</productVersion>
+                <txtProductVersion>1.0.0</txtProductVersion>
+                <productName>Rhapsody Rule Verifier</productName>
+                <internalName>RhapsodyRuleVerifier</internalName>
+                <originalFilename>RhapsodyRuleVerifier.exe</originalFilename>
+              </versionInfo>
             </configuration>
           </execution>
         </executions>

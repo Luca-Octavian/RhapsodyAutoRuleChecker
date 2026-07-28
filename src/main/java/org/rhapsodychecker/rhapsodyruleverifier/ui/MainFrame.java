@@ -266,6 +266,8 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     // ── Entry point ─────────────────────────────────────────────────────────
 
     public static void main(String[] args) {
+        System.setProperty("sun.java2d.dpiaware", "true");
+        System.setProperty("sun.java2d.uiScale.enabled", "true");
         AppLogger.init();
         Runtime.getRuntime().addShutdownHook(new Thread(AppLogger::close));
         AppTheme.apply();

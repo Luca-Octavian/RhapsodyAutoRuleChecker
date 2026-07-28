@@ -2,14 +2,12 @@
 package org.rhapsodychecker.rhapsodyruleverifier.core.service;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
-import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyAliasResolver;
-import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyEvaluationContext;
-import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ConfigLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.LoadingStep;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
+import org.rhapsodychecker.rhapsodyruleverifier.core.rule.EvaluationContext;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleEngine;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
@@ -19,7 +17,9 @@ import java.nio.file.Paths;
 import java.util.List;
 
 /**
- * Business logic for config loading and rule evaluation — no Swing dependency.
+ * Business logic for config loading and rule evaluation — no Swing dependency,
+ * no adapter dependency. Receives pre-built core abstractions (EvaluationContext,
+ * ElementSelector) from the caller (composition root / controller).
  */
 public final class EvaluationService {
 
@@ -46,10 +46,47 @@ public final class EvaluationService {
     }
 
     /**
+     * Functional interface for building an EvaluationContext from a loaded config.
+     * The caller (controller) provides the adapter-specific wiring through this factory,
+     * keeping EvaluationService free of adapter imports.
+     */
+    public interface ContextFactory {
+        /**
+         * Build an EvaluationContext and ElementSelector for the given config and index.
+         * Implementations will typically create adapter-specific objects
+         * (e.g., RhapsodyAliasResolver, RhapsodyEvaluationContext).
+         */
+        ContextPair create(RuleCheckerConfig config, ElementIndex index);
+    }
+
+    /**
+     * Pairs an EvaluationContext with its ElementSelector — both are needed by the RuleEngine.
+     */
+    public static final class ContextPair {
+        private final EvaluationContext context;
+        private final ElementSelector selector;
+
+        public ContextPair(EvaluationContext context, ElementSelector selector) {
+            this.context = context;
+            this.selector = selector;
+        }
+
+        public EvaluationContext context() { return context; }
+        public ElementSelector selector() { return selector; }
+    }
+
+    /**
      * Load config and evaluate all rules against the model.
+     *
+     * @param configPath     path to the YAML config file
+     * @param contextFactory adapter-specific factory (provided by the controller)
+     * @param index          pre-built element index
+     * @param scopePath      optional package scope filter (empty string = all)
+     * @param fromCache      whether the model was loaded from cache (for status message)
+     * @param reporter       progress reporter
      */
     public static EvalResult evaluate(String configPath,
-                                       RhapsodyModelSnapshot snapshot,
+                                       ContextFactory contextFactory,
                                        ElementIndex index,
                                        String scopePath,
                                        boolean fromCache,
@@ -59,13 +96,10 @@ public final class EvaluationService {
         reporter.onStepCompleted(LoadingStep.LOADING_CONFIG);
 
         reporter.onStepStarted(LoadingStep.SELECTING_ELEMENTS);
-        RhapsodyAliasResolver aliasResolver = new RhapsodyAliasResolver(config, snapshot);
-        ElementSelector selector = new ElementSelector(index, config);
-        RhapsodyEvaluationContext context = new RhapsodyEvaluationContext(
-                aliasResolver, snapshot, config, index, selector);
+        ContextPair pair = contextFactory.create(config, index);
         reporter.onStepCompleted(LoadingStep.SELECTING_ELEMENTS);
 
-        RuleEngine engine = new RuleEngine(config, selector, context, scopePath, reporter);
+        RuleEngine engine = new RuleEngine(config, pair.selector(), pair.context(), scopePath, reporter);
         List<RuleResult> results = engine.evaluateWithSummary().allResults();
 
         long failCount = 0;

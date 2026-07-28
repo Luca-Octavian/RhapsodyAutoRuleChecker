@@ -161,6 +161,16 @@ public final class HoverInfoProvider {
         // ── Rule params: RequiredStereotypeOneOf ─────────────────────────────
         put("rule.params.requiredStereotypeOneOf.stereotypes", "Stereotypes",
                 "At least one of these stereotypes must be present.");
+
+        // ── Rule params: OwnerStereotypeConstraint ───────────────────────────
+        put("rule.params.ownerConstraint.ownerStereotype", "Owner Stereotype",
+                "The stereotype that the element's OWNER must have for this rule to apply. "
+                + "If the owner does not have this stereotype, the rule is skipped for that element.",
+                "e.g. Logical-Element, Technical-Element");
+        put("rule.params.ownerConstraint.allowedKinds", "Allowed Kinds",
+                "The ElementKind values that the element is allowed to have when its owner "
+                + "has the specified stereotype. At least one must be selected.",
+                "e.g. PORT_FLOW for Logical blocks, PORT for Technical blocks");
     }
 
     public static FieldHelp get(String key) {
