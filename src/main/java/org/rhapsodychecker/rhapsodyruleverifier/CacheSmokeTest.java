@@ -44,7 +44,7 @@ public class CacheSmokeTest {
 
             RhapsodyModelSnapshot liveSnapshot = new RhapsodyModelLoader().loadModel(conn.getProject());
             System.out.println("  Live elements: " + liveSnapshot.records().size());
-            System.out.println("  Live dependencies indexed: " + liveSnapshot.dependenciesByOwner().size() + " owners");
+            System.out.println("  Live relations indexed: " + liveSnapshot.relationsByOwner().size() + " owners");
 
             // Print a few sample tags to verify pre-loading works
             int taggedCount = 0;

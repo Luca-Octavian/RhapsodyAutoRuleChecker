@@ -171,7 +171,7 @@ public final class ModelLoadService {
         AppLogger.info(profiler.summary());
 
         AppLogger.logModelLoad(snapshot.records().size(),
-                snapshot.dependenciesByOwner().size(),
+                snapshot.relationsByOwner().size(),
                 snapshot.referencesByElement().size(), 0);
 
         String status = "Model loaded from Rhapsody (cache updated): "

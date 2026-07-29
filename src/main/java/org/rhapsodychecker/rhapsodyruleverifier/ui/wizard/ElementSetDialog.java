@@ -184,12 +184,12 @@ public final class ElementSetDialog extends JDialog {
         int sc = ElementSetCountEstimator.estimateStereotypes(fast, stereos);
         int total = ElementSetCountEstimator.estimateTotal(fast, kinds, types, stereos);
 
-        kindsCountLabel.setText(kc >= 0 ? "~" + kc + " elements" : "");
-        typesCountLabel.setText(tc >= 0 ? "~" + tc + " elements" : "");
-        stereoCountLabel.setText(sc >= 0 ? "~" + sc + " elements" : "");
+        kindsCountLabel.setText(kc >= 0 ? kc + " elements" : "");
+        typesCountLabel.setText(tc >= 0 ? tc + " elements" : "");
+        stereoCountLabel.setText(sc >= 0 ? sc + " elements" : "");
 
         if (total >= 0) {
-            totalCountLabel.setText("  Estimated elements affected: ~" + total);
+            totalCountLabel.setText("  Matching elements: " + total);
             totalCountLabel.setVisible(true);
         } else {
             totalCountLabel.setText("");

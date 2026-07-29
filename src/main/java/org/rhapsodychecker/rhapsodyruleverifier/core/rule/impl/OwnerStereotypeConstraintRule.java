@@ -114,6 +114,16 @@ public final class OwnerStereotypeConstraintRule implements Rule {
             for (Object item : (List<?>) v) if (item != null) out.add(item.toString());
             return out;
         }
+        if (v instanceof String) {
+            String s = ((String) v).trim();
+            if (!s.isEmpty()) {
+                List<String> out = new ArrayList<>();
+                for (String part : s.split("\\s*,\\s*")) {
+                    if (!part.isEmpty()) out.add(part);
+                }
+                return out;
+            }
+        }
         return null;
     }
 

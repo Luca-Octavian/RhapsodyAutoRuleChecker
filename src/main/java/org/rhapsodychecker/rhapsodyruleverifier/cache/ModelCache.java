@@ -12,7 +12,7 @@ public final class ModelCache {
 
     private CacheMetadata metadata;
     private List<CachedElement> elements;
-    private Map<String, List<CachedDependency>> dependenciesByOwner;
+    private Map<String, List<CachedRelation>> relationsByOwner;
     private Map<String, List<CachedReference>> referencesByElement;
 
     /** Jackson needs no-arg constructor. */
@@ -20,11 +20,11 @@ public final class ModelCache {
 
     public ModelCache(CacheMetadata metadata,
                       List<CachedElement> elements,
-                      Map<String, List<CachedDependency>> dependenciesByOwner,
+                      Map<String, List<CachedRelation>> relationsByOwner,
                       Map<String, List<CachedReference>> referencesByElement) {
         this.metadata = metadata;
         this.elements = elements;
-        this.dependenciesByOwner = dependenciesByOwner;
+        this.relationsByOwner = relationsByOwner;
         this.referencesByElement = referencesByElement;
     }
 
@@ -34,8 +34,8 @@ public final class ModelCache {
     public List<CachedElement> getElements() { return elements; }
     public void setElements(List<CachedElement> elements) { this.elements = elements; }
 
-    public Map<String, List<CachedDependency>> getDependenciesByOwner() { return dependenciesByOwner; }
-    public void setDependenciesByOwner(Map<String, List<CachedDependency>> d) { this.dependenciesByOwner = d; }
+    public Map<String, List<CachedRelation>> getRelationsByOwner() { return relationsByOwner; }
+    public void setRelationsByOwner(Map<String, List<CachedRelation>> r) { this.relationsByOwner = r; }
 
     public Map<String, List<CachedReference>> getReferencesByElement() { return referencesByElement; }
     public void setReferencesByElement(Map<String, List<CachedReference>> r) { this.referencesByElement = r; }

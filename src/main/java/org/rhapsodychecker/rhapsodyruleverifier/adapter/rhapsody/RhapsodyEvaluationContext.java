@@ -19,8 +19,8 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
     private final ElementIndex index;
     private final ElementSelector selector;
 
-    // Fix 3: Cache relation info per element GUID to avoid repeated COM calls
-    private final Map<String, List<RelationInfo>> relationCache = new HashMap<>();
+    // Cache relation info per element GUID to avoid repeated lookups
+    private final Map<String, List<ResolvedRelation>> relationCache = new HashMap<>();
 
     public RhapsodyEvaluationContext(RhapsodyAliasResolver aliasResolver,
                                      RhapsodyModelSnapshot snapshot,
@@ -41,8 +41,7 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     @Override
     public int countMatchingRelations(ElementRecord element, RelationQuery query) {
-        // Use pre-indexed dependencies (works from both live and cache)
-        List<RelationInfo> relations = getRelationsCached(element.guid());
+        List<ResolvedRelation> relations = getRelationsCached(element.guid());
 
         if (relations.isEmpty()) return 0;
 
@@ -53,7 +52,7 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
         int count = 0;
 
-        for (RelationInfo rel : relations) {
+        for (ResolvedRelation rel : relations) {
             if (query.kind() != null && query.kind() != org.rhapsodychecker.rhapsodyruleverifier.core.config.RelationKind.ANY) {
                 if (!matchesKind(rel.metaClass, query.kind())) continue;
             }
@@ -104,47 +103,40 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     // ---- Cached relation lookup ----
 
-    private List<RelationInfo> getRelationsCached(String elementGuid) {
+    private List<ResolvedRelation> getRelationsCached(String elementGuid) {
         return relationCache.computeIfAbsent(elementGuid, k -> buildRelationsFromIndex(k));
     }
 
     /**
-     * Build relation info from the pre-indexed dependency data in the snapshot.
+     * Build relation info from the pre-indexed relation data in the snapshot.
+     * Uses snapshot's RelationInfo directly — no duplicate data class needed.
      * This works for both live and cached snapshots — no COM calls needed.
      */
-    private List<RelationInfo> buildRelationsFromIndex(String elementGuid) {
-        List<RelationInfo> relations = new ArrayList<>();
+    private List<ResolvedRelation> buildRelationsFromIndex(String elementGuid) {
+        List<ResolvedRelation> relations = new ArrayList<>();
 
-        // Outgoing: dependencies owned by this element
-        List<RhapsodyModelSnapshot.DependencyInfo> preIndexed =
-                snapshot.dependenciesByOwner().get(elementGuid);
-        if (preIndexed != null) {
-            for (RhapsodyModelSnapshot.DependencyInfo dep : preIndexed) {
-                RelationInfo info = new RelationInfo();
-                info.metaClass = "Dependency";
-                info.stereotypes = dep.stereotypes();
-                info.sourceGuid = elementGuid;
-                info.otherEndGuid = dep.otherEndGuid();
-                info.direction = "outgoing";
-                relations.add(info);
+        // Outgoing: relations owned by this element
+        List<RhapsodyModelSnapshot.RelationInfo> outgoing =
+                snapshot.relationsByOwner().get(elementGuid);
+        if (outgoing != null) {
+            for (RhapsodyModelSnapshot.RelationInfo rel : outgoing) {
+                relations.add(new ResolvedRelation(
+                        rel.metaClass(), rel.stereotypes(),
+                        elementGuid, rel.otherEndGuid(), "outgoing"));
             }
         }
 
         // Incoming: use reverse index for O(1) lookup instead of full scan
-        List<RhapsodyModelSnapshot.DependencyInfo> incomingDeps =
-                snapshot.dependenciesByTarget().get(elementGuid);
-        if (incomingDeps != null) {
-            for (RhapsodyModelSnapshot.DependencyInfo dep : incomingDeps) {
-                // dep.otherEndGuid() is the ownerGuid of the source element
-                String sourceGuid = dep.otherEndGuid();
+        List<RhapsodyModelSnapshot.RelationInfo> incoming =
+                snapshot.relationsByTarget().get(elementGuid);
+        if (incoming != null) {
+            for (RhapsodyModelSnapshot.RelationInfo rel : incoming) {
+                // rel.otherEndGuid() is the ownerGuid of the source element
+                String sourceGuid = rel.otherEndGuid();
                 if (sourceGuid != null && !sourceGuid.equals(elementGuid)) {
-                    RelationInfo info = new RelationInfo();
-                    info.metaClass = "Dependency";
-                    info.stereotypes = dep.stereotypes();
-                    info.sourceGuid = sourceGuid;
-                    info.otherEndGuid = sourceGuid;
-                    info.direction = "incoming";
-                    relations.add(info);
+                    relations.add(new ResolvedRelation(
+                            rel.metaClass(), rel.stereotypes(),
+                            sourceGuid, sourceGuid, "incoming"));
                 }
             }
         }
@@ -155,9 +147,9 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
                 snapshot.referencesByElement().get(elementGuid);
         if (preIndexedRefs != null) {
             for (RhapsodyModelSnapshot.ReferenceInfo ref : preIndexedRefs) {
-                // Avoid duplicates with dependency-based incoming relations
+                // Avoid duplicates with relation-based incoming entries
                 boolean alreadyFound = false;
-                for (RelationInfo existing : relations) {
+                for (ResolvedRelation existing : relations) {
                     if (ref.guid().equals(existing.otherEndGuid)
                             && "incoming".equals(existing.direction)) {
                         alreadyFound = true;
@@ -166,18 +158,11 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
                 }
                 if (alreadyFound) continue;
 
-                RelationInfo info = new RelationInfo();
-                info.metaClass = ref.metaClass();
-                info.stereotypes = ref.stereotypes();
-                info.otherEndGuid = ref.guid();
-                info.sourceGuid = elementGuid;
-                info.direction = "incoming";
-                relations.add(info);
+                relations.add(new ResolvedRelation(
+                        ref.metaClass(), ref.stereotypes(),
+                        elementGuid, ref.guid(), "incoming"));
             }
         }
-
-        // Pre-indexed data (dependencies + references) is the primary source.
-        // No live COM calls needed — all data was captured during model loading.
 
         return relations;
     }
@@ -198,7 +183,7 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         }
     }
 
-    private boolean matchesDirection(RelationInfo rel, String elementGuid,
+    private boolean matchesDirection(ResolvedRelation rel, String elementGuid,
                                      org.rhapsodychecker.rhapsodyruleverifier.core.config.RelationDirection dir) {
         switch (dir) {
             case OUTGOING:  return "outgoing".equals(rel.direction);
@@ -224,11 +209,24 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
         return false;
     }
 
-    private static final class RelationInfo {
-        String metaClass;
-        Set<String> stereotypes = Collections.emptySet();
-        String sourceGuid;
-        String otherEndGuid;
-        String direction;
+    /**
+     * Flattened relation record used only within this evaluation context.
+     * Combines relation metadata with resolved direction for query matching.
+     */
+    private static final class ResolvedRelation {
+        final String metaClass;
+        final Set<String> stereotypes;
+        final String sourceGuid;
+        final String otherEndGuid;
+        final String direction;
+
+        ResolvedRelation(String metaClass, Set<String> stereotypes,
+                         String sourceGuid, String otherEndGuid, String direction) {
+            this.metaClass = metaClass;
+            this.stereotypes = stereotypes != null ? stereotypes : Collections.<String>emptySet();
+            this.sourceGuid = sourceGuid;
+            this.otherEndGuid = otherEndGuid;
+            this.direction = direction;
+        }
     }
 }

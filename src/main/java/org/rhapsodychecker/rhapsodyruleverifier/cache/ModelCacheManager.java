@@ -15,7 +15,7 @@ import java.util.*;
 
 /**
  * Reads and writes model cache to/from JSON files.
- * Converts between ElementRecord/DependencyInfo and their cached representations.
+ * Converts between ElementRecord/RelationInfo and their cached representations.
  */
 public final class ModelCacheManager {
 
@@ -58,14 +58,14 @@ public final class ModelCacheManager {
             elements.add(toCachedElement(r));
         }
 
-        Map<String, List<CachedDependency>> deps = new LinkedHashMap<String, List<CachedDependency>>();
-        for (Map.Entry<String, List<RhapsodyModelSnapshot.DependencyInfo>> entry
-                : snapshot.dependenciesByOwner().entrySet()) {
-            List<CachedDependency> cachedDeps = new ArrayList<CachedDependency>();
-            for (RhapsodyModelSnapshot.DependencyInfo d : entry.getValue()) {
-                cachedDeps.add(new CachedDependency(d.guid(), d.stereotypes(), d.otherEndGuid()));
+        Map<String, List<CachedRelation>> rels = new LinkedHashMap<String, List<CachedRelation>>();
+        for (Map.Entry<String, List<RhapsodyModelSnapshot.RelationInfo>> entry
+                : snapshot.relationsByOwner().entrySet()) {
+            List<CachedRelation> cachedRels = new ArrayList<CachedRelation>();
+            for (RhapsodyModelSnapshot.RelationInfo r : entry.getValue()) {
+                cachedRels.add(new CachedRelation(r.guid(), r.metaClass(), r.stereotypes(), r.otherEndGuid()));
             }
-            deps.put(entry.getKey(), cachedDeps);
+            rels.put(entry.getKey(), cachedRels);
         }
 
         // References
@@ -80,7 +80,7 @@ public final class ModelCacheManager {
             refs.put(entry.getKey(), cachedRefs);
         }
 
-        ModelCache cache = new ModelCache(metadata, elements, deps, refs);
+        ModelCache cache = new ModelCache(metadata, elements, rels, refs);
 
         cacheFile.getParentFile().mkdirs();
         MAPPER.writeValue(cacheFile, cache);
@@ -102,18 +102,18 @@ public final class ModelCacheManager {
             records.add(toElementRecord(c));
         }
 
-        Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> deps =
-                new LinkedHashMap<String, List<RhapsodyModelSnapshot.DependencyInfo>>();
-        if (cache.getDependenciesByOwner() != null) {
-            for (Map.Entry<String, List<CachedDependency>> entry
-                    : cache.getDependenciesByOwner().entrySet()) {
-                List<RhapsodyModelSnapshot.DependencyInfo> infos =
-                        new ArrayList<RhapsodyModelSnapshot.DependencyInfo>();
-                for (CachedDependency cd : entry.getValue()) {
-                    infos.add(new RhapsodyModelSnapshot.DependencyInfo(
-                            cd.getGuid(), cd.getStereotypes(), cd.getOtherEndGuid()));
+        Map<String, List<RhapsodyModelSnapshot.RelationInfo>> rels =
+                new LinkedHashMap<String, List<RhapsodyModelSnapshot.RelationInfo>>();
+        if (cache.getRelationsByOwner() != null) {
+            for (Map.Entry<String, List<CachedRelation>> entry
+                    : cache.getRelationsByOwner().entrySet()) {
+                List<RhapsodyModelSnapshot.RelationInfo> infos =
+                        new ArrayList<RhapsodyModelSnapshot.RelationInfo>();
+                for (CachedRelation cr : entry.getValue()) {
+                    infos.add(new RhapsodyModelSnapshot.RelationInfo(
+                            cr.getGuid(), cr.getMetaClass(), cr.getStereotypes(), cr.getOtherEndGuid()));
                 }
-                deps.put(entry.getKey(), infos);
+                rels.put(entry.getKey(), infos);
             }
         }
 
@@ -138,7 +138,7 @@ public final class ModelCacheManager {
         RhapsodyModelSnapshot snapshot = new RhapsodyModelSnapshot(
                 Collections.unmodifiableList(records),
                 Collections.<String, com.telelogic.rhapsody.core.IRPModelElement>emptyMap(),
-                Collections.unmodifiableMap(deps),
+                Collections.unmodifiableMap(rels),
                 Collections.unmodifiableMap(refs));
 
         return new CacheLoadResult(snapshot, cache.getMetadata());

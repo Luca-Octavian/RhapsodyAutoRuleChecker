@@ -107,11 +107,11 @@ public final class ElementSetStepPanel extends JPanel {
             }
         }
 
-        // Approximate count
+        // Exact count from pre-cached data
         int count = ElementSetCountEstimator.estimateTotal(
                 fast, s.kinds(), s.types(), s.stereotypes());
         if (count >= 0) {
-            sb.append("    (~").append(count).append(" elements)");
+            sb.append("    (").append(count).append(" elements)");
         }
 
         return sb.toString();

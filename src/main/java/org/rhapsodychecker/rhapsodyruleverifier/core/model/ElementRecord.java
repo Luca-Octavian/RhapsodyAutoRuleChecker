@@ -113,6 +113,52 @@ public final class ElementRecord {
 
     public Map<String, String> tagValues() { return tagValues; }
 
+    /**
+     * Returns a copy of this record with a different ownerPath.
+     * Used during model loading to set ownerPaths computed locally
+     * after the initial COM scan (avoids COM chain-walking).
+     */
+    public ElementRecord withOwnerPath(String newOwnerPath) {
+        return new Builder()
+                .guid(this.guid)
+                .name(this.name)
+                .metaClass(this.metaClass)
+                .kind(this.kind)
+                .ownerGuid(this.ownerGuid)
+                .ownerPath(newOwnerPath)
+                .stereotypes(this.stereotypes)
+                .typeGuid(this.typeGuid)
+                .typeName(this.typeName)
+                .description(this.description)
+                .portDirection(this.portDirection)
+                .portMultiplicity(this.portMultiplicity)
+                .tagValues(this.tagValues)
+                .build();
+    }
+
+    /**
+     * Returns a copy of this record with a different kind and type info.
+     * Used during local part classification: Objects owned by Blocks
+     * are reclassified as PART with type info loaded from IRPInstance.getOtherClass().
+     */
+    public ElementRecord withKindAndType(ElementKind newKind, String newTypeGuid, String newTypeName) {
+        return new Builder()
+                .guid(this.guid)
+                .name(this.name)
+                .metaClass(this.metaClass)
+                .kind(newKind)
+                .ownerGuid(this.ownerGuid)
+                .ownerPath(this.ownerPath)
+                .stereotypes(this.stereotypes)
+                .typeGuid(newTypeGuid)
+                .typeName(newTypeName)
+                .description(this.description)
+                .portDirection(this.portDirection)
+                .portMultiplicity(this.portMultiplicity)
+                .tagValues(this.tagValues)
+                .build();
+    }
+
     public boolean hasStereotype(String stereotype) {
         if (stereotype == null) return false;
         return stereotypes.contains(stereotype);

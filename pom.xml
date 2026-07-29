@@ -140,7 +140,7 @@
                 <mainClass>org.rhapsodychecker.rhapsodyruleverifier.ui.MainFrame</mainClass>
               </classPath>
               <jre>
-                <path></path>
+                <path>jre</path>
                 <minVersion>1.8.0</minVersion>
                 <jdkPreference>preferJre</jdkPreference>
                 <opts>

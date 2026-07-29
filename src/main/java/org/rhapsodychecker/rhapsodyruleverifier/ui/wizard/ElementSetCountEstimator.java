@@ -6,45 +6,22 @@ import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResul
 import java.util.*;
 
 /**
- * Aproximează numărul de elemente afectate de o combinație de
- * kinds + types + stereotypes, folosind datele din FastDetectionResult.
+ * Computes exact element counts for a combination of
+ * kinds + types + stereotypes, using pre-cached data from FastDetectionResult.
  *
- * Logica mirror-uiește ElementSelector:
+ * Logic mirrors ElementSelector:
  *   - OR within each category (union)
- *   - AND between categories (intersection → estimat cu min)
+ *   - AND between categories (intersection → min of category counts)
  *
- * Kinds sunt mapate la meta-class + stereotype echivalente pentru estimare.
+ * All counts come from pre-loaded ElementRecord data — no COM calls needed.
  */
 public final class ElementSetCountEstimator {
-
-    // Mapare kind → stereotype Rhapsody (pentru estimare)
-    private static final Map<String, String> KIND_TO_STEREOTYPE = new LinkedHashMap<>();
-    // Mapare kind → metaClass Rhapsody (pentru estimare)
-    private static final Map<String, String> KIND_TO_META = new LinkedHashMap<>();
-
-    static {
-        KIND_TO_STEREOTYPE.put("BLOCK",           "Block");
-        KIND_TO_STEREOTYPE.put("INTERFACE_BLOCK",  "InterfaceBlock");
-        KIND_TO_STEREOTYPE.put("PORT_FULL",        "FullPort");
-        KIND_TO_STEREOTYPE.put("PORT_PROXY",       "ProxyPort");
-        KIND_TO_STEREOTYPE.put("PORT_FLOW",        "FlowPort");
-
-        KIND_TO_META.put("PART",        "Object");
-        KIND_TO_META.put("PORT",        "Port");
-        KIND_TO_META.put("PORT_FULL",   "Port");
-        KIND_TO_META.put("PORT_PROXY",  "Port");
-        KIND_TO_META.put("PORT_FLOW",   "Port");
-        KIND_TO_META.put("INTERFACE",   "Interface");
-        KIND_TO_META.put("PACKAGE",     "Package");
-        KIND_TO_META.put("REQUIREMENT", "Requirement");
-        KIND_TO_META.put("CONNECTOR",   "Connector");
-    }
 
     private ElementSetCountEstimator() {}
 
     /**
-     * Estimează totalul de elemente afectate de selecția curentă.
-     * Returnează -1 dacă fast e null (nu avem date).
+     * Computes the total number of elements affected by the current selection.
+     * Returns -1 if fast is null (no data available).
      */
     public static int estimateTotal(
             FastDetectionResult fast,
@@ -54,18 +31,16 @@ public final class ElementSetCountEstimator {
 
         if (fast == null) return -1;
 
-        int kindsCount  = estimateKinds(fast, selectedKinds);
-        int typesCount  = estimateTypes(fast, selectedTypes);
-        int stereoCount = estimateStereotypes(fast, selectedStereotypes);
+        int kindsCount  = countKinds(fast, selectedKinds);
+        int typesCount  = countTypes(fast, selectedTypes);
+        int stereoCount = countStereotypes(fast, selectedStereotypes);
 
-        // Dacă nimic selectat → totalul elementelor
+        // If nothing selected → total elements
         if (kindsCount < 0 && typesCount < 0 && stereoCount < 0) {
-            int total = 0;
-            for (long c : fast.countsByMetaClass().values()) total += c;
-            return total;
+            return (int) fast.totalElements();
         }
 
-        // AND between categories → estimăm cu min (cel mai restrictiv filtra)
+        // AND between categories → min (most restrictive filter)
         int result = Integer.MAX_VALUE;
         if (kindsCount >= 0)  result = Math.min(result, kindsCount);
         if (typesCount >= 0)  result = Math.min(result, typesCount);
@@ -75,39 +50,28 @@ public final class ElementSetCountEstimator {
     }
 
     /**
-     * Count per secțiune Kinds — OR union.
-     * Returnează -1 dacă nimic selectat.
+     * Exact count for Kinds section — OR union using countsByKind.
+     * Returns -1 if nothing selected.
      */
-    public static int estimateKinds(FastDetectionResult fast, List<String> kinds) {
+    public static int countKinds(FastDetectionResult fast, List<String> kinds) {
         if (fast == null || kinds == null || kinds.isEmpty()) return -1;
 
-        // Evităm double-counting: unele kinds share meta-class (ex: PORT, PORT_FULL)
-        // Cel mai bun approach: sumăm stereotipurile unde avem mapare, altfel meta-class
-        Set<String> countedMeta = new HashSet<>();
         int total = 0;
-
         for (String kind : kinds) {
-            String stereo = KIND_TO_STEREOTYPE.get(kind.toUpperCase());
-            String meta   = KIND_TO_META.get(kind.toUpperCase());
-
-            if (stereo != null && fast.countsByStereotype().containsKey(stereo)) {
-                // Stereotip specific → count exact
-                total += fast.countsByStereotype().get(stereo);
-            } else if (meta != null && !countedMeta.contains(meta)) {
-                // Meta-class fallback, dar numărăm o singură dată per meta
-                Long c = fast.countsByMetaClass().get(meta);
-                if (c != null) total += c;
-                countedMeta.add(meta);
+            String key = kind.toUpperCase(java.util.Locale.ROOT);
+            Long count = fast.countsByKind().get(key);
+            if (count != null) {
+                total += count;
             }
         }
         return total;
     }
 
     /**
-     * Count per secțiune Types — OR union.
-     * Returnează -1 dacă nimic selectat.
+     * Exact count for Types section — OR union using countsByMetaClass.
+     * Returns -1 if nothing selected.
      */
-    public static int estimateTypes(FastDetectionResult fast, List<String> types) {
+    public static int countTypes(FastDetectionResult fast, List<String> types) {
         if (fast == null || types == null || types.isEmpty()) return -1;
         int total = 0;
         for (String type : types) {
@@ -123,10 +87,10 @@ public final class ElementSetCountEstimator {
     }
 
     /**
-     * Count per secțiune Stereotypes — OR union.
-     * Returnează -1 dacă nimic selectat.
+     * Exact count for Stereotypes section — OR union using countsByStereotype.
+     * Returns -1 if nothing selected.
      */
-    public static int estimateStereotypes(FastDetectionResult fast, List<String> stereotypes) {
+    public static int countStereotypes(FastDetectionResult fast, List<String> stereotypes) {
         if (fast == null || stereotypes == null || stereotypes.isEmpty()) return -1;
         int total = 0;
         for (String stereo : stereotypes) {
@@ -138,5 +102,24 @@ public final class ElementSetCountEstimator {
             }
         }
         return total;
+    }
+
+    // ── Backward-compatible aliases ─────────────────────────────────────────
+    // These delegate to the new exact-count methods so that any callers using
+    // the old "estimate" names still compile without changes.
+
+    /** @deprecated Use {@link #countKinds(FastDetectionResult, List)} instead. */
+    public static int estimateKinds(FastDetectionResult fast, List<String> kinds) {
+        return countKinds(fast, kinds);
+    }
+
+    /** @deprecated Use {@link #countTypes(FastDetectionResult, List)} instead. */
+    public static int estimateTypes(FastDetectionResult fast, List<String> types) {
+        return countTypes(fast, types);
+    }
+
+    /** @deprecated Use {@link #countStereotypes(FastDetectionResult, List)} instead. */
+    public static int estimateStereotypes(FastDetectionResult fast, List<String> stereotypes) {
+        return countStereotypes(fast, stereotypes);
     }
 }

@@ -115,10 +115,25 @@ public final class RhapsodyConnectionManager {
     }
 
     /**
-     * @return true if both application and project are available.
+     * @return true if both application and project are available and the COM
+     *         handles are still alive (i.e. Rhapsody has not been closed).
      */
     public boolean isConnected() {
-        return application != null && project != null;
+        if (application == null || project == null) return false;
+        // Validate that the cached COM handles are still alive.
+        // If Rhapsody was closed/restarted, any COM call will throw.
+        try {
+            project.getName();
+            return true;
+        } catch (Throwable t) {
+            // Stale handles — clear them so the next connect() does a full reconnect
+            application = null;
+            project = null;
+            applicationCreatedByManager = false;
+            projectOpenedByManager = false;
+            currentProjectPath = null;
+            return false;
+        }
     }
 
     public IRPApplication getApplication() {

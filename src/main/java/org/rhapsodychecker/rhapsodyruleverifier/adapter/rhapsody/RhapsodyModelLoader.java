@@ -27,11 +27,8 @@ public final class RhapsodyModelLoader {
 
         List<ElementRecord> records = new ArrayList<>();
         Map<String, IRPModelElement> handleByGuid = new HashMap<>(4096);
-        Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> dependenciesByOwner = new HashMap<>();
+        Map<String, List<RhapsodyModelSnapshot.RelationInfo>> relationsByOwner = new HashMap<>();
         Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> referencesByElement = new HashMap<>();
-
-        // Owner path cache: avoids re-walking the same owner chain for siblings
-        Map<String, String> ownerPathCache = new HashMap<>(2048);
 
         // ── Step 1: collect all elements ─────────────────────────────────────
         reporter.onStepStarted(LoadingStep.LOADING_ELEMENTS);
@@ -48,7 +45,6 @@ public final class RhapsodyModelLoader {
             if (guid.isEmpty() || name.isEmpty()) continue;
 
             String metaClass  = safeStr(elt.getMetaClass());
-            String ownerPath  = computeOwnerPathCached(elt, ownerPathCache);
             String ownerGuid  = null;
             try {
                 IRPModelElement owner = elt.getOwner();
@@ -73,28 +69,8 @@ public final class RhapsodyModelLoader {
 
             ElementKind kind = classify(metaClass, stereotypes);
 
-            if ("Dependency".equals(metaClass)) {
-                if (ownerGuid != null && !ownerGuid.isEmpty()) {
-                    String otherEndGuid = null;
-                    if (elt instanceof IRPDependency) {
-                        try {
-                            IRPModelElement dependsOn = ((IRPDependency) elt).getDependsOn();
-                            if (dependsOn != null) {
-                                otherEndGuid = safeStr(dependsOn.getGUID());
-                            }
-                        } catch (Throwable t) { /* ignore */ }
-                    }
+            collectRelation(metaClass, guid, ownerGuid, stereotypes, elt, relationsByOwner);
 
-                    RhapsodyModelSnapshot.DependencyInfo depInfo =
-                            new RhapsodyModelSnapshot.DependencyInfo(guid, stereotypes, otherEndGuid);
-
-                    dependenciesByOwner
-                            .computeIfAbsent(ownerGuid, k -> new ArrayList<>())
-                            .add(depInfo);
-                }
-            }
-
-            // ── Pre-load port info to avoid COM calls during evaluation ──
             String portDirection = null;
             String portMultiplicity = null;
 
@@ -118,7 +94,7 @@ public final class RhapsodyModelLoader {
 
             records.add(ElementRecord.builder()
                     .guid(guid).name(name).metaClass(metaClass).kind(kind)
-                    .ownerGuid(ownerGuid).ownerPath(ownerPath)
+                    .ownerGuid(ownerGuid).ownerPath(null)
                     .stereotypes(stereotypes)
                     .typeGuid(typeGuid).typeName(typeName)
                     .description(description)
@@ -128,7 +104,7 @@ public final class RhapsodyModelLoader {
                     .build());
             handleByGuid.put(guid, elt);
 
-            // ── Pre-index incoming references ──
+            // Pre-index incoming references
             try {
                 IRPCollection refs = elt.getReferences();
                 if (refs != null && refs.getCount() > 0) {
@@ -160,33 +136,76 @@ public final class RhapsodyModelLoader {
 
         reporter.onStepCompleted(LoadingStep.LOADING_ELEMENTS);
 
-        // ── Step 2: fetch parts (Objects) owned by Blocks/InterfaceBlocks ────
-        reporter.onStepStarted(LoadingStep.BUILDING_INDEX);
+        // ── Step 1b: compute ownerPath locally from GUID relationships ───────
+        // Instead of walking getOwner().getName() up the COM hierarchy for each
+        // element, we build ownerPath entirely in Java memory from the
+        // guid→name and guid→ownerGuid maps already collected.
+        {
+            Map<String, String> guidToName = new HashMap<>(records.size());
+            Map<String, String> guidToOwnerGuid = new HashMap<>(records.size());
+            for (ElementRecord r : records) {
+                guidToName.put(r.guid(), r.name());
+                r.ownerGuid().ifPresent(og -> guidToOwnerGuid.put(r.guid(), og));
+            }
 
-        Map<String, Integer> guidToIndex = new HashMap<>();
-        for (int idx = 0; idx < records.size(); idx++) {
-            guidToIndex.put(records.get(idx).guid(), idx);
+            // Cache: ownerGuid → computed path for that owner (avoids recomputing for siblings)
+            Map<String, String> ownerPathCache = new HashMap<>(2048);
+
+            for (int idx = 0; idx < records.size(); idx++) {
+                ElementRecord r = records.get(idx);
+                String og = r.ownerGuid().orElse(null);
+                if (og == null) continue; // project-level element, no ownerPath
+
+                String path = buildOwnerPathLocal(og, guidToName, guidToOwnerGuid, ownerPathCache);
+                if (path != null) {
+                    records.set(idx, r.withOwnerPath(path));
+                }
+            }
         }
 
-        for (ElementRecord blockRec : new ArrayList<>(records)) {
-            if (!blockRec.kind().isBlockLike()) continue;
-            IRPModelElement blockElt = handleByGuid.get(blockRec.guid());
-            if (blockElt == null || !(blockElt instanceof IRPClassifier)) continue;
+        // ── Step 2: local part classification ────────────────────────────────
+        // Objects (metaClass=Object) owned by Blocks/InterfaceBlocks are parts.
+        // getNestedElementsRecursive() returns these Objects, so we classify
+        // them locally by checking ownerGuid against the known Block set —
+        // no per-Block getNestedElements() COM calls needed.
+        reporter.onStepStarted(LoadingStep.BUILDING_INDEX);
 
-            IRPClassifier classifier = (IRPClassifier) blockElt;
-            List<ElementRecord> partRecords = fetchOwnedParts(classifier, blockRec);
-            for (ElementRecord partRec : partRecords) {
-                Integer existingIdx = guidToIndex.get(partRec.guid());
-                if (existingIdx != null) {
-                    records.set(existingIdx, partRec);
-                } else {
-                    records.add(partRec);
-                    guidToIndex.put(partRec.guid(), records.size() - 1);
+        {
+            // Build set of Block/InterfaceBlock GUIDs
+            Set<String> blockGuids = new HashSet<>();
+            for (ElementRecord r : records) {
+                if (r.kind().isBlockLike()) {
+                    blockGuids.add(r.guid());
                 }
-                if (!handleByGuid.containsKey(partRec.guid())) {
-                    IRPModelElement partHandle = safeFindNestedElement(classifier, partRec.guid());
-                    if (partHandle != null) handleByGuid.put(partRec.guid(), partHandle);
+            }
+
+            // Reclassify Objects owned by Blocks as PART, load type info via handle
+            for (int idx = 0; idx < records.size(); idx++) {
+                ElementRecord r = records.get(idx);
+                if (!"Object".equals(r.metaClass())) continue;
+
+                String ownerGuid = r.ownerGuid().orElse(null);
+                if (ownerGuid == null || !blockGuids.contains(ownerGuid)) continue;
+
+                // This Object is owned by a Block → reclassify as PART
+                String typeGuid = r.typeGuid().orElse(null);
+                String typeName = r.typeName().orElse(null);
+
+                // Load type info from IRPInstance.getOtherClass() if not already present
+                if (typeGuid == null || typeGuid.isEmpty()) {
+                    IRPModelElement handle = handleByGuid.get(r.guid());
+                    if (handle instanceof IRPInstance) {
+                        try {
+                            IRPClassifier otherClass = ((IRPInstance) handle).getOtherClass();
+                            if (otherClass != null) {
+                                typeGuid = safeStr(otherClass.getGUID());
+                                typeName = safeStr(otherClass.getName());
+                            }
+                        } catch (Throwable t) { /* ignore */ }
+                    }
                 }
+
+                records.set(idx, r.withKindAndType(ElementKind.PART, typeGuid, typeName));
             }
         }
 
@@ -200,7 +219,7 @@ public final class RhapsodyModelLoader {
         return new RhapsodyModelSnapshot(
                 Collections.unmodifiableList(records),
                 Collections.unmodifiableMap(handleByGuid),
-                Collections.unmodifiableMap(dependenciesByOwner),
+                Collections.unmodifiableMap(relationsByOwner),
                 Collections.unmodifiableMap(referencesByElement));
     }
 
@@ -360,6 +379,131 @@ public final class RhapsodyModelLoader {
         return ElementKind.OTHER;
     }
 
+    /**
+     * Builds ownerPath entirely in Java memory by walking the ownerGuid chain.
+     * No COM calls needed — uses the guid→name and guid→ownerGuid maps
+     * collected during the initial scan.
+     *
+     * @param ownerGuid   the immediate owner's GUID
+     * @param guidToName  map of GUID → element name (from scan)
+     * @param guidToOwnerGuid map of GUID → that element's ownerGuid
+     * @param cache       memoization cache: ownerGuid → its computed path
+     * @return the owner path string (e.g. "Pkg::SubPkg::Block"), or null if owner not in scan
+     */
+    public static String buildOwnerPathLocal(String ownerGuid,
+                                              Map<String, String> guidToName,
+                                              Map<String, String> guidToOwnerGuid,
+                                              Map<String, String> cache) {
+        if (ownerGuid == null || ownerGuid.isEmpty()) return null;
+
+        // Check cache first
+        if (cache.containsKey(ownerGuid)) {
+            return cache.get(ownerGuid);
+        }
+
+        // Walk the chain upward, collecting names
+        Deque<String> parts = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>(); // cycle guard
+        String current = ownerGuid;
+
+        while (current != null && !current.isEmpty()) {
+            if (!visited.add(current)) break; // cycle detected
+            String name = guidToName.get(current);
+            if (name == null) {
+                // Owner not in our scan (e.g. project root or external) — stop here
+                break;
+            }
+            parts.addFirst(name);
+            current = guidToOwnerGuid.get(current); // walk up
+        }
+
+        String path = parts.isEmpty() ? null : join(parts);
+        cache.put(ownerGuid, path);
+        return path;
+    }
+
+    /** Java 8 compatible String.join for Deque */
+    private static String join(Deque<String> parts) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (String p : parts) {
+            if (!first) sb.append("::");
+            sb.append(p);
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Fetches owned parts (Objects) from a Block/InterfaceBlock classifier,
+     * collecting both the ElementRecord AND the IRPModelElement handle in a single
+     * getNestedElements() traversal. This eliminates the separate safeFindNestedElement()
+     * call which previously re-traversed the same collection.
+     */
+    private void fetchOwnedPartsWithHandles(IRPClassifier classifier,
+                                             ElementRecord ownerRec,
+                                             List<ElementRecord> records,
+                                             Map<String, Integer> guidToIndex,
+                                             Map<String, IRPModelElement> handleByGuid) {
+        try {
+            IRPCollection nested = classifier.getNestedElements();
+            if (nested == null) return;
+            int cnt = nested.getCount();
+            for (int i = 1; i <= cnt; i++) {
+                Object o = nested.getItem(i);
+                if (!(o instanceof IRPModelElement)) continue;
+                IRPModelElement elt = (IRPModelElement) o;
+                if (!"Object".equals(safeStr(elt.getMetaClass()))) continue;
+
+                String guid = safeStr(elt.getGUID());
+                String name = safeStr(elt.getName());
+                if (guid.isEmpty() || name.isEmpty()) continue;
+
+                Set<String> stereotypes = readStereotypeNames(elt);
+                String description = safeGetDescription(elt);
+                String ownerPath = ownerRec.ownerPath()
+                        .map(p -> p + "::" + ownerRec.name())
+                        .orElse(ownerRec.name());
+
+                String typeGuid = null, typeName = null;
+                if (elt instanceof IRPInstance) {
+                    try {
+                        IRPClassifier otherClass = ((IRPInstance) elt).getOtherClass();
+                        if (otherClass != null) {
+                            typeGuid = safeStr(otherClass.getGUID());
+                            typeName = safeStr(otherClass.getName());
+                        }
+                    } catch (Throwable t) {}
+                }
+
+                Map<String, String> partTagValues = readAllTags(elt);
+
+                ElementRecord partRec = ElementRecord.builder()
+                        .guid(guid).name(name).metaClass(safeStr(elt.getMetaClass()))
+                        .kind(ElementKind.PART)
+                        .ownerGuid(ownerRec.guid()).ownerPath(ownerPath)
+                        .stereotypes(stereotypes)
+                        .typeGuid(typeGuid).typeName(typeName)
+                        .description(description)
+                        .tagValues(partTagValues)
+                        .build();
+
+                Integer existingIdx = guidToIndex.get(guid);
+                if (existingIdx != null) {
+                    records.set(existingIdx, partRec);
+                } else {
+                    records.add(partRec);
+                    guidToIndex.put(guid, records.size() - 1);
+                }
+
+                // Store handle directly — no need for separate safeFindNestedElement()
+                if (!handleByGuid.containsKey(guid)) {
+                    handleByGuid.put(guid, elt);
+                }
+            }
+        } catch (Throwable t) {}
+    }
+
     private List<ElementRecord> fetchOwnedParts(IRPClassifier classifier, ElementRecord ownerRec) {
         List<ElementRecord> result = new ArrayList<>();
         try {
@@ -487,5 +631,76 @@ public final class RhapsodyModelLoader {
         if (set == null || name == null) return false;
         for (String s : set) { if (s.equalsIgnoreCase(name)) return true; }
         return false;
+    }
+
+    // ---- Relation collection (SRP: single method handles all relation metaclasses) ----
+
+    /**
+     * Detects whether the given element is a relation (Dependency, Generalization,
+     * Association) and, if so, indexes it in the relationsByOwner map.
+     *
+     * <p>This method is intentionally static-compatible and reusable from
+     * {@link org.rhapsodychecker.rhapsodyruleverifier.cache.update.IncrementalCacheUpdater}.
+     *
+     * @param metaClass        the element's metaClass
+     * @param guid             the element's GUID
+     * @param ownerGuid        the owner's GUID (null if project-level)
+     * @param stereotypes      the element's stereotypes
+     * @param elt              the live Rhapsody element handle
+     * @param relationsByOwner the map to populate
+     */
+    public static void collectRelation(String metaClass, String guid, String ownerGuid,
+                                        Set<String> stereotypes, IRPModelElement elt,
+                                        Map<String, List<RhapsodyModelSnapshot.RelationInfo>> relationsByOwner) {
+        if (ownerGuid == null || ownerGuid.isEmpty()) return;
+
+        String otherEndGuid = null;
+
+        if ("Dependency".equals(metaClass)) {
+            if (elt instanceof IRPDependency) {
+                try {
+                    IRPModelElement dependsOn = ((IRPDependency) elt).getDependsOn();
+                    if (dependsOn != null) {
+                        otherEndGuid = safeStr(dependsOn.getGUID());
+                    }
+                } catch (Throwable t) { /* ignore */ }
+            }
+        } else if ("Generalization".equals(metaClass)) {
+            // Generalization: child (owner) → parent (base class)
+            // IRPGeneralization.getBaseClass() returns the parent classifier
+            otherEndGuid = safeCallReflect(elt, "getBaseClass");
+        } else if ("Association".equals(metaClass) || "AssociationEnd".equals(metaClass)) {
+            // Association: try getOtherClass() for the far end
+            otherEndGuid = safeCallReflect(elt, "getOtherClass");
+        } else {
+            // Not a relation metaclass we track
+            return;
+        }
+
+        RhapsodyModelSnapshot.RelationInfo relInfo =
+                new RhapsodyModelSnapshot.RelationInfo(guid, metaClass, stereotypes, otherEndGuid);
+
+        List<RhapsodyModelSnapshot.RelationInfo> list = relationsByOwner.get(ownerGuid);
+        if (list == null) {
+            list = new ArrayList<RhapsodyModelSnapshot.RelationInfo>();
+            relationsByOwner.put(ownerGuid, list);
+        }
+        list.add(relInfo);
+    }
+
+    /**
+     * Reflectively calls a no-arg method that returns an IRPModelElement,
+     * and extracts the GUID from it. Used for Generalization.getBaseClass()
+     * and Association.getOtherClass() which may not be in the compile-time API.
+     */
+    private static String safeCallReflect(IRPModelElement elt, String methodName) {
+        try {
+            java.lang.reflect.Method m = elt.getClass().getMethod(methodName);
+            Object result = m.invoke(elt);
+            if (result instanceof IRPModelElement) {
+                return safeStr(((IRPModelElement) result).getGUID());
+            }
+        } catch (Throwable t) { /* ignore */ }
+        return null;
     }
 }

@@ -267,6 +267,16 @@ public final class RequiredValueRule implements Rule {
             }
             return out;
         }
+        if (v instanceof String) {
+            String s = ((String) v).trim();
+            if (!s.isEmpty()) {
+                List<String> out = new ArrayList<>();
+                for (String part : s.split("\\s*,\\s*")) {
+                    if (!part.isEmpty()) out.add(part);
+                }
+                return out;
+            }
+        }
         return null;
     }
 

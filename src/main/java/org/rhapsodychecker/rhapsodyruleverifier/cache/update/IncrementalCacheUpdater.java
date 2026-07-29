@@ -4,7 +4,7 @@ package org.rhapsodychecker.rhapsodyruleverifier.cache.update;
 import com.telelogic.rhapsody.core.*;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
-import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedDependency;
+import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedRelation;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedElement;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCache;
 import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
@@ -22,7 +22,7 @@ import java.util.*;
  * diffing against the cache, and only doing full reads on changed/new elements.
  *
  * <p>Phase 1: Quick scan — reads GUID, name, metaClass, stereotypes, description, tags
- *            for every element. Collects dependency info naturally.
+ *            for every element. Collects relation info naturally.
  * <p>Phase 2: Diff — compares fingerprints against cached elements.
  * <p>Phase 3: Targeted full read — does complete reads (owner path, port info, type, refs)
  *            only for changed/new elements.
@@ -55,8 +55,8 @@ public final class IncrementalCacheUpdater {
 
         Map<String, ElementFingerprint> fingerprints = new LinkedHashMap<String, ElementFingerprint>();
         Map<String, IRPModelElement> scannedHandles = new HashMap<String, IRPModelElement>(4096);
-        Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> freshDeps =
-                new HashMap<String, List<RhapsodyModelSnapshot.DependencyInfo>>();
+        Map<String, List<RhapsodyModelSnapshot.RelationInfo>> freshRels =
+                new HashMap<String, List<RhapsodyModelSnapshot.RelationInfo>>();
 
         IRPCollection all = RhapsodyModelLoader.safeGetNestedElementsRecursive(project);
         int count = all != null ? all.getCount() : 0;
@@ -80,38 +80,17 @@ public final class IncrementalCacheUpdater {
                     guid, name, metaClass, stereotypes, description));
             scannedHandles.put(guid, elt);
 
-            // Collect dependency info (free — already reading metaClass)
-            if ("Dependency".equals(metaClass)) {
-                String ownerGuid = null;
-                try {
-                    IRPModelElement owner = elt.getOwner();
-                    if (owner != null && !(owner instanceof IRPProject)) {
-                        ownerGuid = RhapsodyModelLoader.safeStr(owner.getGUID());
-                    }
-                } catch (Throwable t) { /* ignore */ }
-
-                if (ownerGuid != null && !ownerGuid.isEmpty()) {
-                    String otherEndGuid = null;
-                    if (elt instanceof IRPDependency) {
-                        try {
-                            IRPModelElement dependsOn = ((IRPDependency) elt).getDependsOn();
-                            if (dependsOn != null) {
-                                otherEndGuid = RhapsodyModelLoader.safeStr(dependsOn.getGUID());
-                            }
-                        } catch (Throwable t) { /* ignore */ }
-                    }
-
-                    RhapsodyModelSnapshot.DependencyInfo depInfo =
-                            new RhapsodyModelSnapshot.DependencyInfo(guid, stereotypes, otherEndGuid);
-
-                    List<RhapsodyModelSnapshot.DependencyInfo> ownerDeps = freshDeps.get(ownerGuid);
-                    if (ownerDeps == null) {
-                        ownerDeps = new ArrayList<RhapsodyModelSnapshot.DependencyInfo>();
-                        freshDeps.put(ownerGuid, ownerDeps);
-                    }
-                    ownerDeps.add(depInfo);
+            // Collect relation info (Dependency, Generalization, Association)
+            // using the shared collectRelation() helper from RhapsodyModelLoader
+            String ownerGuid = null;
+            try {
+                IRPModelElement owner = elt.getOwner();
+                if (owner != null && !(owner instanceof IRPProject)) {
+                    ownerGuid = RhapsodyModelLoader.safeStr(owner.getGUID());
                 }
-            }
+            } catch (Throwable t) { /* ignore */ }
+
+            RhapsodyModelLoader.collectRelation(metaClass, guid, ownerGuid, stereotypes, elt, freshRels);
 
             if (i % 50 == 0 || i == count) {
                 reporter.onProgress(i, count);
@@ -209,10 +188,6 @@ public final class IncrementalCacheUpdater {
         }
 
         // Build name-based lookup of freshly scanned OSLC elements.
-        // OSLC proxy elements get new GUIDs on every Rhapsody model load (GUID rotation),
-        // so GUID-based matching will ALWAYS see cached OSLC elements as "missing".
-        // We use name-based matching to determine if the element is truly absent
-        // (cold start, not resolved) vs just got a new GUID (warm start, normal rotation).
         Set<String> freshOslcNameSet = new HashSet<String>();
         for (ElementFingerprint fp : fingerprints.values()) {
             if (RhapsodyModelLoader.isRemoteOslcResource(fp.guid(), fp.name())) {
@@ -221,23 +196,20 @@ public final class IncrementalCacheUpdater {
         }
 
         // Check for removed elements (in cache but not in scan)
-        // OSLC proxies are handled specially due to GUID rotation.
-        int missingOslcCount = 0;   // OSLC elements NOT in scan at all (by name)
-        int rotatedOslcCount = 0;   // OSLC elements in scan with new GUID (normal)
+        int missingOslcCount = 0;
+        int rotatedOslcCount = 0;
         List<String> candidateRemovals = new ArrayList<String>();
         for (String cachedGuid : cachedByGuid.keySet()) {
             if (!fingerprints.containsKey(cachedGuid)) {
                 CachedElement cachedEl = cachedByGuid.get(cachedGuid);
                 String cachedName = cachedEl != null ? cachedEl.getName() : null;
                 if (RhapsodyModelLoader.isRemoteOslcResource(cachedGuid, cachedName)) {
-                    // This OSLC element's GUID is not in the scan — check if the
-                    // same element appeared with a new GUID (name-based match)
                     if (cachedName != null && freshOslcNameSet.contains(cachedName)) {
-                        rotatedOslcCount++; // normal GUID rotation, not missing
+                        rotatedOslcCount++;
                     } else {
-                        missingOslcCount++; // truly missing from scan
+                        missingOslcCount++;
                     }
-                    continue; // never add OSLC proxies to removal candidates
+                    continue;
                 }
                 candidateRemovals.add(cachedGuid);
             }
@@ -248,31 +220,21 @@ public final class IncrementalCacheUpdater {
                     + " elements re-appeared with new GUIDs (normal behavior)");
         }
 
-        // Determine if the scan is incomplete:
-        // - Any OSLC proxy elements truly missing from the scan (not just rotated)
-        //   → cold start, not fully resolved
-        // - Too many non-OSLC removals relative to scan size → also suspect
         boolean scanIncomplete = missingOslcCount > 0;
         int deferredRemovalCount = 0;
 
         int removalThreshold = Math.max(100, (int) (fingerprints.size() * 0.05));
         if (scanIncomplete) {
-            // OSLC proxies are missing — the scan is incomplete.
-            // Defer ALL removals, not just OSLC ones, because non-OSLC elements
-            // might also be missing due to incomplete model initialization.
             deferredRemovalCount = candidateRemovals.size() + missingOslcCount;
             AppLogger.warn("Incremental scan appears incomplete: " + missingOslcCount
                     + " OSLC proxy elements missing from scan. Deferring all "
                     + deferredRemovalCount + " removals to preserve cached data.");
-            // removedGuids stays empty — no removals applied
         } else if (candidateRemovals.size() > removalThreshold) {
             deferredRemovalCount = candidateRemovals.size();
             AppLogger.warn("Incremental scan: " + candidateRemovals.size()
                     + " removals detected (threshold: " + removalThreshold
                     + ") — deferring removals to avoid false deletions from incomplete scan");
-            // removedGuids stays empty
         } else {
-            // Scan looks complete — apply removals normally
             for (String guid : candidateRemovals) {
                 removedGuids.add(guid);
                 CachedElement removed = cachedByGuid.get(guid);
@@ -280,14 +242,12 @@ public final class IncrementalCacheUpdater {
             }
         }
 
-        // Check if dependency changes affect additional elements — but only if
-        // the scan is complete. On an incomplete scan, dependency lists will differ
-        // for owners whose OSLC targets are missing, producing false "changed" flags.
+        // Check if relation changes affect additional elements
         if (!scanIncomplete) {
-            checkDependencyChanges(freshDeps, existingCache.getDependenciesByOwner(),
+            checkRelationChanges(freshRels, existingCache.getRelationsByOwner(),
                     cachedByGuid, fingerprints, changedGuids);
         } else {
-            AppLogger.info("Skipping dependency diff — scan is incomplete");
+            AppLogger.info("Skipping relation diff — scan is incomplete");
         }
 
         DiffResult diff = new DiffResult(newGuids, removedGuids, changedGuids,
@@ -305,10 +265,42 @@ public final class IncrementalCacheUpdater {
         needsFullRead.addAll(newGuids);
         needsFullRead.addAll(changedGuids);
 
-        Map<String, String> ownerPathCache = new HashMap<String, String>(2048);
-        RhapsodyModelLoader loader = new RhapsodyModelLoader(); // for computeOwnerPathCached
+        Map<String, String> guidToName = new HashMap<String, String>(fingerprints.size());
+        Map<String, String> guidToOwnerGuid = new HashMap<String, String>(fingerprints.size());
+        for (Map.Entry<String, IRPModelElement> entry : scannedHandles.entrySet()) {
+            ElementFingerprint fp = fingerprints.get(entry.getKey());
+            if (fp != null) {
+                guidToName.put(fp.guid(), fp.name());
+            }
+        }
+        for (CachedElement ce : existingCache.getElements()) {
+            if (!guidToName.containsKey(ce.getGuid())) {
+                guidToName.put(ce.getGuid(), ce.getName());
+            }
+        }
 
-        // Build updated element records
+        for (String guid : needsFullRead) {
+            IRPModelElement elt = scannedHandles.get(guid);
+            if (elt == null) continue;
+            try {
+                IRPModelElement owner = elt.getOwner();
+                if (owner != null && !(owner instanceof IRPProject)) {
+                    String og = RhapsodyModelLoader.safeStr(owner.getGUID());
+                    if (!og.isEmpty()) {
+                        guidToOwnerGuid.put(guid, og);
+                    }
+                }
+            } catch (Throwable t) { /* ignore */ }
+        }
+        for (CachedElement ce : existingCache.getElements()) {
+            if (ce.getOwnerGuid() != null && !ce.getOwnerGuid().isEmpty()
+                    && !guidToOwnerGuid.containsKey(ce.getGuid())) {
+                guidToOwnerGuid.put(ce.getGuid(), ce.getOwnerGuid());
+            }
+        }
+
+        Map<String, String> ownerPathCache = new HashMap<String, String>(2048);
+
         List<ElementRecord> updatedRecords = new ArrayList<ElementRecord>();
         Map<String, IRPModelElement> updatedHandles = new HashMap<String, IRPModelElement>();
         Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> updatedRefs =
@@ -321,12 +313,11 @@ public final class IncrementalCacheUpdater {
             IRPModelElement elt = scannedHandles.get(guid);
             if (elt == null) continue;
 
-            ElementRecord record = readFullElement(elt, loader, ownerPathCache);
+            ElementRecord record = readFullElement(elt, guidToName, guidToOwnerGuid, ownerPathCache);
             if (record != null) {
                 updatedRecords.add(record);
                 updatedHandles.put(guid, elt);
 
-                // Read references for changed/new elements
                 readReferences(elt, guid, updatedRefs);
             }
 
@@ -342,14 +333,9 @@ public final class IncrementalCacheUpdater {
             updatedByGuid.put(rec.guid(), rec);
         }
 
-        // Build final record list: unchanged from cache + updated from live
         List<ElementRecord> finalRecords = new ArrayList<ElementRecord>();
         Set<String> removedSet = new HashSet<String>(removedGuids);
 
-        // Build set of OSLC URL-format names that are in the fresh scan.
-        // OSLC proxy elements get new GUIDs every time Rhapsody loads the model,
-        // so we must deduplicate by name rather than GUID to avoid keeping both
-        // the old cached copy and the freshly scanned copy.
         Set<String> freshOslcNames = new HashSet<String>();
         for (ElementFingerprint fp : fingerprints.values()) {
             if (RhapsodyModelLoader.isRemoteOslcResource(fp.guid(), fp.name())) {
@@ -358,21 +344,16 @@ public final class IncrementalCacheUpdater {
         }
         int oslcDeduped = 0;
 
-        // Add unchanged elements from cache (converting CachedElement → ElementRecord)
         for (CachedElement ce : existingCache.getElements()) {
             if (removedSet.contains(ce.getGuid())) continue;
             if (updatedByGuid.containsKey(ce.getGuid())) continue;
 
-            // Skip cached OSLC proxy elements whose name matches a freshly scanned
-            // element — the fresh version has a new GUID (OSLC GUID rotation) and
-            // will be added from updatedRecords below. Keeping both would duplicate.
             String ceName = ce.getName();
             if (ceName != null && freshOslcNames.contains(ceName)) {
                 oslcDeduped++;
                 continue;
             }
 
-            // Keep the cached version as-is
             finalRecords.add(toElementRecord(ce));
         }
 
@@ -381,10 +362,8 @@ public final class IncrementalCacheUpdater {
                     + " cached elements with freshly scanned versions (GUID rotation)");
         }
 
-        // Add updated/new elements
         finalRecords.addAll(updatedRecords);
 
-        // Sort
         finalRecords.sort(Comparator
                 .comparing(new java.util.function.Function<ElementRecord, String>() {
                     @Override
@@ -399,11 +378,10 @@ public final class IncrementalCacheUpdater {
                     }
                 }));
 
-        // Merge references: keep cached refs for unchanged elements, use fresh for updated
+        // Merge references
         Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> finalRefs =
                 new HashMap<String, List<RhapsodyModelSnapshot.ReferenceInfo>>();
 
-        // Copy cached references for unchanged elements
         if (existingCache.getReferencesByElement() != null) {
             for (Map.Entry<String, List<org.rhapsodychecker.rhapsodyruleverifier.cache.CachedReference>> entry
                     : existingCache.getReferencesByElement().entrySet()) {
@@ -421,7 +399,6 @@ public final class IncrementalCacheUpdater {
                 finalRefs.put(elGuid, refInfos);
             }
         }
-        // Add fresh references for updated elements
         finalRefs.putAll(updatedRefs);
 
         reporter.onStepCompleted(LoadingStep.INCREMENTAL_UPDATING);
@@ -431,42 +408,39 @@ public final class IncrementalCacheUpdater {
         // ── Phase 4: Build snapshot ─────────────────────────────────────────
         PhaseTimer tBuild = profiler.startPhase("Phase 4: Build snapshot");
 
-        // Merge dependencies: when the scan is incomplete, fresh deps may be missing
-        // OSLC-related entries. Start with cached deps and overlay fresh on top.
-        Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> finalDeps;
+        // Merge relations: when the scan is incomplete, fresh rels may be missing
+        // OSLC-related entries. Start with cached rels and overlay fresh on top.
+        Map<String, List<RhapsodyModelSnapshot.RelationInfo>> finalRels;
         if (scanIncomplete) {
-            finalDeps = new HashMap<String, List<RhapsodyModelSnapshot.DependencyInfo>>();
-            // Start with cached deps (converted to DependencyInfo)
-            Map<String, List<CachedDependency>> cachedDepsMap = existingCache.getDependenciesByOwner();
-            if (cachedDepsMap != null) {
-                for (Map.Entry<String, List<CachedDependency>> entry : cachedDepsMap.entrySet()) {
-                    List<RhapsodyModelSnapshot.DependencyInfo> infos =
-                            new ArrayList<RhapsodyModelSnapshot.DependencyInfo>();
-                    for (CachedDependency cd : entry.getValue()) {
-                        infos.add(new RhapsodyModelSnapshot.DependencyInfo(
-                                cd.getGuid(), cd.getStereotypes(), cd.getOtherEndGuid()));
+            finalRels = new HashMap<String, List<RhapsodyModelSnapshot.RelationInfo>>();
+            Map<String, List<CachedRelation>> cachedRelsMap = existingCache.getRelationsByOwner();
+            if (cachedRelsMap != null) {
+                for (Map.Entry<String, List<CachedRelation>> entry : cachedRelsMap.entrySet()) {
+                    List<RhapsodyModelSnapshot.RelationInfo> infos =
+                            new ArrayList<RhapsodyModelSnapshot.RelationInfo>();
+                    for (CachedRelation cr : entry.getValue()) {
+                        infos.add(new RhapsodyModelSnapshot.RelationInfo(
+                                cr.getGuid(), cr.getMetaClass(), cr.getStereotypes(), cr.getOtherEndGuid()));
                     }
-                    finalDeps.put(entry.getKey(), infos);
+                    finalRels.put(entry.getKey(), infos);
                 }
             }
-            // Overlay fresh deps for owners that WERE in the scan
-            // (their dep lists are reliable — it's only the missing owners that matter)
-            for (Map.Entry<String, List<RhapsodyModelSnapshot.DependencyInfo>> entry
-                    : freshDeps.entrySet()) {
+            for (Map.Entry<String, List<RhapsodyModelSnapshot.RelationInfo>> entry
+                    : freshRels.entrySet()) {
                 if (fingerprints.containsKey(entry.getKey())) {
-                    finalDeps.put(entry.getKey(), entry.getValue());
+                    finalRels.put(entry.getKey(), entry.getValue());
                 }
             }
-            AppLogger.info("Merged dependencies: " + finalDeps.size()
+            AppLogger.info("Merged relations: " + finalRels.size()
                     + " owners (cached base + fresh overlay for scanned elements)");
         } else {
-            finalDeps = freshDeps;
+            finalRels = freshRels;
         }
 
         RhapsodyModelSnapshot snapshot = new RhapsodyModelSnapshot(
                 Collections.unmodifiableList(finalRecords),
-                Collections.<String, IRPModelElement>emptyMap(), // no handles in cache mode
-                Collections.unmodifiableMap(finalDeps),
+                Collections.<String, IRPModelElement>emptyMap(),
+                Collections.unmodifiableMap(finalRels),
                 Collections.unmodifiableMap(finalRefs));
 
         tBuild.stop().items(finalRecords.size());
@@ -483,7 +457,8 @@ public final class IncrementalCacheUpdater {
     // ---- Full element read (Phase 3) ----
 
     private ElementRecord readFullElement(IRPModelElement elt,
-                                          RhapsodyModelLoader loader,
+                                          Map<String, String> guidToName,
+                                          Map<String, String> guidToOwnerGuid,
                                           Map<String, String> ownerPathCache) {
         try {
             String guid = RhapsodyModelLoader.safeStr(elt.getGUID());
@@ -491,7 +466,6 @@ public final class IncrementalCacheUpdater {
             String metaClass = RhapsodyModelLoader.safeStr(elt.getMetaClass());
             if (guid.isEmpty() || name.isEmpty()) return null;
 
-            String ownerPath = loader.computeOwnerPathCached(elt, ownerPathCache);
             String ownerGuid = null;
             try {
                 IRPModelElement owner = elt.getOwner();
@@ -499,6 +473,9 @@ public final class IncrementalCacheUpdater {
                     ownerGuid = RhapsodyModelLoader.safeStr(owner.getGUID());
                 }
             } catch (Throwable t) { /* ignore */ }
+
+            String ownerPath = RhapsodyModelLoader.buildOwnerPathLocal(
+                    ownerGuid, guidToName, guidToOwnerGuid, ownerPathCache);
 
             Set<String> stereotypes = RhapsodyModelLoader.readStereotypeNames(elt);
             String description = RhapsodyModelLoader.safeGetDescription(elt);
@@ -586,76 +563,81 @@ public final class IncrementalCacheUpdater {
         } catch (Throwable t) { /* ignore */ }
     }
 
-    // ---- Dependency diff helper ----
+    // ---- Relation diff helper ----
 
-    private void checkDependencyChanges(
-            Map<String, List<RhapsodyModelSnapshot.DependencyInfo>> freshDeps,
-            Map<String, List<CachedDependency>> cachedDeps,
+    private void checkRelationChanges(
+            Map<String, List<RhapsodyModelSnapshot.RelationInfo>> freshRels,
+            Map<String, List<CachedRelation>> cachedRels,
             Map<String, CachedElement> cachedByGuid,
             Map<String, ElementFingerprint> fingerprints,
             List<String> changedGuids) {
 
-        if (cachedDeps == null) return;
+        if (cachedRels == null) return;
 
         Set<String> alreadyChanged = new HashSet<String>(changedGuids);
 
-        // Check each owner's dependency list
         Set<String> allOwnerGuids = new HashSet<String>();
-        allOwnerGuids.addAll(freshDeps.keySet());
-        allOwnerGuids.addAll(cachedDeps.keySet());
+        allOwnerGuids.addAll(freshRels.keySet());
+        allOwnerGuids.addAll(cachedRels.keySet());
 
         for (String ownerGuid : allOwnerGuids) {
             if (alreadyChanged.contains(ownerGuid)) continue;
             if (!fingerprints.containsKey(ownerGuid) && !cachedByGuid.containsKey(ownerGuid)) continue;
 
-            List<RhapsodyModelSnapshot.DependencyInfo> freshList = freshDeps.get(ownerGuid);
-            List<CachedDependency> cachedList = cachedDeps.get(ownerGuid);
+            List<RhapsodyModelSnapshot.RelationInfo> freshList = freshRels.get(ownerGuid);
+            List<CachedRelation> cachedList = cachedRels.get(ownerGuid);
 
             if (freshList == null) freshList = Collections.emptyList();
             if (cachedList == null) cachedList = Collections.emptyList();
 
-            if (!depsMatch(freshList, cachedList)) {
+            if (!relsMatch(freshList, cachedList)) {
                 if (fingerprints.containsKey(ownerGuid)) {
                     changedGuids.add(ownerGuid);
                     alreadyChanged.add(ownerGuid);
-                    AppLogger.debug("Dependency change detected for owner: " + ownerGuid);
+                    AppLogger.debug("Relation change detected for owner: " + ownerGuid);
                 }
             }
         }
     }
 
-    private boolean depsMatch(List<RhapsodyModelSnapshot.DependencyInfo> fresh,
-                              List<CachedDependency> cached) {
+    private boolean relsMatch(List<RhapsodyModelSnapshot.RelationInfo> fresh,
+                              List<CachedRelation> cached) {
         if (fresh.size() != cached.size()) return false;
 
         // Compare by GUID sets (order doesn't matter)
         Set<String> freshGuids = new LinkedHashSet<String>();
-        for (RhapsodyModelSnapshot.DependencyInfo d : fresh) {
-            freshGuids.add(d.guid());
+        for (RhapsodyModelSnapshot.RelationInfo r : fresh) {
+            freshGuids.add(r.guid());
         }
         Set<String> cachedGuids = new LinkedHashSet<String>();
-        for (CachedDependency d : cached) {
-            cachedGuids.add(d.getGuid());
+        for (CachedRelation r : cached) {
+            cachedGuids.add(r.getGuid());
         }
         if (!freshGuids.equals(cachedGuids)) return false;
 
-        // Also check otherEndGuid and stereotypes for each
-        Map<String, RhapsodyModelSnapshot.DependencyInfo> freshByGuid =
-                new LinkedHashMap<String, RhapsodyModelSnapshot.DependencyInfo>();
-        for (RhapsodyModelSnapshot.DependencyInfo d : fresh) {
-            freshByGuid.put(d.guid(), d);
+        // Also check otherEndGuid, metaClass and stereotypes for each
+        Map<String, RhapsodyModelSnapshot.RelationInfo> freshByGuid =
+                new LinkedHashMap<String, RhapsodyModelSnapshot.RelationInfo>();
+        for (RhapsodyModelSnapshot.RelationInfo r : fresh) {
+            freshByGuid.put(r.guid(), r);
         }
-        for (CachedDependency cd : cached) {
-            RhapsodyModelSnapshot.DependencyInfo fd = freshByGuid.get(cd.getGuid());
-            if (fd == null) return false;
+        for (CachedRelation cr : cached) {
+            RhapsodyModelSnapshot.RelationInfo fr = freshByGuid.get(cr.getGuid());
+            if (fr == null) return false;
 
-            String freshOther = fd.otherEndGuid();
-            String cachedOther = cd.getOtherEndGuid();
+            String freshOther = fr.otherEndGuid();
+            String cachedOther = cr.getOtherEndGuid();
             if (freshOther == null && cachedOther != null) return false;
             if (freshOther != null && !freshOther.equals(cachedOther)) return false;
 
-            Set<String> freshStereos = fd.stereotypes();
-            Set<String> cachedStereos = cd.getStereotypes();
+            // Also compare metaClass (new field)
+            String freshMeta = fr.metaClass();
+            String cachedMeta = cr.getMetaClass();
+            if (freshMeta == null && cachedMeta != null) return false;
+            if (freshMeta != null && !freshMeta.equals(cachedMeta)) return false;
+
+            Set<String> freshStereos = fr.stereotypes();
+            Set<String> cachedStereos = cr.getStereotypes();
             if (freshStereos == null) freshStereos = Collections.emptySet();
             if (cachedStereos == null) cachedStereos = Collections.emptySet();
             if (!freshStereos.equals(cachedStereos)) return false;
