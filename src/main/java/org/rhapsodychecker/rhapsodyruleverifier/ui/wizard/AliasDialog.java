@@ -20,10 +20,17 @@ public final class AliasDialog extends JDialog {
     private final FastDetectionResult  fast;
     private final List<String>         detectedStereos;
 
+    // Kind-uri creabile din wizard. STEREOTYPE si STEREOTYPE_SET raman
+    // suportate de engine/YAML, dar nu mai sunt oferite ca optiuni noi aici -
+    // vezi prefill() pentru compatibilitatea la editarea unui alias existent.
+    private static final AliasKind[] WIZARD_KINDS = Arrays.stream(AliasKind.values())
+            .filter(k -> k != AliasKind.STEREOTYPE && k != AliasKind.STEREOTYPE_SET)
+            .toArray(AliasKind[]::new);
+
     // Campuri comune
     private final JTextField           idField    = new JTextField(20);
     private final JTextField           helpField  = new JTextField(30);
-    private final JComboBox<AliasKind> kindCombo  = new JComboBox<>(AliasKind.values());
+    private final JComboBox<AliasKind> kindCombo  = new JComboBox<>(WIZARD_KINDS);
 
     // taggedValue
     private final JTextField           profileField     = new JTextField(20);
@@ -177,6 +184,16 @@ public final class AliasDialog extends JDialog {
     private void prefill(AliasDefinition a) {
         idField.setText(a.id());
         a.help().ifPresent(helpField::setText);
+
+        // Backward compat: un alias existent (incarcat din YAML) poate avea
+        // kind STEREOTYPE / STEREOTYPE_SET, chiar daca acestea nu mai sunt
+        // creabile din wizard. Il adaugam temporar in combo doar pentru ca
+        // editarea acestui alias sa functioneze in continuare.
+        if ((a.kind() == AliasKind.STEREOTYPE || a.kind() == AliasKind.STEREOTYPE_SET)
+                && ((DefaultComboBoxModel<AliasKind>) kindCombo.getModel()).getIndexOf(a.kind()) < 0) {
+            kindCombo.addItem(a.kind());
+        }
+
         kindCombo.setSelectedItem(a.kind());
         rebuildDynamic();
 

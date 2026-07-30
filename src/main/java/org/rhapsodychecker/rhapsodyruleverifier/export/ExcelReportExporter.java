@@ -21,7 +21,7 @@ public final class ExcelReportExporter {
     private ExcelReportExporter() {}
 
     private static final String[] HEADERS = {
-            "Rule", "Arch Element ID", "Arch Element Name", "Path"
+            "Rule", "Arch Element ID", "Arch Element Name", "Path", "Reason"
     };
 
     /**
@@ -70,6 +70,10 @@ public final class ExcelReportExporter {
                 Cell pathCell = row.createCell(3);
                 pathCell.setCellValue(path);
                 pathCell.setCellStyle(failStyle);
+
+                Cell reasonCell = row.createCell(4);
+                reasonCell.setCellValue(r.message());
+                reasonCell.setCellStyle(failStyle);
             }
 
             // Auto-size columns for readability
@@ -98,6 +102,8 @@ public final class ExcelReportExporter {
 
     private static CellStyle buildFailRowStyle(Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
+        style.setWrapText(true);
+        style.setVerticalAlignment(VerticalAlignment.TOP);
         return style;
     }
 }

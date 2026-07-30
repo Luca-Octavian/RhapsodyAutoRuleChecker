@@ -72,6 +72,7 @@ public final class RuleFactory {
         configMap.put("params", spec.params());
 
         rule.configure(configMap);
+
         return rule;
     }
 

@@ -53,7 +53,7 @@ public final class HoverInfoProvider {
                 "The identifier used by rules to reference this alias.",
                 "e.g. ELEMENT_DESCRIPTION");
         put("alias.kind", "Kind",
-                "The source of the value: description, name, tagged value, or stereotype.");
+                "The source of the value: description, name, or tagged value.");
         put("alias.title", "Title",
                 "Friendly name shown in the interface (optional).");
         put("alias.help", "Help",
@@ -122,18 +122,42 @@ public final class HoverInfoProvider {
                 "Additional filters on top of the Element Set (advanced, optional).");
 
         // ── Rule params: RequiredValue ─────────────────────────────────────
-        put("rule.params.requiredValue.nonEmpty", "Non-empty",
-                "The value must not be empty.");
+        put("rule.params.requiredValue.checkMode", "Check Mode",
+                "How should the value from the Target Alias be validated?\n\n"
+                + "• Must not be empty — fails if the value is missing or blank.\n"
+                + "• Must match specific value(s) — fails if the value is not one of the listed values.\n"
+                + "• Length constraint — fails if the value's character count is outside the min/max range.\n"
+                + "• Regex pattern — fails if the value doesn't match the given regular expression.\n"
+                + "• Numeric comparison — treats the value as a number and compares it.");
+        put("rule.params.requiredValue.values", "Allowed Values",
+                "List the values that are considered valid, separated by commas.\n"
+                + "The element passes if its value matches any one of these.\n\n"
+                + "Example: ASIL_A, ASIL_B, ASIL_C, ASIL_D");
         put("rule.params.requiredValue.minLength", "Min Length",
-                "The minimum accepted length of the value.");
+                "The minimum number of characters the value must have. "
+                + "Leave empty for no minimum.");
         put("rule.params.requiredValue.maxLength", "Max Length",
-                "The maximum accepted length of the value.");
-        put("rule.params.requiredValue.operator", "Operator",
-                "The comparison operator: eq, in, gte, or lte.");
-        put("rule.params.requiredValue.value", "Value",
-                "The expected value (for eq/gte/lte).");
-        put("rule.params.requiredValue.values", "Values",
-                "The list of accepted values (for the 'in' operator).");
+                "The maximum number of characters the value is allowed to have. "
+                + "Leave empty for no maximum.");
+        put("rule.params.requiredValue.pattern", "Regex Pattern",
+                "A regular expression that the value must match.\n\n"
+                + "Example: ^[A-Z][a-zA-Z0-9_]*$ (must start with uppercase letter)");
+        put("rule.params.requiredValue.numericComp", "Numeric Comparison",
+                "How to compare the value as a number. Pick a comparison type from the dropdown.");
+        put("rule.params.requiredValue.numericValue", "Comparison Value",
+                "The number to compare against.");
+        put("rule.params.requiredValue.rangeMin", "Range Min",
+                "The lower bound of the accepted range (inclusive).");
+        put("rule.params.requiredValue.rangeMax", "Range Max",
+                "The upper bound of the accepted range (inclusive).");
+
+        // ── Rule: Group ─────────────────────────────────────────────────────
+        put("rule.group", "Group",
+                "Optional label that groups rules together. Rules sharing the same "
+                        + "group are evaluated individually as normal. After evaluation, "
+                        + "results are conjoined per element: an element passes the group "
+                        + "only if ALL rules in the group pass for it. Leave empty for "
+                        + "ungrouped rules.");
 
         // ── Rule params: NamingPattern ──────────────────────────────────────
         put("rule.params.namingPattern.pattern", "Pattern",
@@ -142,17 +166,25 @@ public final class HoverInfoProvider {
 
         // ── Rule params: RelationExists ─────────────────────────────────────
         put("rule.params.relationExists.relationKind", "Relation Kind",
-                "The type of relation being counted (dependency, association, ...).");
+                "What type of relation to look for.\n\n"
+                + "• any — matches all relation types\n"
+                + "• dependency — a uses/depends-on link\n"
+                + "• association — a structural link\n"
+                + "• generalization — an inheritance link\n\n"
+                + "Leave at 'any' if you don't need to filter by relation type.");
         put("rule.params.relationExists.direction", "Direction",
-                "The direction of the relation: any, outgoing, or incoming.");
+                "Which direction of the relation to count.\n\n"
+                + "• any — both outgoing and incoming\n"
+                + "• outgoing — only relations FROM this element TO another\n"
+                + "• incoming — only relations FROM another element TO this one");
         put("rule.params.relationExists.relationStereotypes", "Relation Stereotypes",
-                "The stereotypes required on the relation.");
-        put("rule.params.relationExists.operator", "Operator",
-                "The comparison operator for the relation count: gte, lte, or eq.");
-        put("rule.params.relationExists.value", "Value",
-                "The required number of relations.");
-        put("rule.params.relationExists.targetSet", "Target Set",
-                "The target Element Set of the relation (optional).");
+                "Only count relations that have one of these stereotypes.\n"
+                + "For example, selecting 'satisfy' counts only traceability links "
+                + "stereotyped as <<satisfy>>. Leave empty to match any stereotype.");
+        put("rule.params.relationExists.count", "Required Count",
+                "How many matching relations the element must have.\n\n"
+                + "Example: 'At least 1' means every element needs at least one "
+                + "matching relation. 'Exactly 2' means it must have precisely two.");
 
         // ── Rule params: RequiredStereotype ──────────────────────────────────
         put("rule.params.requiredStereotype.stereotype", "Stereotype",

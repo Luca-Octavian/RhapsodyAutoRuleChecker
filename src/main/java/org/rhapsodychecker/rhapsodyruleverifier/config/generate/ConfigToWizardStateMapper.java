@@ -26,8 +26,24 @@ public final class ConfigToWizardStateMapper {
 
     private ConfigToWizardStateMapper() {}
 
+    /**
+     * Convenience overload for callers that don't have (or don't care about)
+     * the original file path, e.g. building a WizardState in memory without
+     * an "Edit in Wizard" load. sourcePath() on the resulting state will be
+     * null, so WizardDialog will prompt for a save location as usual.
+     */
     public static MappingResult map(RuleCheckerConfig config, FastDetectionResult fast) {
+        return map(config, fast, null);
+    }
+
+    /**
+     * @param sourcePath path of the YAML file this config was loaded from,
+     *                    so "Edit in Wizard" can save back to it directly
+     *                    without re-prompting. Pass null if unknown (e.g. new config).
+     */
+    public static MappingResult map(RuleCheckerConfig config, FastDetectionResult fast, String sourcePath) {
         WizardState  state    = new WizardState().mode(config.mode().name().toLowerCase());
+        state.sourcePath(sourcePath);
         List<String> warnings = new ArrayList<>();
 
         // ── Aliases ───────────────────────────────────────────────────────────
@@ -108,7 +124,8 @@ public final class ConfigToWizardStateMapper {
                     spec.appliesToSet().orElse(null),
                     spec.params(),
                     spec.message().orElse(null),
-                    spec.enabled()       
+                    spec.enabled(),
+                    spec.group().orElse(null)
             );
             state.addRule(req);
         }

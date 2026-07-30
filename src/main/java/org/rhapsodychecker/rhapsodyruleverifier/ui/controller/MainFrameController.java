@@ -12,6 +12,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.ConfigToWizardStateMapper;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
+import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.EvaluationService;
@@ -45,7 +46,7 @@ public final class MainFrameController {
         String selectedScope();
         void setStatus(String text);
         void loadTree(org.rhapsodychecker.rhapsodyruleverifier.ui.PackageNode tree);
-        void loadResults(List<RuleResult> results, ElementIndex index);
+        void loadResults(List<RuleResult> results, ElementIndex index, List<RuleSpec> specs);
         void clearTree();
         void clearResults();
         void setBusy(boolean busy);
@@ -184,7 +185,7 @@ public final class MainFrameController {
                 } else {
                     config = evalResult.config();
                     lastResults = evalResult.results();
-                    view.loadResults(lastResults, index);
+                    view.loadResults(lastResults, index, config.rules());
                     view.setStatus("  " + evalResult.statusMessage());
                     recentFiles.addRecentConfig(configPath);
                     view.refreshRecentConfigs(recentFiles.recentConfigs());
@@ -248,7 +249,7 @@ public final class MainFrameController {
         }
 
         ConfigToWizardStateMapper.MappingResult mapped =
-                ConfigToWizardStateMapper.map(config, fastDetectionResult);
+                ConfigToWizardStateMapper.map(config, fastDetectionResult, view.configPath());
 
         if (mapped.hasWarnings()) {
             String warningText = String.join("\n", mapped.warnings());

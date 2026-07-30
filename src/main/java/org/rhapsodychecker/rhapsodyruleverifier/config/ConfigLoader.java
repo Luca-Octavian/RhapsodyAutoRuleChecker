@@ -195,6 +195,7 @@ public final class ConfigLoader {
                 }
 
                 Map<String, Object> params = optMap(fields, "params");
+                String group = optString(fields, "group", null);
 
                 RuleSpec rule = RuleSpec.builder()
                         .id(id)
@@ -202,6 +203,7 @@ public final class ConfigLoader {
                         .enabled(optBool(fields, "enabled", true))
                         .title(optString(fields, "title", null))
                         .message(optString(fields, "message", null))
+                        .group(group)
                         .appliesToSet(appliesToSet)
                         .appliesToTypes(appliesToTypes)
                         .appliesToStereotypes(appliesToStereotypes)
@@ -294,7 +296,7 @@ public final class ConfigLoader {
             }
             return out;
         }
-        // Single scalar → list of one
+        // Single scalar -> list of one
         String s = v.toString().trim();
         return s.isEmpty() ? Collections.emptyList() : Collections.singletonList(s);
     }

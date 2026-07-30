@@ -1,0 +1,42 @@
+# ══════════════════════════════════════════════════════════════════════════
+# GroupTest.yaml — minimal config exercising the group feature.
+# Used by GroupSmokeTest, which runs against a live Rhapsody model.
+#
+# Semantics: two rules share the group "BLOCK_COMPLIANCE". Each rule is
+# evaluated individually as normal. After evaluation, RuleGrouping derives
+# a per-element conjunction: a Block is "fully compliant" only if BOTH
+# rules pass for that element. Individual results still appear in the
+# results table — the group verdict is a post-processing overlay.
+# ══════════════════════════════════════════════════════════════════════════
+schemaVersion: 1
+mode: lenient
+
+aliases:
+  ELEMENT_DESCRIPTION:
+    kind: description
+    title: "Element description"
+
+elementSets:
+  AllBlocks:
+    title: "All Blocks"
+    kinds: [BLOCK, INTERFACE_BLOCK]
+
+rules:
+  - id: BLOCK_HAS_DESCRIPTION
+    title: "Block must have a description"
+    type: REQUIRED_VALUE
+    group: BLOCK_COMPLIANCE
+    appliesTo: { set: AllBlocks }
+    target: ELEMENT_DESCRIPTION
+    params:
+      nonEmpty: true
+    message: "Missing description on block '{elementName}'"
+
+  - id: BLOCK_HAS_ASIL
+    title: "Block must have an ASIL stereotype"
+    type: REQUIRED_STEREOTYPE_ONE_OF
+    group: BLOCK_COMPLIANCE
+    appliesTo: { set: AllBlocks }
+    params:
+      anyOf: [ASIL_QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D]
+    message: "Missing ASIL stereotype on block '{elementName}'"

@@ -11,14 +11,14 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 import java.util.*;
 
 /**
- * Convertește WizardState → RuleCheckerConfig gata de injectat în RuleEngine.
+ * Converts WizardState into a RuleCheckerConfig ready for injection into RuleEngine.
  *
- * Nu scrie YAML — produce direct obiectul de config in-memory.
- * Dacă utilizatorul vrea să exporte/salveze configurația, YamlPresetWriter
- * se ocupă separat de serializare.
+ * Does not write YAML — produces the config object in-memory.
+ * If the user wants to export/save the configuration, YamlPresetWriter
+ * handles serialization separately.
  *
- * Validarea cross-reference (alias există, set există) este făcută de
- * RuleCheckerConfig.validate() la build time — deci nu duplicăm logica aici.
+ * Cross-reference validation (alias exists, set exists) is done by
+ * RuleCheckerConfig.validate() at build time — so we don't duplicate logic here.
  */
 public final class ConfigBuilder {
 
@@ -42,28 +42,35 @@ public final class ConfigBuilder {
 
     private static Map<String, AliasDefinition> buildAliasMap(List<AliasDefinition> aliases) {
         Map<String, AliasDefinition> map = new LinkedHashMap<>();
-        aliases.forEach(a -> map.put(a.id(), a));
+        for (AliasDefinition a : aliases) {
+            map.put(a.id(), a);
+        }
         return map;
     }
 
     private static Map<String, ElementSetDefinition> buildSetMap(List<ElementSetDefinition> sets) {
         Map<String, ElementSetDefinition> map = new LinkedHashMap<>();
-        sets.forEach(s -> map.put(s.id(), s));
+        for (ElementSetDefinition s : sets) {
+            map.put(s.id(), s);
+        }
         return map;
     }
 
     private static List<RuleSpec> buildRuleSpecs(List<WizardState.RuleRequest> requests) {
         List<RuleSpec> specs = new ArrayList<>();
         for (WizardState.RuleRequest req : requests) {
+            RuleType type = parseRuleType(req.ruleType());
+
             specs.add(
                     RuleSpec.builder()
                             .id(req.id())
                             .title(req.title())
-                            .type(parseRuleType(req.ruleType()))
+                            .type(type)
                             .target(req.targetAliasId())
                             .appliesToSet(req.elementSetId())
                             .params(req.params())
                             .message(req.message())
+                            .group(req.group())
                             .enabled(true)
                             .build()
             );
@@ -94,6 +101,11 @@ public final class ConfigBuilder {
             case "RELATIONEXISTS":            return RuleType.RELATION_EXISTS;
             case "NAMING_PATTERN":
             case "NAMINGPATTERN":             return RuleType.NAMING_PATTERN;
+            // Was missing: any config containing an OwnerStereotypeConstraint rule
+            // threw "Unknown rule type from wizard" when built from wizard state,
+            // even though the type is fully supported by the engine.
+            case "OWNER_STEREOTYPE_CONSTRAINT":
+            case "OWNERSTEREOTYPECONSTRAINT":  return RuleType.OWNER_STEREOTYPE_CONSTRAINT;
             default:
                 throw new IllegalArgumentException("Unknown rule type from wizard: " + raw);
         }

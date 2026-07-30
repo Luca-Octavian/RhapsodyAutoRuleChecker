@@ -8,16 +8,24 @@ import java.util.*;
 
 public final class WizardState {
 
-    private String                           scopePath = "";
-    private String                           mode      = "lenient";
-    private final List<AliasDefinition>      aliases   = new ArrayList<>();
-    private final List<ElementSetDefinition> sets      = new ArrayList<>();
-    private final List<RuleRequest>          rules     = new ArrayList<>();
+    private String                           scopePath  = "";
+    private String                           mode       = "lenient";
+    private String                           sourcePath = null;
+    private final List<AliasDefinition>      aliases    = new ArrayList<>();
+    private final List<ElementSetDefinition> sets       = new ArrayList<>();
+    private final List<RuleRequest>          rules      = new ArrayList<>();
 
     // ── Getters ───────────────────────────────────────────────────────────────
 
-    public String scopePath() { return scopePath; }
-    public String mode()      { return mode; }
+    public String scopePath()  { return scopePath; }
+    public String mode()       { return mode; }
+
+    /**
+     * Path of the YAML file this state was originally loaded from via
+     * "Edit in Wizard", or null for a brand-new config. Used by WizardDialog
+     * to save back to the same file without re-prompting for a location.
+     */
+    public String sourcePath() { return sourcePath; }
 
     public List<AliasDefinition>      aliases() { return Collections.unmodifiableList(aliases); }
     public List<ElementSetDefinition> sets()    { return Collections.unmodifiableList(sets); }
@@ -25,8 +33,9 @@ public final class WizardState {
 
     // ── Fluent setters ────────────────────────────────────────────────────────
 
-    public WizardState scopePath(String p) { this.scopePath = p; return this; }
-    public WizardState mode(String m)      { this.mode = m;      return this; }
+    public WizardState scopePath(String p)  { this.scopePath = p;  return this; }
+    public WizardState mode(String m)       { this.mode = m;       return this; }
+    public WizardState sourcePath(String p) { this.sourcePath = p; return this; }
 
     public WizardState addAlias(AliasDefinition a)    { aliases.add(a); return this; }
     public WizardState addSet(ElementSetDefinition s) { sets.add(s);    return this; }
@@ -56,7 +65,7 @@ public final class WizardState {
 
     public WizardState replaceRule(int index, RuleRequest r) { rules.set(index, r); return this; }
 
-    /** Togglează enabled pe regula de la index, returnând starea. */
+    /** Toggles enabled on the rule at the given index, returning the state. */
     public WizardState setRuleEnabled(int index, boolean enabled) {
         rules.set(index, rules.get(index).withEnabled(enabled));
         return this;
@@ -73,9 +82,10 @@ public final class WizardState {
         private final String              elementSetId;
         private final Map<String, Object> params;
         private final String              message;
-        private final boolean             enabled;          // ← NOU (default true)
+        private final boolean             enabled;
+        private final String              group;
 
-        /** Constructor original — enabled = true implicit. */
+        /** Constructor without group or enabled — both default (null / true). */
         public RuleRequest(
                 String              id,
                 String              title,
@@ -85,10 +95,10 @@ public final class WizardState {
                 Map<String, Object> params,
                 String              message
         ) {
-            this(id, title, ruleType, targetAliasId, elementSetId, params, message, true);
+            this(id, title, ruleType, targetAliasId, elementSetId, params, message, true, null);
         }
 
-        /** Constructor complet cu enabled. */
+        /** Constructor with enabled but no group. */
         public RuleRequest(
                 String              id,
                 String              title,
@@ -98,6 +108,21 @@ public final class WizardState {
                 Map<String, Object> params,
                 String              message,
                 boolean             enabled
+        ) {
+            this(id, title, ruleType, targetAliasId, elementSetId, params, message, enabled, null);
+        }
+
+        /** Full constructor with enabled and group. */
+        public RuleRequest(
+                String              id,
+                String              title,
+                String              ruleType,
+                String              targetAliasId,
+                String              elementSetId,
+                Map<String, Object> params,
+                String              message,
+                boolean             enabled,
+                String              group
         ) {
             this.id            = id;
             this.title         = title;
@@ -110,6 +135,7 @@ public final class WizardState {
                                              : Collections.emptyMap()));
             this.message       = message;
             this.enabled       = enabled;
+            this.group         = group;
         }
 
         public String              id()            { return id; }
@@ -120,11 +146,18 @@ public final class WizardState {
         public Map<String, Object> params()        { return params; }
         public String              message()       { return message; }
         public boolean             isEnabled()     { return enabled; }
+        public String              group()         { return group; }
 
-        /** Returnează o copie cu enabled modificat (imutabilitate păstrată). */
+        /** Returns a copy with enabled modified (immutability preserved). */
         public RuleRequest withEnabled(boolean enabled) {
             return new RuleRequest(id, title, ruleType, targetAliasId,
-                                   elementSetId, params, message, enabled);
+                                   elementSetId, params, message, enabled, group);
+        }
+
+        /** Returns a copy with group modified (immutability preserved). */
+        public RuleRequest withGroup(String group) {
+            return new RuleRequest(id, title, ruleType, targetAliasId,
+                                   elementSetId, params, message, enabled, group);
         }
 
         @Override

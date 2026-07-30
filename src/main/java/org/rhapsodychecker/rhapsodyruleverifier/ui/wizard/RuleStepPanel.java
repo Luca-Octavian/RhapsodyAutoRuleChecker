@@ -87,14 +87,16 @@ public final class RuleStepPanel extends JPanel {
     }
 
     /**
-     * Formateaza un RuleRequest pentru afisare in lista, in loc de dump-ul
-     * brut r.toString() (care expune reprezentarea interna a record-ului).
+     * Formats a RuleRequest for display in the list.
      */
     private static String formatEntry(WizardState.RuleRequest r) {
         StringBuilder sb = new StringBuilder(r.id());
         sb.append("  [").append(r.ruleType().toLowerCase()).append("]");
         if (r.elementSetId()   != null) sb.append("  on ").append(r.elementSetId());
         if (r.targetAliasId()  != null) sb.append("  → ").append(r.targetAliasId());
+        if (r.group() != null && !r.group().trim().isEmpty()) {
+            sb.append("  group=").append(r.group());
+        }
         return sb.toString();
     }
 

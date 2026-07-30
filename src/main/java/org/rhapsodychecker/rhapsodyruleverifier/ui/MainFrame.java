@@ -2,6 +2,7 @@
 package org.rhapsodychecker.rhapsodyruleverifier.ui;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
+import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.controller.MainFrameController;
@@ -179,8 +180,8 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     @Override public void setStatus(String text) { statusBar.setText(text); }
 
     @Override public void loadTree(PackageNode tree) { treePanel.loadTree(tree); }
-    @Override public void loadResults(List<RuleResult> results, ElementIndex index) {
-        resultsPanel.loadResults(results, index);
+    @Override public void loadResults(List<RuleResult> results, ElementIndex index, List<RuleSpec> specs) {
+        resultsPanel.loadResults(results, index, specs);
     }
 
     @Override public void clearTree()    { treePanel.clear(); }

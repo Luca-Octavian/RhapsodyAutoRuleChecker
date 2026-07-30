@@ -35,6 +35,7 @@ public final class WizardDialog extends JDialog {
     private final JButton    backBtn     = new JButton("← Back");
     private final JButton    nextBtn     = new JButton("Next →");
     private final JButton    cancelBtn   = new JButton("Cancel");
+    private final JButton    saveAsBtn   = new JButton("Save As...");
     private final JLabel     stepLabel   = new JLabel();
 
     private final WizardState       wizardState;
@@ -80,10 +81,16 @@ public final class WizardDialog extends JDialog {
         cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         backBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         nextBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        saveAsBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+
+        // "Save As..." doar disponibil pe pasul Review, si doar are sens
+        // cand editam un config existent (altfel e identic cu Save & Close).
+        saveAsBtn.setVisible(false);
 
         JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
         navPanel.add(cancelBtn);
         navPanel.add(backBtn);
+        navPanel.add(saveAsBtn);
         navPanel.add(nextBtn);
         add(navPanel, BorderLayout.SOUTH);
     }
@@ -106,6 +113,11 @@ public final class WizardDialog extends JDialog {
                 saveConfig();
             }
         });
+
+        saveAsBtn.addActionListener(e -> {
+            reviewPanel.applyToState();
+            promptAndSave();
+        });
     }
 
     private void updateStepUI() {
@@ -122,10 +134,26 @@ public final class WizardDialog extends JDialog {
 
         backBtn.setEnabled(currentStep > 0);
         nextBtn.setText(currentStep == STEP_ORDER.length - 1 ? "Save & Close" : "Next →");
+
+        boolean onReview = STEP_ORDER[currentStep].equals(STEP_REVIEW);
+        saveAsBtn.setVisible(onReview && wizardState.sourcePath() != null);
     }
 
     private void saveConfig() {
-    	reviewPanel.applyToState();
+        reviewPanel.applyToState();
+
+        String existingPath = wizardState.sourcePath();
+        if (existingPath != null && !existingPath.trim().isEmpty()) {
+            // Editam un config existent: salvam direct la aceeasi cale,
+            // fara sa mai intrebam userul unde. "Save As..." ramane
+            // disponibil daca vrea totusi alta locatie.
+            writeConfig(existingPath);
+        } else {
+            promptAndSave();
+        }
+    }
+
+    private void promptAndSave() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Save Config As");
         chooser.setSelectedFile(new File("rule-config.yaml"));
@@ -137,9 +165,14 @@ public final class WizardDialog extends JDialog {
         String path = chooser.getSelectedFile().getAbsolutePath();
         if (!path.endsWith(".yaml") && !path.endsWith(".yml")) path += ".yaml";
 
+        writeConfig(path);
+    }
+
+    private void writeConfig(String path) {
         try {
             YamlPresetWriter.write(wizardState, path);
             savedConfigPath = path;
+            wizardState.sourcePath(path);
             JOptionPane.showMessageDialog(this,
                     "Config saved to:\n" + path,
                     "Saved", JOptionPane.INFORMATION_MESSAGE);

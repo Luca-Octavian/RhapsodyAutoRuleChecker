@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Serializează WizardState → fișier YAML compatibil cu ConfigLoader.
- * Scriere manuală (fără Jackson/SnakeYAML) pentru a controla formatarea.
+ * Serializes WizardState to a YAML file compatible with ConfigLoader.
+ * Manual writing (no Jackson/SnakeYAML) to control formatting.
  */
 public final class YamlPresetWriter {
 
@@ -87,7 +87,7 @@ public final class YamlPresetWriter {
                 break;
             case DESCRIPTION:
             case NAME:
-                // niciun câmp extra
+                // no extra fields
                 break;
         }
     }
@@ -108,6 +108,10 @@ public final class YamlPresetWriter {
             out.add("    title: \"" + escape(r.title()) + "\"");
         }
         out.add("    type: " + r.ruleType());
+
+        if (r.group() != null && !r.group().isEmpty()) {
+            out.add("    group: " + r.group());
+        }
 
         if (r.elementSetId() != null) {
             out.add("    appliesTo: { set: " + r.elementSetId() + " }");
@@ -130,7 +134,7 @@ public final class YamlPresetWriter {
         out.add("");
     }
 
-    // ── Formatare YAML ────────────────────────────────────────────────────────
+    // ── YAML formatting ────────────────────────────────────────────────────────
 
     private static String kindYaml(AliasKind kind) {
         switch (kind) {
@@ -179,8 +183,8 @@ public final class YamlPresetWriter {
         return false;
     }
 
-    @SuppressWarnings("unchecked")
     private static String paramValueYaml(Object value) {
+        if (value == null) return "";
         if (value instanceof List) {
             // Safely convert all items to strings (List may contain Integer/String mix)
             List<String> stringList = new ArrayList<>();

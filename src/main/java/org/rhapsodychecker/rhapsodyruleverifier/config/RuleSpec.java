@@ -14,6 +14,11 @@ public final class RuleSpec {
     private final String title;
     private final String message;
 
+    // Optional grouping label. Rules sharing the same group are evaluated
+    // individually and their per-element results are then conjoined (ALL must
+    // pass) in a pure post-processing step by RuleGrouping.
+    private final String group;
+
     // Scope: either a set reference or inline filters
     private final String appliesToSet;
     private final List<String> appliesToTypes;
@@ -36,6 +41,7 @@ public final class RuleSpec {
         this.enabled = b.enabled;
         this.title = b.title;
         this.message = b.message;
+        this.group = b.group;
 
         this.appliesToSet = b.appliesToSet;
         this.appliesToTypes = freezeList(b.appliesToTypes);
@@ -52,27 +58,6 @@ public final class RuleSpec {
         this.params = b.params != null
                 ? Collections.unmodifiableMap(new LinkedHashMap<>(b.params))
                 : Collections.emptyMap();
-
-    }
-
-    private void validate() {
-        if (appliesToSet == null && appliesToTypes.isEmpty() && appliesToStereotypes.isEmpty()) {
-            throw new IllegalArgumentException("Rule '" + id + "': appliesTo must specify a set or at least types/stereotypes");
-        }
-        switch (type) {
-            case REQUIRED_VALUE:
-            case NAMING_PATTERN:
-                if (target == null || target.trim().isEmpty())
-                    throw new IllegalArgumentException("Rule '" + id + "': " + type + " requires a target alias");
-                break;
-            case RELATION_EXISTS:
-                // target is optional; params must have operator + value
-                break;
-            case REQUIRED_STEREOTYPE:
-            case REQUIRED_STEREOTYPE_ONE_OF:
-                // target or params must specify stereotypes
-                break;
-        }
     }
 
     public String id() { return id; }
@@ -80,6 +65,13 @@ public final class RuleSpec {
     public boolean enabled() { return enabled; }
     public Optional<String> title() { return Optional.ofNullable(title); }
     public Optional<String> message() { return Optional.ofNullable(message); }
+
+    /**
+     * Optional group label. When non-null, results from all rules sharing the
+     * same group are conjoined per element: the element passes the group only
+     * if every rule in the group passes for it.
+     */
+    public Optional<String> group() { return Optional.ofNullable(group); }
 
     public Optional<String> appliesToSet() { return Optional.ofNullable(appliesToSet); }
     public List<String> appliesToTypes() { return appliesToTypes; }
@@ -93,7 +85,8 @@ public final class RuleSpec {
 
     @Override
     public String toString() {
-        return "RuleSpec{id='" + id + "', type=" + type + ", enabled=" + enabled + "}";
+        return "RuleSpec{id='" + id + "', type=" + type + ", enabled=" + enabled
+                + (group != null ? ", group='" + group + "'" : "") + "}";
     }
 
     public static Builder builder() { return new Builder(); }
@@ -104,6 +97,7 @@ public final class RuleSpec {
         private boolean enabled = true;
         private String title;
         private String message;
+        private String group;
         private String appliesToSet;
         private List<String> appliesToTypes;
         private List<String> appliesToStereotypes;
@@ -120,6 +114,7 @@ public final class RuleSpec {
         public Builder enabled(boolean enabled) { this.enabled = enabled; return this; }
         public Builder title(String title) { this.title = title; return this; }
         public Builder message(String message) { this.message = message; return this; }
+        public Builder group(String group) { this.group = group; return this; }
         public Builder appliesToSet(String set) { this.appliesToSet = set; return this; }
         public Builder appliesToTypes(List<String> types) { this.appliesToTypes = types; return this; }
         public Builder appliesToStereotypes(List<String> stereos) { this.appliesToStereotypes = stereos; return this; }
