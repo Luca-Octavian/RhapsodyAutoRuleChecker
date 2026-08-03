@@ -1,7 +1,6 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/adapter/rhapsody/RhapsodyEvaluationContext.java
 package org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody;
 
-import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
@@ -15,7 +14,6 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     private final RhapsodyAliasResolver aliasResolver;
     private final RhapsodyModelSnapshot snapshot;
-    private final RuleCheckerConfig config;
     private final ElementIndex index;
     private final ElementSelector selector;
 
@@ -24,12 +22,10 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     public RhapsodyEvaluationContext(RhapsodyAliasResolver aliasResolver,
                                      RhapsodyModelSnapshot snapshot,
-                                     RuleCheckerConfig config,
                                      ElementIndex index,
                                      ElementSelector selector) {
         this.aliasResolver = Objects.requireNonNull(aliasResolver);
         this.snapshot = Objects.requireNonNull(snapshot);
-        this.config = Objects.requireNonNull(config);
         this.index = Objects.requireNonNull(index);
         this.selector = Objects.requireNonNull(selector);
     }
@@ -89,9 +85,6 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
 
     @Override
     public Optional<Object> getOption(String key) {
-        if ("mode".equalsIgnoreCase(key)) {
-            return Optional.of(config.mode());
-        }
         return Optional.empty();
     }
 

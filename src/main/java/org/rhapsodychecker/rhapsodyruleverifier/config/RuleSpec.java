@@ -1,6 +1,7 @@
 package org.rhapsodychecker.rhapsodyruleverifier.config;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
+import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
 
 import java.util.*;
 
@@ -29,8 +30,8 @@ public final class RuleSpec {
     // Conditions (optional predicates)
     private final List<Map<String, Object>> conditions;
 
-    // Target alias for value-based rules
-    private final String target;
+    // Target specification for value-based rules
+    private final TargetSpec target;
 
     // Rule-specific parameters
     private final Map<String, Object> params;
@@ -54,6 +55,7 @@ public final class RuleSpec {
                 : Collections.emptyList();
 
         this.target = b.target;
+
 
         this.params = b.params != null
                 ? Collections.unmodifiableMap(new LinkedHashMap<>(b.params))
@@ -80,7 +82,7 @@ public final class RuleSpec {
     public List<String> appliesToExcludePackages() { return appliesToExcludePackages; }
 
     public List<Map<String, Object>> conditions() { return conditions; }
-    public Optional<String> target() { return Optional.ofNullable(target); }
+    public Optional<TargetSpec> target() { return Optional.ofNullable(target); }
     public Map<String, Object> params() { return params; }
 
     @Override
@@ -104,7 +106,7 @@ public final class RuleSpec {
         private List<String> appliesToIncludePackages;
         private List<String> appliesToExcludePackages;
         private List<Map<String, Object>> conditions;
-        private String target;
+        private TargetSpec target;
         private Map<String, Object> params;
 
         private Builder() {}
@@ -121,7 +123,7 @@ public final class RuleSpec {
         public Builder appliesToIncludePackages(List<String> pkgs) { this.appliesToIncludePackages = pkgs; return this; }
         public Builder appliesToExcludePackages(List<String> pkgs) { this.appliesToExcludePackages = pkgs; return this; }
         public Builder conditions(List<Map<String, Object>> conditions) { this.conditions = conditions; return this; }
-        public Builder target(String target) { this.target = target; return this; }
+        public Builder target(TargetSpec target) { this.target = target; return this; }
         public Builder params(Map<String, Object> params) { this.params = params; return this; }
         public RuleSpec build() { return new RuleSpec(this); }
     }

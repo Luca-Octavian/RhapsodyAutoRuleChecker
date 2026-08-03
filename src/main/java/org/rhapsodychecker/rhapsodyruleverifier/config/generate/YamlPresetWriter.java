@@ -1,8 +1,8 @@
 // config/generate/YamlPresetWriter.java
 package org.rhapsodychecker.rhapsodyruleverifier.config.generate;
 
-import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
+import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.AliasKind;
 
 import java.io.IOException;
@@ -25,17 +25,7 @@ public final class YamlPresetWriter {
         List<String> lines = new ArrayList<>();
 
         lines.add("schemaVersion: 1");
-        lines.add("mode: " + state.mode());
         lines.add("");
-
-        // ── aliases ───────────────────────────────────────────────────────────
-        if (!state.aliases().isEmpty()) {
-            lines.add("aliases:");
-            for (AliasDefinition alias : state.aliases()) {
-                writeAlias(alias, lines);
-            }
-            lines.add("");
-        }
 
         // ── elementSets ───────────────────────────────────────────────────────
         if (!state.sets().isEmpty()) {
@@ -58,39 +48,6 @@ public final class YamlPresetWriter {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
-
-    @SuppressWarnings("incomplete-switch")
-	private static void writeAlias(AliasDefinition a, List<String> out) {
-        out.add("  " + a.id() + ":");
-        out.add("    kind: " + kindYaml(a.kind()));
-        a.title().ifPresent(t      -> out.add("    title: \"" + escape(t) + "\""));
-        a.help().ifPresent(h       -> out.add("    help: \"" + escape(h) + "\""));
-
-        switch (a.kind()) {
-            case TAGGED_VALUE:
-                a.profileName().ifPresent(p    -> out.add("    profileName: " + p));
-                a.tagName().ifPresent(t        -> out.add("    tagName: " + t));
-                a.stereotypeName().ifPresent(s -> out.add("    stereotypeName: " + s));
-                out.add("    type: " + a.valueType().name().toLowerCase());
-                if (!a.values().isEmpty()) {
-                    out.add("    values: " + toInlineList(a.values()));
-                }
-                break;
-            case STEREOTYPE:
-                a.stereotypeName().ifPresent(s -> out.add("    stereotypeName: " + s));
-                break;
-            case STEREOTYPE_SET:
-                a.profileName().ifPresent(p -> out.add("    profileName: " + p));
-                if (!a.stereotypeNames().isEmpty()) {
-                    out.add("    stereotypeNames: " + toInlineList(a.stereotypeNames()));
-                }
-                break;
-            case DESCRIPTION:
-            case NAME:
-                // no extra fields
-                break;
-        }
-    }
 
     private static void writeElementSet(ElementSetDefinition s, List<String> out) {
         out.add("  " + s.id() + ":");
@@ -116,9 +73,12 @@ public final class YamlPresetWriter {
         if (r.elementSetId() != null) {
             out.add("    appliesTo: { set: " + r.elementSetId() + " }");
         }
-        if (r.targetAliasId() != null) {
-            out.add("    target: " + r.targetAliasId());
+
+        // Write target as a YAML map
+        if (r.targetSpec() != null) {
+            writeTarget(r.targetSpec(), out);
         }
+
         if (!r.params().isEmpty()) {
             out.add("    params:");
             for (Map.Entry<String, Object> e : r.params().entrySet()) {
@@ -134,16 +94,34 @@ public final class YamlPresetWriter {
         out.add("");
     }
 
+    private static void writeTarget(TargetSpec t, List<String> out) {
+        out.add("    target:");
+        out.add("      kind: " + kindYaml(t.kind()));
+
+        if (t.kind() == AliasKind.TAGGED_VALUE) {
+            t.profileName().ifPresent(p -> out.add("      profile: " + p));
+            t.tagName().ifPresent(n     -> out.add("      tag: " + n));
+            t.stereotypeName().ifPresent(s -> out.add("      stereotypeName: " + s));
+            if (t.valueType() != null && t.valueType() != org.rhapsodychecker.rhapsodyruleverifier.core.config.ValueType.STRING) {
+                out.add("      type: " + t.valueType().name().toLowerCase());
+            }
+            if (!t.values().isEmpty()) {
+                out.add("      values: " + toInlineList(t.values()));
+            }
+        }
+    }
+
     // ── YAML formatting ────────────────────────────────────────────────────────
 
     private static String kindYaml(AliasKind kind) {
         switch (kind) {
-            case TAGGED_VALUE:   return "taggedValue";
-            case STEREOTYPE:     return "stereotype";
-            case STEREOTYPE_SET: return "stereotypeSet";
-            case DESCRIPTION:    return "description";
-            case NAME:           return "name";
-            default:             return kind.name().toLowerCase();
+            case TAGGED_VALUE:      return "taggedValue";
+            case DESCRIPTION:       return "description";
+            case NAME:              return "name";
+            case PORT_TYPE:         return "portType";
+            case PORT_DIRECTION:    return "portDirection";
+            case PORT_MULTIPLICITY: return "portMultiplicity";
+            default:                return kind.name().toLowerCase();
         }
     }
 
@@ -152,8 +130,6 @@ public final class YamlPresetWriter {
         for (int i = 0; i < items.size(); i++) {
             if (i > 0) sb.append(", ");
             String val = items.get(i);
-            // Quote values that YAML might misinterpret as non-string types
-            // (integers, floats, booleans, or values with special characters)
             if (needsQuoting(val)) {
                 sb.append("\"").append(escape(val)).append("\"");
             } else {
@@ -164,21 +140,14 @@ public final class YamlPresetWriter {
         return sb.toString();
     }
 
-    /**
-     * Returns true if the value needs YAML quoting to prevent type coercion.
-     * Values like "1", "1.0", "true", "yes", "1..1" get quoted to stay as strings.
-     */
     private static boolean needsQuoting(String val) {
         if (val == null || val.isEmpty()) return true;
-        // Numeric values
         try { Integer.parseInt(val); return true; } catch (NumberFormatException e) { /* not int */ }
         try { Double.parseDouble(val); return true; } catch (NumberFormatException e) { /* not double */ }
-        // YAML boolean words
         String lower = val.toLowerCase();
         if ("true".equals(lower) || "false".equals(lower)
                 || "yes".equals(lower) || "no".equals(lower)
                 || "on".equals(lower) || "off".equals(lower)) return true;
-        // Contains dots between digits (e.g. "1..1") — YAML might parse oddly
         if (val.contains("..")) return true;
         return false;
     }
@@ -186,7 +155,6 @@ public final class YamlPresetWriter {
     private static String paramValueYaml(Object value) {
         if (value == null) return "";
         if (value instanceof List) {
-            // Safely convert all items to strings (List may contain Integer/String mix)
             List<String> stringList = new ArrayList<>();
             for (Object item : (List<?>) value) {
                 stringList.add(item != null ? item.toString() : "");

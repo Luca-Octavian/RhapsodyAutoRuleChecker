@@ -93,7 +93,7 @@ public final class RuleStepPanel extends JPanel {
         StringBuilder sb = new StringBuilder(r.id());
         sb.append("  [").append(r.ruleType().toLowerCase()).append("]");
         if (r.elementSetId()   != null) sb.append("  on ").append(r.elementSetId());
-        if (r.targetAliasId()  != null) sb.append("  → ").append(r.targetAliasId());
+        if (r.targetSpec()     != null) sb.append("  → ").append(r.targetSpec().kind());
         if (r.group() != null && !r.group().trim().isEmpty()) {
             sb.append("  group=").append(r.group());
         }

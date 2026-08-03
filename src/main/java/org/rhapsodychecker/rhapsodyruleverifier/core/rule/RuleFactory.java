@@ -68,7 +68,7 @@ public final class RuleFactory {
         configMap.put("ruleId", spec.id());
         spec.title().ifPresent(t -> configMap.put("ruleTitle", t));
         spec.message().ifPresent(m -> configMap.put("ruleMessage", m));
-        spec.target().ifPresent(t -> configMap.put("target", t));
+        spec.target().ifPresent(t -> configMap.put("target", t));  // TargetSpec object
         configMap.put("params", spec.params());
 
         rule.configure(configMap);

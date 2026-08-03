@@ -242,10 +242,25 @@ public final class IncrementalCacheUpdater {
             }
         }
 
+        // Build guidToName early — needed for OSLC-aware relation diff in Phase 2
+        // and also used in Phase 3 for owner path resolution.
+        Map<String, String> guidToName = new HashMap<String, String>(fingerprints.size());
+        for (Map.Entry<String, IRPModelElement> entry : scannedHandles.entrySet()) {
+            ElementFingerprint fp = fingerprints.get(entry.getKey());
+            if (fp != null) {
+                guidToName.put(fp.guid(), fp.name());
+            }
+        }
+        for (CachedElement ce : existingCache.getElements()) {
+            if (!guidToName.containsKey(ce.getGuid())) {
+                guidToName.put(ce.getGuid(), ce.getName());
+            }
+        }
+
         // Check if relation changes affect additional elements
         if (!scanIncomplete) {
             checkRelationChanges(freshRels, existingCache.getRelationsByOwner(),
-                    cachedByGuid, fingerprints, changedGuids);
+                    cachedByGuid, fingerprints, changedGuids, guidToName);
         } else {
             AppLogger.info("Skipping relation diff — scan is incomplete");
         }
@@ -265,19 +280,7 @@ public final class IncrementalCacheUpdater {
         needsFullRead.addAll(newGuids);
         needsFullRead.addAll(changedGuids);
 
-        Map<String, String> guidToName = new HashMap<String, String>(fingerprints.size());
         Map<String, String> guidToOwnerGuid = new HashMap<String, String>(fingerprints.size());
-        for (Map.Entry<String, IRPModelElement> entry : scannedHandles.entrySet()) {
-            ElementFingerprint fp = fingerprints.get(entry.getKey());
-            if (fp != null) {
-                guidToName.put(fp.guid(), fp.name());
-            }
-        }
-        for (CachedElement ce : existingCache.getElements()) {
-            if (!guidToName.containsKey(ce.getGuid())) {
-                guidToName.put(ce.getGuid(), ce.getName());
-            }
-        }
 
         for (String guid : needsFullRead) {
             IRPModelElement elt = scannedHandles.get(guid);
@@ -342,6 +345,17 @@ public final class IncrementalCacheUpdater {
                 freshOslcNames.add(fp.name());
             }
         }
+
+        // Fix 2: Build set of OSLC names that successfully got a fresh record in Phase 3.
+        // If readFullElement() failed silently for an OSLC element, we must NOT dedup
+        // the old cached version — otherwise the element disappears entirely.
+        Set<String> successfullyUpdatedOslcNames = new HashSet<String>();
+        for (ElementRecord rec : updatedRecords) {
+            if (RhapsodyModelLoader.isRemoteOslcResource(rec.guid(), rec.name())) {
+                successfullyUpdatedOslcNames.add(rec.name());
+            }
+        }
+
         int oslcDeduped = 0;
 
         for (CachedElement ce : existingCache.getElements()) {
@@ -349,7 +363,8 @@ public final class IncrementalCacheUpdater {
             if (updatedByGuid.containsKey(ce.getGuid())) continue;
 
             String ceName = ce.getName();
-            if (ceName != null && freshOslcNames.contains(ceName)) {
+            if (ceName != null && freshOslcNames.contains(ceName)
+                    && successfullyUpdatedOslcNames.contains(ceName)) { // Fix 2: guard added
                 oslcDeduped++;
                 continue;
             }
@@ -434,7 +449,27 @@ public final class IncrementalCacheUpdater {
             AppLogger.info("Merged relations: " + finalRels.size()
                     + " owners (cached base + fresh overlay for scanned elements)");
         } else {
-            finalRels = freshRels;
+            // Fix 3: Start with fresh rels as the base, but preserve cached rel
+            // entries for owners that were NOT scanned fresh (e.g. old OSLC GUID keys).
+            finalRels = new HashMap<String, List<RhapsodyModelSnapshot.RelationInfo>>(freshRels);
+
+            if (existingCache.getRelationsByOwner() != null) {
+                for (Map.Entry<String, List<CachedRelation>> entry
+                        : existingCache.getRelationsByOwner().entrySet()) {
+                    String ownerGuid = entry.getKey();
+                    if (finalRels.containsKey(ownerGuid)) continue; // fresh wins
+                    if (removedSet.contains(ownerGuid)) continue;   // truly gone
+                    if (!cachedByGuid.containsKey(ownerGuid)) continue; // unknown
+                    // Carry forward this cached rel entry
+                    List<RhapsodyModelSnapshot.RelationInfo> infos =
+                            new ArrayList<RhapsodyModelSnapshot.RelationInfo>();
+                    for (CachedRelation cr : entry.getValue()) {
+                        infos.add(new RhapsodyModelSnapshot.RelationInfo(
+                                cr.getGuid(), cr.getMetaClass(), cr.getStereotypes(), cr.getOtherEndGuid()));
+                    }
+                    finalRels.put(ownerGuid, infos);
+                }
+            }
         }
 
         RhapsodyModelSnapshot snapshot = new RhapsodyModelSnapshot(
@@ -570,7 +605,8 @@ public final class IncrementalCacheUpdater {
             Map<String, List<CachedRelation>> cachedRels,
             Map<String, CachedElement> cachedByGuid,
             Map<String, ElementFingerprint> fingerprints,
-            List<String> changedGuids) {
+            List<String> changedGuids,
+            Map<String, String> guidToName) { // Fix 1: pass guidToName for OSLC-aware comparison
 
         if (cachedRels == null) return;
 
@@ -590,7 +626,7 @@ public final class IncrementalCacheUpdater {
             if (freshList == null) freshList = Collections.emptyList();
             if (cachedList == null) cachedList = Collections.emptyList();
 
-            if (!relsMatch(freshList, cachedList)) {
+            if (!relsMatch(freshList, cachedList, guidToName)) { // Fix 1: pass guidToName
                 if (fingerprints.containsKey(ownerGuid)) {
                     changedGuids.add(ownerGuid);
                     alreadyChanged.add(ownerGuid);
@@ -600,30 +636,56 @@ public final class IncrementalCacheUpdater {
         }
     }
 
+    /**
+     * Fix 1: OSLC-aware relation comparison.
+     * For OSLC elements whose GUIDs rotate on every load, compare by resolved name
+     * ("oslc:" + name) instead of by GUID. This prevents every element with an OSLC
+     * relation from being spuriously marked as changed on every incremental scan.
+     */
     private boolean relsMatch(List<RhapsodyModelSnapshot.RelationInfo> fresh,
-                              List<CachedRelation> cached) {
+                              List<CachedRelation> cached,
+                              Map<String, String> guidToName) {
         if (fresh.size() != cached.size()) return false;
 
-        // Compare by GUID sets (order doesn't matter)
-        Set<String> freshGuids = new LinkedHashSet<String>();
+        // Build comparison keys: for OSLC elements use "oslc:<name>", otherwise use GUID
+        Set<String> freshKeys = new LinkedHashSet<String>();
         for (RhapsodyModelSnapshot.RelationInfo r : fresh) {
-            freshGuids.add(r.guid());
+            String name = guidToName.get(r.guid());
+            if (name != null && RhapsodyModelLoader.isRemoteOslcResource(r.guid(), name)) {
+                freshKeys.add("oslc:" + name);
+            } else {
+                freshKeys.add(r.guid());
+            }
         }
-        Set<String> cachedGuids = new LinkedHashSet<String>();
+        Set<String> cachedKeys = new LinkedHashSet<String>();
         for (CachedRelation r : cached) {
-            cachedGuids.add(r.getGuid());
+            String name = guidToName.get(r.getGuid());
+            if (name != null && RhapsodyModelLoader.isRemoteOslcResource(r.getGuid(), name)) {
+                cachedKeys.add("oslc:" + name);
+            } else {
+                cachedKeys.add(r.getGuid());
+            }
         }
-        if (!freshGuids.equals(cachedGuids)) return false;
+        if (!freshKeys.equals(cachedKeys)) return false;
 
-        // Also check otherEndGuid, metaClass and stereotypes for each
-        Map<String, RhapsodyModelSnapshot.RelationInfo> freshByGuid =
+        // For non-OSLC relations, also check otherEndGuid, metaClass and stereotypes
+        Map<String, RhapsodyModelSnapshot.RelationInfo> freshByKey =
                 new LinkedHashMap<String, RhapsodyModelSnapshot.RelationInfo>();
         for (RhapsodyModelSnapshot.RelationInfo r : fresh) {
-            freshByGuid.put(r.guid(), r);
+            String name = guidToName.get(r.guid());
+            String key = (name != null && RhapsodyModelLoader.isRemoteOslcResource(r.guid(), name))
+                    ? "oslc:" + name : r.guid();
+            freshByKey.put(key, r);
         }
         for (CachedRelation cr : cached) {
-            RhapsodyModelSnapshot.RelationInfo fr = freshByGuid.get(cr.getGuid());
+            String name = guidToName.get(cr.getGuid());
+            String key = (name != null && RhapsodyModelLoader.isRemoteOslcResource(cr.getGuid(), name))
+                    ? "oslc:" + name : cr.getGuid();
+            RhapsodyModelSnapshot.RelationInfo fr = freshByKey.get(key);
             if (fr == null) return false;
+
+            // Skip deep comparison for OSLC relations (GUIDs are expected to differ)
+            if (key.startsWith("oslc:")) continue;
 
             String freshOther = fr.otherEndGuid();
             String cachedOther = cr.getOtherEndGuid();

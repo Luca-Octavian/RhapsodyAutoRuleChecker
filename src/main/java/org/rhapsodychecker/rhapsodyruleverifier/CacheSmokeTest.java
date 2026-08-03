@@ -107,19 +107,19 @@ public class CacheSmokeTest {
 
             // Live evaluation
             ElementIndex liveIndex = ElementIndex.build(liveSnapshot.records());
-            RhapsodyAliasResolver liveResolver = new RhapsodyAliasResolver(config, liveSnapshot);
+            RhapsodyAliasResolver liveResolver = new RhapsodyAliasResolver(liveSnapshot);
             ElementSelector liveSelector = new ElementSelector(liveIndex, config);
             RhapsodyEvaluationContext liveContext = new RhapsodyEvaluationContext(
-                    liveResolver, liveSnapshot, config, liveIndex, liveSelector);
+                    liveResolver, liveSnapshot, liveIndex, liveSelector);
             RuleEngine liveEngine = new RuleEngine(config, liveSelector, liveContext);
             List<RuleResult> liveResults = liveEngine.evaluateAll();
 
             // Cached evaluation
             ElementIndex cachedIndex = ElementIndex.build(cachedSnapshot.records());
-            RhapsodyAliasResolver cachedResolver = new RhapsodyAliasResolver(config, cachedSnapshot);
+            RhapsodyAliasResolver cachedResolver = new RhapsodyAliasResolver(cachedSnapshot);
             ElementSelector cachedSelector = new ElementSelector(cachedIndex, config);
             RhapsodyEvaluationContext cachedContext = new RhapsodyEvaluationContext(
-                    cachedResolver, cachedSnapshot, config, cachedIndex, cachedSelector);
+                    cachedResolver, cachedSnapshot, cachedIndex, cachedSelector);
             RuleEngine cachedEngine = new RuleEngine(config, cachedSelector, cachedContext);
             List<RuleResult> cachedResults = cachedEngine.evaluateAll();
 

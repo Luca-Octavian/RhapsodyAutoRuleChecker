@@ -1,11 +1,9 @@
 // config/generate/ConfigBuilder.java
 package org.rhapsodychecker.rhapsodyruleverifier.config.generate;
 
-import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
-import org.rhapsodychecker.rhapsodyruleverifier.core.config.ConfigMode;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 
 import java.util.*;
@@ -17,7 +15,7 @@ import java.util.*;
  * If the user wants to export/save the configuration, YamlPresetWriter
  * handles serialization separately.
  *
- * Cross-reference validation (alias exists, set exists) is done by
+ * Cross-reference validation (set exists) is done by
  * RuleCheckerConfig.validate() at build time — so we don't duplicate logic here.
  */
 public final class ConfigBuilder {
@@ -25,28 +23,17 @@ public final class ConfigBuilder {
     private ConfigBuilder() {}
 
     public static RuleCheckerConfig build(WizardState state) {
-        Map<String, AliasDefinition>      aliasMap = buildAliasMap(state.aliases());
         Map<String, ElementSetDefinition> setMap   = buildSetMap(state.sets());
         List<RuleSpec>                    specs    = buildRuleSpecs(state.rules());
 
         return RuleCheckerConfig.builder()
                 .schemaVersion(1)
-                .mode(parseMode(state.mode()))
-                .aliases(aliasMap)
                 .elementSets(setMap)
                 .rules(specs)
                 .build();
     }
 
     // ---------------------------------------------------------------
-
-    private static Map<String, AliasDefinition> buildAliasMap(List<AliasDefinition> aliases) {
-        Map<String, AliasDefinition> map = new LinkedHashMap<>();
-        for (AliasDefinition a : aliases) {
-            map.put(a.id(), a);
-        }
-        return map;
-    }
 
     private static Map<String, ElementSetDefinition> buildSetMap(List<ElementSetDefinition> sets) {
         Map<String, ElementSetDefinition> map = new LinkedHashMap<>();
@@ -66,7 +53,7 @@ public final class ConfigBuilder {
                             .id(req.id())
                             .title(req.title())
                             .type(type)
-                            .target(req.targetAliasId())
+                            .target(req.targetSpec())
                             .appliesToSet(req.elementSetId())
                             .params(req.params())
                             .message(req.message())
@@ -76,16 +63,6 @@ public final class ConfigBuilder {
             );
         }
         return specs;
-    }
-
-    private static ConfigMode parseMode(String raw) {
-        if (raw == null) return ConfigMode.LENIENT;
-        switch (raw.toUpperCase(Locale.ROOT)) {
-            case "STRICT":  return ConfigMode.STRICT;
-            case "LENIENT": return ConfigMode.LENIENT;
-            default:
-                throw new IllegalArgumentException("Unknown config mode: " + raw);
-        }
     }
 
     private static RuleType parseRuleType(String raw) {
@@ -101,9 +78,6 @@ public final class ConfigBuilder {
             case "RELATIONEXISTS":            return RuleType.RELATION_EXISTS;
             case "NAMING_PATTERN":
             case "NAMINGPATTERN":             return RuleType.NAMING_PATTERN;
-            // Was missing: any config containing an OwnerStereotypeConstraint rule
-            // threw "Unknown rule type from wizard" when built from wizard state,
-            // even though the type is fully supported by the engine.
             case "OWNER_STEREOTYPE_CONSTRAINT":
             case "OWNERSTEREOTYPECONSTRAINT":  return RuleType.OWNER_STEREOTYPE_CONSTRAINT;
             default:

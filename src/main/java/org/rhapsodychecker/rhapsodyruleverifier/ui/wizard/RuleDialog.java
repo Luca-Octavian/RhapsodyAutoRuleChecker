@@ -1,15 +1,18 @@
 // ui/wizard/RuleDialog.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 
-import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
+import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
+import org.rhapsodychecker.rhapsodyruleverifier.core.config.AliasKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
+import org.rhapsodychecker.rhapsodyruleverifier.core.config.ValueType;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;
@@ -27,15 +30,29 @@ public final class RuleDialog extends JDialog {
     private final JTextField          idField      = new JTextField(20);
     private final JComboBox<RuleType> typeCombo    = new JComboBox<>(RuleType.values());
     private final JComboBox<String>   setCombo     = new JComboBox<>();
-    private final JComboBox<String>   targetCombo  = new JComboBox<>();
     private final JTextField          messageField = new JTextField(40);
     private final JComboBox<String>   groupCombo   = new JComboBox<>();
+
+    // ── Target fields (replacing old alias combo) ─────────────────────────────
+    private static final AliasKind[] TARGET_KINDS = {
+        AliasKind.DESCRIPTION, AliasKind.NAME, AliasKind.TAGGED_VALUE,
+        AliasKind.PORT_TYPE, AliasKind.PORT_DIRECTION, AliasKind.PORT_MULTIPLICITY
+    };
+    private final JComboBox<AliasKind> targetKindCombo = new JComboBox<>(TARGET_KINDS);
+    private final JTextField           targetProfileField = new JTextField(20);
+    private final JTextField           targetTagNameField = new JTextField(20);
+    private final JTextField           targetValuesField  = new JTextField(20);
+
+    // Label references for target rows (to show/hide based on rule type / kind selection)
+    private JComponent targetKindLabel;
+    private JComponent targetProfileLabel;
+    private JComponent targetTagNameLabel;
+    private JComponent targetValuesLabel;
 
     // Dynamic params area
     private final JPanel paramsPanel = new JPanel(new GridBagLayout());
 
     // ── RequiredValue fields ──────────────────────────────────────────────────
-    // Mode selector replaces the old "dump everything" approach
     private static final String[] VALUE_CHECK_MODES = {
         "Must not be empty",
         "Must match specific value(s)",
@@ -46,10 +63,10 @@ public final class RuleDialog extends JDialog {
     private final JComboBox<String> valueCheckModeCombo = new JComboBox<>(VALUE_CHECK_MODES);
 
     // Mode-specific fields (shown/hidden based on mode)
-    private final JTextField valuesField       = new JTextField(25);   // "Must match specific value(s)"
-    private final JTextField minLenField       = new JTextField(8);    // "Length constraint"
-    private final JTextField maxLenField       = new JTextField(8);    // "Length constraint"
-    private final JTextField rvPatternField    = new JTextField(25);   // "Regex pattern"
+    private final JTextField valuesField       = new JTextField(25);
+    private final JTextField minLenField       = new JTextField(8);
+    private final JTextField maxLenField       = new JTextField(8);
+    private final JTextField rvPatternField    = new JTextField(25);
     // Numeric comparison
     private static final String[] NUMERIC_COMPARISONS = {
         "equals (=)", "not equals (\u2260)",
@@ -68,10 +85,10 @@ public final class RuleDialog extends JDialog {
     private JPanel rvPatternPanel;
     private JPanel rvNumericPanel;
 
-    // RequiredStereotype — rebuilt in rebuildParams()
+    // RequiredStereotype
     private CheckboxListField requiredStereoField;
 
-    // RequiredStereotypeOneOf — rebuilt in rebuildParams()
+    // RequiredStereotypeOneOf
     private CheckboxListField oneOfStereoField;
 
     // NamingPattern
@@ -86,7 +103,6 @@ public final class RuleDialog extends JDialog {
     private final JComboBox<String> directionCombo = new JComboBox<>(
             new String[]{"any", "outgoing", "incoming"});
     private CheckboxListField       relStereoField;
-    // Human-readable count: "At least / Exactly / At most / More than / Fewer than" + spinner
     private static final String[] REL_COUNT_MODES = {
         "At least", "Exactly", "At most", "More than", "Fewer than"
     };
@@ -105,10 +121,6 @@ public final class RuleDialog extends JDialog {
         ALL_ELEMENT_KINDS = Collections.unmodifiableList(kinds);
     }
 
-    // Stored references for target alias row (to show/hide based on rule type)
-    private JComponent targetLabel;
-    private JComponent targetField;
-
     private WizardState.RuleRequest result = null;
     private final JButton okBtn = new JButton("Save Rule");
 
@@ -126,7 +138,7 @@ public final class RuleDialog extends JDialog {
         }
         this.detectedStereos = stereos;
 
-        setSize(560, 680);
+        setSize(560, 720);
         setLocationRelativeTo(parent);
         build(prefill);
     }
@@ -153,17 +165,45 @@ public final class RuleDialog extends JDialog {
         for (ElementSetDefinition s : state.sets()) setCombo.addItem(s.id());
         addFormRow(top, gbc, row++, "Applies To Set", "rule.appliesToSet", setCombo);
 
-        targetCombo.addItem("");
-        for (AliasDefinition a : state.aliases()) targetCombo.addItem(a.id());
-        targetLabel = HelpIcon.labelWithHelp("Target Alias:", "rule.target");
-        targetField = targetCombo;
+        // ── Target section — all rows added directly to top's GridBagLayout ──
+        // Row: Target kind selector
+        targetKindLabel = HelpIcon.labelWithHelp("Target:", "rule.target");
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 1;
-        top.add(targetLabel, gbc);
+        top.add(targetKindLabel, gbc);
         gbc.gridx = 1; gbc.weightx = 1;
-        top.add(targetField, gbc);
+        top.add(targetKindCombo, gbc);
         row++;
 
+        // Row: Profile (TAGGED_VALUE only)
+        targetProfileLabel = HelpIcon.labelWithHelp("Profile *:", "rule.target.taggedValue.profile");
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 1;
+        top.add(targetProfileLabel, gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        top.add(targetProfileField, gbc);
+        row++;
+
+        // Row: Tag Name (TAGGED_VALUE only)
+        targetTagNameLabel = HelpIcon.labelWithHelp("Tag Name *:", "rule.target.taggedValue.tagName");
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 1;
+        top.add(targetTagNameLabel, gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        top.add(targetTagNameField, gbc);
+        row++;
+
+        // Row: Allowed Values (TAGGED_VALUE only)
+        targetValuesLabel = HelpIcon.labelWithHelp("Allowed Values:", "rule.target.taggedValue.allowedValues");
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 1;
+        top.add(targetValuesLabel, gbc);
+        gbc.gridx = 1; gbc.weightx = 1;
+        top.add(targetValuesField, gbc);
+        row++;
+
+        targetKindCombo.addActionListener(e -> updateTargetKindFields());
+        targetKindCombo.setSelectedItem(AliasKind.DESCRIPTION);
+        updateTargetKindFields();
+
         groupCombo.setEditable(true);
+        AppTheme.styleComboBox(groupCombo);
         groupCombo.addItem("");
         Set<String> existingGroups = new LinkedHashSet<>();
         for (WizardState.RuleRequest r : state.rules()) {
@@ -181,7 +221,7 @@ public final class RuleDialog extends JDialog {
         paramsPanel.setBorder(BorderFactory.createTitledBorder("Rule Parameters"));
         JScrollPane paramsScroll = new JScrollPane(paramsPanel);
         paramsScroll.getVerticalScrollBar().setUnitIncrement(16);
-        paramsScroll.setPreferredSize(new Dimension(500, 300));
+        paramsScroll.setPreferredSize(new Dimension(500, 280));
         add(paramsScroll, BorderLayout.CENTER);
 
         typeCombo.addActionListener(e -> { rebuildParams(); updateTargetVisibility(); revalidateLive(); });
@@ -192,7 +232,7 @@ public final class RuleDialog extends JDialog {
 
         FieldValidation.onChange(idField,      this::revalidateLive);
         FieldValidation.onChange(patternField, this::revalidateLive);
-        FieldValidation.onChange(targetCombo,  this::revalidateLive);
+        FieldValidation.onChange(targetKindCombo,  this::revalidateLive);
         revalidateLive();
 
         // ── Buttons ───────────────────────────────────────────────────────────
@@ -210,6 +250,20 @@ public final class RuleDialog extends JDialog {
             result = buildRequest();
             dispose();
         });
+    }
+
+    /** Shows/hides tagged-value sub-rows based on the selected target kind. */
+    private void updateTargetKindFields() {
+        AliasKind kind = (AliasKind) targetKindCombo.getSelectedItem();
+        boolean showTag = kind == AliasKind.TAGGED_VALUE;
+        if (targetProfileLabel  != null) targetProfileLabel.setVisible(showTag);
+        if (targetProfileField  != null) targetProfileField.setVisible(showTag);
+        if (targetTagNameLabel  != null) targetTagNameLabel.setVisible(showTag);
+        if (targetTagNameField  != null) targetTagNameField.setVisible(showTag);
+        if (targetValuesLabel   != null) targetValuesLabel.setVisible(showTag);
+        if (targetValuesField   != null) targetValuesField.setVisible(showTag);
+        Container parent = targetKindCombo.getParent();
+        if (parent != null) { parent.revalidate(); parent.repaint(); }
     }
 
     private void rebuildParams() {
@@ -242,21 +296,17 @@ public final class RuleDialog extends JDialog {
                 sgbc.fill = GridBagConstraints.HORIZONTAL;
                 sgbc.weightx = 1;
 
-                // Match panel
                 addFormRow(rvMatchPanel, sgbc, 0, "Allowed values",
                         "rule.params.requiredValue.values", valuesField);
 
-                // Length panel
                 addFormRow(rvLengthPanel, sgbc, 0, "Min Length",
                         "rule.params.requiredValue.minLength", minLenField);
                 addFormRow(rvLengthPanel, sgbc, 1, "Max Length",
                         "rule.params.requiredValue.maxLength", maxLenField);
 
-                // Pattern panel
                 addFormRow(rvPatternPanel, sgbc, 0, "Regex pattern *",
                         "rule.params.requiredValue.pattern", rvPatternField);
 
-                // Numeric panel — each sub-row in its own panel for show/hide
                 JPanel numCompRow = new JPanel(new GridBagLayout());
                 addFormRow(numCompRow, sgbc, 0, "Comparison",
                         "rule.params.requiredValue.numericComp", numericCompCombo);
@@ -335,7 +385,6 @@ public final class RuleDialog extends JDialog {
                 paramsPanel.add(relStereoField, gbc);
                 gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
-                // Human-readable count row: "Require [At least v] [1] relation(s)"
                 JPanel countRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
                 countRow.add(new JLabel("Require"));
                 countRow.add(relCountModeCombo);
@@ -372,7 +421,6 @@ public final class RuleDialog extends JDialog {
         paramsPanel.repaint();
     }
 
-    /** Shows/hides RequiredValue sub-panels based on the selected check mode. */
     private void updateValueCheckModeFields() {
         String mode = (String) valueCheckModeCombo.getSelectedItem();
         if (mode == null) mode = VALUE_CHECK_MODES[0];
@@ -393,11 +441,9 @@ public final class RuleDialog extends JDialog {
         paramsPanel.repaint();
     }
 
-    /** Shows/hides the "between" min/max rows vs the single value row. */
     private void updateNumericFields() {
         String comp = (String) numericCompCombo.getSelectedItem();
         boolean isBetween = "between".equals(comp);
-        // The value, min, max fields are each wrapped in their own panel
         Container valueRow = numericValueField.getParent();
         Container minRow = numericMinField.getParent();
         Container maxRow = numericMaxField.getParent();
@@ -419,9 +465,20 @@ public final class RuleDialog extends JDialog {
         rebuildParams();
 
         if (r.elementSetId()  != null) setCombo.setSelectedItem(r.elementSetId());
-        if (r.targetAliasId() != null) targetCombo.setSelectedItem(r.targetAliasId());
         if (r.message()       != null) messageField.setText(r.message());
         if (r.group() != null && !r.group().isEmpty()) groupCombo.setSelectedItem(r.group());
+
+        // Prefill target
+        TargetSpec ts = r.targetSpec();
+        if (ts != null) {
+            targetKindCombo.setSelectedItem(ts.kind());
+            updateTargetKindFields();
+            ts.profileName().ifPresent(targetProfileField::setText);
+            ts.tagName().ifPresent(targetTagNameField::setText);
+            if (!ts.values().isEmpty()) {
+                targetValuesField.setText(String.join(", ", ts.values()));
+            }
+        }
 
         Map<String, Object> p = r.params();
         RuleType type = (RuleType) typeCombo.getSelectedItem();
@@ -429,7 +486,6 @@ public final class RuleDialog extends JDialog {
 
         switch (type) {
             case REQUIRED_VALUE:
-                // Determine which mode to select based on existing params
                 if (p.containsKey("pattern") || "matches".equals(p.get("operator"))) {
                     valueCheckModeCombo.setSelectedItem("Regex pattern");
                     if (p.get("pattern") != null) rvPatternField.setText(p.get("pattern").toString());
@@ -440,7 +496,6 @@ public final class RuleDialog extends JDialog {
                 } else if (p.containsKey("values") || "in".equals(p.get("operator"))
                         || "not_in".equals(p.get("operator")) || "eq".equals(p.get("operator"))) {
                     valueCheckModeCombo.setSelectedItem("Must match specific value(s)");
-                    // Populate values field
                     Object vals = p.get("values");
                     Object singleVal = p.get("value");
                     if (vals instanceof List) {
@@ -457,7 +512,6 @@ public final class RuleDialog extends JDialog {
                     valueCheckModeCombo.setSelectedItem("Numeric comparison");
                     prefillNumericComp(p);
                 } else {
-                    // Default: nonEmpty
                     valueCheckModeCombo.setSelectedItem("Must not be empty");
                 }
                 updateValueCheckModeFields();
@@ -493,7 +547,6 @@ public final class RuleDialog extends JDialog {
                     relStereoField.setSelectedValues(v instanceof List
                             ? (List<String>) v : Collections.singletonList(v.toString()));
                 }
-                // Map operator back to human-readable
                 String op = p.get("operator") != null ? p.get("operator").toString() : "gte";
                 relCountModeCombo.setSelectedItem(operatorToCountMode(op));
                 if (p.get("value") != null) {
@@ -542,8 +595,19 @@ public final class RuleDialog extends JDialog {
     private void updateTargetVisibility() {
         RuleType type = (RuleType) typeCombo.getSelectedItem();
         boolean needsTarget = type == RuleType.REQUIRED_VALUE || type == RuleType.NAMING_PATTERN;
-        if (targetLabel != null) targetLabel.setVisible(needsTarget);
-        if (targetField != null) targetField.setVisible(needsTarget);
+        if (targetKindLabel != null) targetKindLabel.setVisible(needsTarget);
+        if (targetKindCombo != null) targetKindCombo.setVisible(needsTarget);
+        if (!needsTarget) {
+            // Ensure tag sub-rows are hidden when the whole target section is hidden
+            if (targetProfileLabel != null) targetProfileLabel.setVisible(false);
+            if (targetProfileField != null) targetProfileField.setVisible(false);
+            if (targetTagNameLabel != null) targetTagNameLabel.setVisible(false);
+            if (targetTagNameField != null) targetTagNameField.setVisible(false);
+            if (targetValuesLabel  != null) targetValuesLabel.setVisible(false);
+            if (targetValuesField  != null) targetValuesField.setVisible(false);
+        } else {
+            updateTargetKindFields();
+        }
     }
 
     private void revalidateLive() {
@@ -551,14 +615,10 @@ public final class RuleDialog extends JDialog {
         if (valid) FieldValidation.markValid(idField); else FieldValidation.markInvalid(idField);
 
         RuleType type = (RuleType) typeCombo.getSelectedItem();
-        FieldValidation.markValid(targetCombo);
         if (type != null) {
             switch (type) {
                 case REQUIRED_VALUE:
-                    String target = (String) targetCombo.getSelectedItem();
-                    boolean targetOk = target != null && !target.trim().isEmpty();
-                    if (targetOk) FieldValidation.markValid(targetCombo); else FieldValidation.markInvalid(targetCombo);
-                    valid = valid && targetOk;
+                    // Target kind is always selected (combo), so always valid
                     break;
                 case REQUIRED_STEREOTYPE:
                     boolean reqOk = requiredStereoField != null && !requiredStereoField.getSelectedValues().isEmpty();
@@ -596,9 +656,15 @@ public final class RuleDialog extends JDialog {
         RuleType type = (RuleType) typeCombo.getSelectedItem();
         switch (type) {
             case REQUIRED_VALUE:
-                String target = (String) targetCombo.getSelectedItem();
-                if (target == null || target.trim().isEmpty()) {
-                    warn("Target Alias is required for RequiredValue."); return false;
+                // Validate tagged value fields if needed
+                AliasKind kind = (AliasKind) targetKindCombo.getSelectedItem();
+                if (kind == AliasKind.TAGGED_VALUE) {
+                    if (targetProfileField.getText().trim().isEmpty()) {
+                        warn("Profile Name is required for Tagged Value targets."); return false;
+                    }
+                    if (targetTagNameField.getText().trim().isEmpty()) {
+                        warn("Tag Name is required for Tagged Value targets."); return false;
+                    }
                 }
                 break;
             case REQUIRED_STEREOTYPE:
@@ -614,6 +680,15 @@ public final class RuleDialog extends JDialog {
             case NAMING_PATTERN:
                 if (patternField.getText().trim().isEmpty()) {
                     warn("Pattern is required."); return false;
+                }
+                AliasKind npKind = (AliasKind) targetKindCombo.getSelectedItem();
+                if (npKind == AliasKind.TAGGED_VALUE) {
+                    if (targetProfileField.getText().trim().isEmpty()) {
+                        warn("Profile Name is required for Tagged Value targets."); return false;
+                    }
+                    if (targetTagNameField.getText().trim().isEmpty()) {
+                        warn("Tag Name is required for Tagged Value targets."); return false;
+                    }
                 }
                 break;
             case OWNER_STEREOTYPE_CONSTRAINT:
@@ -640,10 +715,7 @@ public final class RuleDialog extends JDialog {
                     params.put("nonEmpty", true);
                 } else if ("Must match specific value(s)".equals(mode)) {
                     List<String> vals = splitValues(valuesField.getText());
-                    if (vals.size() == 1) {
-                        params.put("operator", "in");
-                        params.put("values", vals);
-                    } else if (!vals.isEmpty()) {
+                    if (!vals.isEmpty()) {
                         params.put("operator", "in");
                         params.put("values", vals);
                     }
@@ -701,18 +773,39 @@ public final class RuleDialog extends JDialog {
                 break;
         }
 
+        // Build TargetSpec from UI
+        TargetSpec targetSpec = buildTargetSpec();
+
         String setId    = (String) setCombo.getSelectedItem();
-        String targetId = (String) targetCombo.getSelectedItem();
         String groupVal = groupCombo.getSelectedItem() != null
                 ? groupCombo.getSelectedItem().toString().trim() : null;
         if (groupVal != null && groupVal.isEmpty()) groupVal = null;
 
         return new WizardState.RuleRequest(
                 idField.getText().trim(), null, type.name(),
-                (targetId == null || targetId.trim().isEmpty()) ? null : targetId,
+                targetSpec,
                 (setId    == null || setId.trim().isEmpty())    ? null : setId,
                 params, nullable(messageField.getText()), true, groupVal
         );
+    }
+
+    /** Builds a TargetSpec from the current target UI fields. */
+    private TargetSpec buildTargetSpec() {
+        RuleType type = (RuleType) typeCombo.getSelectedItem();
+        boolean needsTarget = type == RuleType.REQUIRED_VALUE || type == RuleType.NAMING_PATTERN;
+        if (!needsTarget) return null;
+
+        AliasKind kind = (AliasKind) targetKindCombo.getSelectedItem();
+        if (kind == null) return null;
+
+        TargetSpec.Builder b = TargetSpec.builder().kind(kind);
+        if (kind == AliasKind.TAGGED_VALUE) {
+            b.profileName(nullable(targetProfileField.getText()));
+            b.tagName(nullable(targetTagNameField.getText()));
+            List<String> vals = splitValues(targetValuesField.getText());
+            if (!vals.isEmpty()) b.values(vals);
+        }
+        return b.build();
     }
 
     // ── Operator mapping helpers ──────────────────────────────────────────────

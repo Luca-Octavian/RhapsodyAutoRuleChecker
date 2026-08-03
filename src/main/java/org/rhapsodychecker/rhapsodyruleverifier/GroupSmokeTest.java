@@ -74,7 +74,6 @@ public class GroupSmokeTest {
             System.out.println("\n[Phase 3] Loading config: " + yamlPath);
             RuleCheckerConfig config = ConfigLoader.load(Paths.get(yamlPath));
             System.out.println("  Rules: " + config.rules().size()
-                    + ", aliases: " + config.aliases().size()
                     + ", sets: " + config.elementSets().size());
 
             // Verify group labels are present
@@ -91,10 +90,10 @@ public class GroupSmokeTest {
             // ── Phase 4: wire the evaluation pipeline ─────────────────────
             System.out.println("\n[Phase 4] Wiring evaluation pipeline...");
             ElementIndex index = ElementIndex.build(snapshot.records());
-            RhapsodyAliasResolver resolver = new RhapsodyAliasResolver(config, snapshot);
+            RhapsodyAliasResolver resolver = new RhapsodyAliasResolver(snapshot);
             ElementSelector selector = new ElementSelector(index, config);
             RhapsodyEvaluationContext context = new RhapsodyEvaluationContext(
-                    resolver, snapshot, config, index, selector);
+                    resolver, snapshot, index, selector);
 
             // ── Phase 5: evaluate all rules via the engine ────────────────
             System.out.println("\n[Phase 5] Evaluating rules...");

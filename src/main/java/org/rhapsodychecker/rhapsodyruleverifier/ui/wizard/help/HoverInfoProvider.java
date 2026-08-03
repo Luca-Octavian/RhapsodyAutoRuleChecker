@@ -8,7 +8,7 @@ import java.util.Map;
  * Central dictionary: logical key (not the internal name from YAML/Rhapsody)
  * -> user-friendly description.
  *
- * Keys are grouped by entity: "alias.*", "elementSet.*", "rule.*",
+ * Keys are grouped by entity: "elementSet.*", "rule.*",
  * "rule.params.<ruleType>.*". A single place to edit descriptions,
  * no matter how many dialogs the field appears in.
  */
@@ -44,35 +44,6 @@ public final class HoverInfoProvider {
         // ── Top-level ──────────────────────────────────────────────────────
         put("top.schemaVersion", "Schema Version",
                 "The version of the configuration schema. Leave at 1 if unsure.");
-        put("top.mode", "Mode",
-                "Behavior on errors: 'lenient' only reports issues, "
-                        + "'strict' stops evaluation at the first error.");
-
-        // ── Alias ──────────────────────────────────────────────────────────
-        put("alias.id", "Alias ID",
-                "The identifier used by rules to reference this alias.",
-                "e.g. ELEMENT_DESCRIPTION");
-        put("alias.kind", "Kind",
-                "The source of the value: description, name, or tagged value.");
-        put("alias.title", "Title",
-                "Friendly name shown in the interface (optional).");
-        put("alias.help", "Help",
-                "Short description of this alias (optional).");
-        put("alias.valueType", "Value Type",
-                "The expected type of the value (string/int/enum/bool). "
-                        + "Only relevant for taggedValue, defaults to string.");
-        put("alias.profileName", "Profile Name",
-                "The Rhapsody profile that owns the tag or stereotypes.");
-        put("alias.tagName", "Tag Name",
-                "The name of the tag defined in the profile.");
-        put("alias.stereotypeOwner", "Stereotype Owner",
-                "The stereotype that owns this tag (optional, only for taggedValue).");
-        put("alias.stereotypeName", "Stereotype Name",
-                "The name of the stereotype being searched for.");
-        put("alias.stereotypeNames", "Stereotype Names",
-                "The list of stereotypes allowed for this alias.");
-        put("alias.values", "Allowed Values",
-                "The list of allowed values, if the value type is enum.");
 
         // ── Element Set ────────────────────────────────────────────────────
         put("elementSet.id", "Element Set ID",
@@ -116,14 +87,25 @@ public final class HoverInfoProvider {
                         + "{elementName}, {value}.");
         put("rule.appliesToSet", "Applies To Set",
                 "The Element Set that this rule applies to.");
-        put("rule.target", "Target Alias",
-                "The alias checked by this rule (e.g. Description, a Tag).");
+        put("rule.target", "Target",
+                "The target property checked by this rule (e.g. Description, a Tagged Value, Port Type).");
+        put("rule.target.taggedValue.profile", "Profile",
+                "The name of the UML profile that declares the tagged value.\n\n"
+                + "Example: SysML, AUTOSAR, MyCustomProfile");
+        put("rule.target.taggedValue.tagName", "Tag Name",
+                "The name of the tagged value (tag) within the profile to read the value from.\n\n"
+                + "Example: ASIL, SafetyLevel, Version");
+        put("rule.target.taggedValue.allowedValues", "Allowed Values",
+                "Optional: comma-separated list of values this tag is allowed to have at the model level. "
+                + "Leave empty if you do not want to restrict the tag's value here "
+                + "(use the Rule Parameters section to specify value constraints instead).\n\n"
+                + "Example: ASIL_A, ASIL_B, ASIL_C, ASIL_D");
         put("rule.conditions", "Conditions (advanced)",
                 "Additional filters on top of the Element Set (advanced, optional).");
 
         // ── Rule params: RequiredValue ─────────────────────────────────────
         put("rule.params.requiredValue.checkMode", "Check Mode",
-                "How should the value from the Target Alias be validated?\n\n"
+                "How should the value from the Target be validated?\n\n"
                 + "• Must not be empty — fails if the value is missing or blank.\n"
                 + "• Must match specific value(s) — fails if the value is not one of the listed values.\n"
                 + "• Length constraint — fails if the value's character count is outside the min/max range.\n"

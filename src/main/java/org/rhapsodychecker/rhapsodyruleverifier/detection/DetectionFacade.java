@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
  * Strategia de cost:
  *   fastScan()         → rulează la startup, instant (zero apeluri native grele)
  *   discoverTags()     → on-demand, scoped la kind/scope selectat în wizard
- *   guessAliases()     → logică pură, după ce avem datele
  */
 public final class DetectionFacade {
 
@@ -98,13 +97,6 @@ public final class DetectionFacade {
     // ------------------------------------------------------------------
     // FAZA 3 — logică pură, fără apeluri native
     // ------------------------------------------------------------------
-
-    public AliasGuess guessAliases(
-            FastDetectionResult          fast,
-            Optional<TagDiscoveryResult> tags
-    ) {
-        return suggestionsService.guessAliases(fast, tags, fast.ports());
-    }
 
     // ------------------------------------------------------------------
     // Factory pentru wiring implicit

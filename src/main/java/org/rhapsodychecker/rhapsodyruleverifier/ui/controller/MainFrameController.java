@@ -159,10 +159,10 @@ public final class MainFrameController {
                 try {
                     // Adapter wiring: build Rhapsody-specific context via factory
                     EvaluationService.ContextFactory contextFactory = (cfg, idx) -> {
-                        RhapsodyAliasResolver aliasResolver = new RhapsodyAliasResolver(cfg, snapshot);
+                        RhapsodyAliasResolver aliasResolver = new RhapsodyAliasResolver(snapshot);
                         ElementSelector selector = new ElementSelector(idx, cfg);
                         RhapsodyEvaluationContext context = new RhapsodyEvaluationContext(
-                                aliasResolver, snapshot, cfg, idx, selector);
+                                aliasResolver, snapshot, idx, selector);
                         return new EvaluationService.ContextPair(context, selector);
                     };
                     evalResult = EvaluationService.evaluate(

@@ -4,8 +4,6 @@ public enum AliasKind {
     DESCRIPTION,
     NAME,
     TAGGED_VALUE,
-    STEREOTYPE,
-    STEREOTYPE_SET,
     PORT_TYPE,          // the classifier/type assigned to a port
     PORT_DIRECTION,     // in/out/inout/none
     PORT_MULTIPLICITY;  // multiplicity string (e.g., "1", "1..1", "0..*")
@@ -19,9 +17,6 @@ public enum AliasKind {
             case "name":                return NAME;
             case "taggedvalue":
             case "tagged_value":        return TAGGED_VALUE;
-            case "stereotype":          return STEREOTYPE;
-            case "stereotypeset":
-            case "stereotype_set":      return STEREOTYPE_SET;
             case "porttype":
             case "port_type":           return PORT_TYPE;
             case "portdirection":
@@ -30,7 +25,7 @@ public enum AliasKind {
             case "port_multiplicity":   return PORT_MULTIPLICITY;
             default:
                 throw new IllegalArgumentException("Unknown AliasKind: '" + value + "'. "
-                        + "Allowed: description, name, taggedValue, stereotype, stereotypeSet, "
+                        + "Allowed: description, name, taggedValue, "
                         + "portType, portDirection, portMultiplicity");
         }
     }

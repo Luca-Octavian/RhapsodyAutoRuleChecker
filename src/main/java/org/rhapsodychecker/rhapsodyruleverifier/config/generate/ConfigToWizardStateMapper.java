@@ -1,7 +1,6 @@
 // config/generate/ConfigToWizardStateMapper.java
 package org.rhapsodychecker.rhapsodyruleverifier.config.generate;
 
-import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
@@ -28,9 +27,7 @@ public final class ConfigToWizardStateMapper {
 
     /**
      * Convenience overload for callers that don't have (or don't care about)
-     * the original file path, e.g. building a WizardState in memory without
-     * an "Edit in Wizard" load. sourcePath() on the resulting state will be
-     * null, so WizardDialog will prompt for a save location as usual.
+     * the original file path.
      */
     public static MappingResult map(RuleCheckerConfig config, FastDetectionResult fast) {
         return map(config, fast, null);
@@ -39,24 +36,15 @@ public final class ConfigToWizardStateMapper {
     /**
      * @param sourcePath path of the YAML file this config was loaded from,
      *                    so "Edit in Wizard" can save back to it directly
-     *                    without re-prompting. Pass null if unknown (e.g. new config).
+     *                    without re-prompting. Pass null if unknown.
      */
     public static MappingResult map(RuleCheckerConfig config, FastDetectionResult fast, String sourcePath) {
-        WizardState  state    = new WizardState().mode(config.mode().name().toLowerCase());
+        WizardState  state    = new WizardState();
         state.sourcePath(sourcePath);
         List<String> warnings = new ArrayList<>();
 
-        // ── Aliases ───────────────────────────────────────────────────────────
-        for (AliasDefinition alias : config.aliases().values()) {
-            state.addAlias(alias);
-        }
-
         // ── Element Sets ──────────────────────────────────────────────────────
         for (ElementSetDefinition set : config.elementSets().values()) {
-            // Always preserve the original element set exactly as-is.
-            // Previously, auto-translated stereotypes were injected here for UI display,
-            // but they got written back to YAML and changed the engine's behavior
-            // (kinds + stereotypes = intersection, shrinking the candidate set).
             state.addSet(set);
 
             if (fast != null) {
@@ -77,9 +65,7 @@ public final class ConfigToWizardStateMapper {
                 }
 
                 for (String stereo : set.stereotypes()) {
-                    // Skip if this stereotype was auto-translated from a kind
                     if (kindTranslatedLower.contains(stereo.toLowerCase())) continue;
-                    // Case-insensitive check against detected stereotypes
                     if (!detectedStereosLower.contains(stereo.toLowerCase())) {
                         warnings.add("ElementSet '" + set.id() + "': stereotype '"
                                 + stereo + "' not detected in current model.");
@@ -101,15 +87,7 @@ public final class ConfigToWizardStateMapper {
 
         // ── Rules ─────────────────────────────────────────────────────────────
         for (RuleSpec spec : config.rules()) {
-
-            // Warn daca target alias nu exista
-            if (spec.target().isPresent()
-                    && !config.aliases().containsKey(spec.target().get())) {
-                warnings.add("Rule '" + spec.id() + "': target alias '"
-                        + spec.target().get() + "' not found in aliases.");
-            }
-
-            // Warn daca elementSet nu exista
+            // Warn if elementSet doesn't exist
             if (spec.appliesToSet().isPresent()
                     && !config.elementSets().containsKey(spec.appliesToSet().get())) {
                 warnings.add("Rule '" + spec.id() + "': elementSet '"
@@ -149,6 +127,7 @@ public final class ConfigToWizardStateMapper {
         public List<String> warnings()    { return warnings; }
         public boolean      hasWarnings() { return !warnings.isEmpty(); }
     }
+
     private static List<String> translateKindsToStereotypes(List<String> kinds) {
         List<String> result = new ArrayList<>();
         for (String kind : kinds) {
@@ -163,7 +142,6 @@ public final class ConfigToWizardStateMapper {
                 case "PACKAGE":         result.add("Package");        break;
                 case "REQUIREMENT":     result.add("Requirement");    break;
                 case "CONNECTOR":       result.add("connector");      break;
-                // OTHER nu are echivalent de stereotip
                 default: break;
             }
         }

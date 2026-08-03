@@ -4,14 +4,13 @@ package org.rhapsodychecker.rhapsodyruleverifier.detection;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.*;
-import org.rhapsodychecker.rhapsodyruleverifier.detection.api.AliasGuess.DescriptionSource;
 
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Derivă sugestii de alias-uri și stereotipuri din rezultatele detecției.
+ * Derivă sugestii de stereotipuri din rezultatele detecției.
  * Logică pură — zero apeluri native, zero dependențe pe Rhapsody API.
  */
 public final class SuggestionsService {
@@ -29,40 +28,6 @@ public final class SuggestionsService {
     private static final Set<String> DESCRIPTION_TAG_KEYWORDS = new LinkedHashSet<>(Arrays.asList(
             "description", "desc", "comment", "text", "documentation", "note"
     ));
-
-    // ── Alias guessing ────────────────────────────────────────────────────────
-
-    public AliasGuess guessAliases(
-            FastDetectionResult          fast,
-            Optional<TagDiscoveryResult> tags,
-            PortCapabilities             ports
-    ) {
-        DescriptionSource descSource  = resolveDescriptionSource(fast, tags);
-        String            descTagName = descSource == DescriptionSource.TAG
-                ? findDescriptionTagName(tags.get()).orElse(null)
-                : null;
-
-        List<String> asilTagCandidates = tags
-                .map(t -> t.tagNames().stream()
-                        .filter(n -> ASIL_TAG_KEYWORDS.contains(n.toLowerCase()))
-                        .collect(Collectors.toList()))
-                .orElse(Collections.emptyList());
-
-        List<String> asilStereoCandidates = fast.countsByStereotype().keySet().stream()
-                .filter(s -> ASIL_STEREO_KEYWORDS.contains(s.toLowerCase()))
-                .collect(Collectors.toList());
-
-        return AliasGuess.builder()
-                .descriptionSource(descSource)
-                .descriptionTagName(descTagName)
-                .asilTagCandidates(asilTagCandidates)
-                .asilStereoCandidates(asilStereoCandidates)
-                // directed = PORT_FLOW + PORT_PROXY
-                .portTypeResolvable(ports.directedTypeResolvable())
-                .portDirectionResolvable(ports.directedDirectionResolvable())
-                .portMultiplicityResolvable(ports.directedMultiplicityResolvable())
-                .build();
-    }
 
     // ── Stereotype suggestions ────────────────────────────────────────────────
 
@@ -141,24 +106,4 @@ public final class SuggestionsService {
                 || lower.contains("fmea");
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    private DescriptionSource resolveDescriptionSource(
-            FastDetectionResult          fast,
-            Optional<TagDiscoveryResult> tags
-    ) {
-        if (fast.descriptionFillRate() >= DESCRIPTION_FILL_THRESHOLD) {
-            return DescriptionSource.NATIVE_DESCRIPTION;
-        }
-        if (tags.isPresent() && findDescriptionTagName(tags.get()).isPresent()) {
-            return DescriptionSource.TAG;
-        }
-        return DescriptionSource.UNKNOWN;
-    }
-
-    private Optional<String> findDescriptionTagName(TagDiscoveryResult tags) {
-        return tags.tagNames().stream()
-                .filter(n -> DESCRIPTION_TAG_KEYWORDS.contains(n.toLowerCase()))
-                .findFirst();
-    }
 }

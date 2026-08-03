@@ -1,8 +1,7 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/adapter/rhapsody/RhapsodyAliasResolver.java
 package org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody;
 
-import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
-import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
+import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.DefaultResolvedValue;
@@ -12,40 +11,19 @@ import java.util.*;
 
 public final class RhapsodyAliasResolver implements AliasResolver {
 
-    private final RuleCheckerConfig config;
-
-    public RhapsodyAliasResolver(RuleCheckerConfig config, RhapsodyModelSnapshot snapshot) {
-        this.config = Objects.requireNonNull(config, "config");
+    public RhapsodyAliasResolver(RhapsodyModelSnapshot snapshot) {
         // snapshot kept in signature for API compatibility but no longer used during evaluation
     }
 
     @Override
-    public ResolvedValue resolveValue(ElementRecord element, String aliasId) {
-        if ("description".equalsIgnoreCase(aliasId)) {
-            return resolveDescription(element);
-        }
-        if ("name".equalsIgnoreCase(aliasId)) {
-            return DefaultResolvedValue.of(element.name(), "name");
-        }
-
-        Optional<AliasDefinition> optAlias = config.alias(aliasId);
-        if (!optAlias.isPresent()) {
-            return DefaultResolvedValue.absent();
-        }
-
-        AliasDefinition alias = optAlias.get();
-
-        switch (alias.kind()) {
+    public ResolvedValue resolveValue(ElementRecord element, TargetSpec target) {
+        switch (target.kind()) {
             case DESCRIPTION:
                 return resolveDescription(element);
             case NAME:
                 return DefaultResolvedValue.of(element.name(), "name");
             case TAGGED_VALUE:
-                return resolveTaggedValue(element, alias);
-            case STEREOTYPE:
-                return resolveStereotypePresence(element, alias);
-            case STEREOTYPE_SET:
-                return resolveStereotypeSet(element, alias);
+                return resolveTaggedValue(element, target);
             case PORT_TYPE:
                 return resolvePortType(element);
             case PORT_DIRECTION:
@@ -65,8 +43,8 @@ public final class RhapsodyAliasResolver implements AliasResolver {
         return DefaultResolvedValue.absent();
     }
 
-    private ResolvedValue resolveTaggedValue(ElementRecord element, AliasDefinition alias) {
-        String tagName = alias.tagName().orElse(null);
+    private ResolvedValue resolveTaggedValue(ElementRecord element, TargetSpec target) {
+        String tagName = target.tagName().orElse(null);
         if (tagName == null) return DefaultResolvedValue.absent();
 
         // Fast path: pre-loaded tags on ElementRecord (works for both live and cached mode)
@@ -85,8 +63,8 @@ public final class RhapsodyAliasResolver implements AliasResolver {
         }
 
         // Stereotype fallback for ASIL-style tags (stored as stereotypes like ASIL_A)
-        if (!alias.values().isEmpty()) {
-            for (String allowed : alias.values()) {
+        if (!target.values().isEmpty()) {
+            for (String allowed : target.values()) {
                 if (element.hasStereotypeIgnoreCase(allowed)
                         || element.hasStereotypeIgnoreCase(tagName + "_" + allowed)) {
                     return DefaultResolvedValue.of(allowed, "stereotype-fallback:" + allowed);
@@ -94,27 +72,6 @@ public final class RhapsodyAliasResolver implements AliasResolver {
             }
         }
 
-        return DefaultResolvedValue.absent();
-    }
-
-    private ResolvedValue resolveStereotypePresence(ElementRecord element, AliasDefinition alias) {
-        String stereoName = alias.stereotypeName().orElse(null);
-        if (stereoName == null) return DefaultResolvedValue.absent();
-
-        boolean has = element.hasStereotypeIgnoreCase(stereoName);
-        return DefaultResolvedValue.of(has ? "true" : "false", "stereotype:" + stereoName);
-    }
-
-    private ResolvedValue resolveStereotypeSet(ElementRecord element, AliasDefinition alias) {
-        List<String> matched = new ArrayList<>();
-        for (String candidate : alias.stereotypeNames()) {
-            if (element.hasStereotypeIgnoreCase(candidate)) {
-                matched.add(candidate);
-            }
-        }
-        if (!matched.isEmpty()) {
-            return DefaultResolvedValue.of(matched.get(0), "stereotypeSet:" + matched.get(0));
-        }
         return DefaultResolvedValue.absent();
     }
 

@@ -12,7 +12,7 @@ import java.io.File;
 import java.util.Optional;
 
 /**
- * Dialog modal cu 5 pași (CardLayout) pentru configurarea regulilor.
+ * Dialog modal cu 3 pași (CardLayout) pentru configurarea regulilor.
  * Acceptă un WizardState pre-populat (edit) sau null (new config).
  *
  * După închidere, getSavedConfigPath() returnează calea YAML salvată
@@ -20,14 +20,12 @@ import java.util.Optional;
  */
 public final class WizardDialog extends JDialog {
 
-    private static final String STEP_SCOPE   = "SCOPE";
     private static final String STEP_SETS    = "SETS";
-    private static final String STEP_ALIASES = "ALIASES";
     private static final String STEP_RULES   = "RULES";
     private static final String STEP_REVIEW  = "REVIEW";
 
     private static final String[] STEP_ORDER = {
-            STEP_SCOPE, STEP_SETS, STEP_ALIASES, STEP_RULES, STEP_REVIEW
+            STEP_SETS, STEP_RULES, STEP_REVIEW
     };
 
     private final CardLayout cardLayout  = new CardLayout();
@@ -55,9 +53,7 @@ public final class WizardDialog extends JDialog {
         // Construieste pașii
         reviewPanel = new ReviewStepPanel(wizardState);
 
-        cardPanel.add(new ScopeStepPanel(wizardState, fast),        STEP_SCOPE);
         cardPanel.add(new ElementSetStepPanel(wizardState, fast),    STEP_SETS);
-        cardPanel.add(new AliasStepPanel(wizardState, fast),         STEP_ALIASES);
         cardPanel.add(new RuleStepPanel(wizardState, fast),          STEP_RULES);
         cardPanel.add(reviewPanel,                                    STEP_REVIEW);
 
@@ -83,8 +79,6 @@ public final class WizardDialog extends JDialog {
         nextBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         saveAsBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
 
-        // "Save As..." doar disponibil pe pasul Review, si doar are sens
-        // cand editam un config existent (altfel e identic cu Save & Close).
         saveAsBtn.setVisible(false);
 
         JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
@@ -121,7 +115,6 @@ public final class WizardDialog extends JDialog {
     }
 
     private void updateStepUI() {
-        // Daca intram pe Review, actualizam sumarul
         if (STEP_ORDER[currentStep].equals(STEP_REVIEW)) {
             reviewPanel.refresh();
         }
@@ -144,9 +137,6 @@ public final class WizardDialog extends JDialog {
 
         String existingPath = wizardState.sourcePath();
         if (existingPath != null && !existingPath.trim().isEmpty()) {
-            // Editam un config existent: salvam direct la aceeasi cale,
-            // fara sa mai intrebam userul unde. "Save As..." ramane
-            // disponibil daca vrea totusi alta locatie.
             writeConfig(existingPath);
         } else {
             promptAndSave();
@@ -190,9 +180,7 @@ public final class WizardDialog extends JDialog {
 
     private static String stepTitle(String step) {
         switch (step) {
-            case STEP_SCOPE:   return "Select Mode";
             case STEP_SETS:    return "Define Element Sets";
-            case STEP_ALIASES: return "Configure Aliases";
             case STEP_RULES:   return "Add Rules";
             case STEP_REVIEW:  return "Review & Save";
             default:           return step;

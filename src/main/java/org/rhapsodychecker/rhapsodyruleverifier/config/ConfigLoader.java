@@ -1,7 +1,6 @@
 package org.rhapsodychecker.rhapsodyruleverifier.config;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.AliasKind;
-import org.rhapsodychecker.rhapsodyruleverifier.core.config.ConfigMode;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.ValueType;
 import org.yaml.snakeyaml.Yaml;
@@ -51,9 +50,7 @@ public final class ConfigLoader {
 
         try {
             int schemaVersion = requireInt(root, "schemaVersion");
-            ConfigMode mode = ConfigMode.fromString(optString(root, "mode", "lenient"));
 
-            Map<String, AliasDefinition> aliases = parseAliases(optMap(root, "aliases"));
             Map<String, ElementSetDefinition> elementSets = parseElementSets(optMap(root, "elementSets"));
 
             // Collect parse errors but don't throw yet
@@ -62,8 +59,6 @@ public final class ConfigLoader {
 
             return RuleCheckerConfig.builder()
                     .schemaVersion(schemaVersion)
-                    .mode(mode)
-                    .aliases(aliases)
                     .elementSets(elementSets)
                     .rules(rules)
                     .parseErrors(parseErrors)
@@ -71,31 +66,6 @@ public final class ConfigLoader {
         } catch (IllegalArgumentException e) {
             throw new ConfigLoadException("Config validation error: " + e.getMessage(), e);
         }
-    }
-
-    // ---- Aliases ----
-
-    private static Map<String, AliasDefinition> parseAliases(Map<String, Object> raw) {
-        if (raw == null || raw.isEmpty()) return Collections.emptyMap();
-        Map<String, AliasDefinition> out = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : raw.entrySet()) {
-            String id = entry.getKey();
-            Map<String, Object> fields = castMap(entry.getValue());
-            AliasDefinition alias = AliasDefinition.builder()
-                    .id(id)
-                    .kind(AliasKind.fromString(requireString(fields, "kind", "alias '" + id + "'")))
-                    .title(optString(fields, "title", null))
-                    .help(optString(fields, "help", null))
-                    .valueType(ValueType.fromString(optString(fields, "type", null)))
-                    .profileName(optString(fields, "profileName", null))
-                    .tagName(optString(fields, "tagName", null))
-                    .stereotypeName(optString(fields, "stereotypeName", null))
-                    .stereotypeNames(optStringList(fields, "stereotypeNames"))
-                    .values(optStringList(fields, "values"))
-                    .build();
-            out.put(id, alias);
-        }
-        return out;
     }
 
     // ---- Element Sets ----
@@ -170,12 +140,13 @@ public final class ConfigLoader {
                     continue;
                 }
 
-                String target = optString(fields, "target", null);
+                // Parse target: can be a map (new format) or a string (legacy alias ID)
+                TargetSpec target = parseTarget(fields, label, errors);
                 switch (type) {
                     case REQUIRED_VALUE:
                     case NAMING_PATTERN:
-                        if (target == null || target.trim().isEmpty()) {
-                            errors.add(label + ": " + type + " requires a target alias");
+                        if (target == null) {
+                            errors.add(label + ": " + type + " requires a target");
                             continue;
                         }
                         break;
@@ -220,6 +191,73 @@ public final class ConfigLoader {
         }
 
         return out;
+    }
+
+    /**
+     * Parses the target field from a rule. Supports two formats:
+     * - New format (map): { kind: description } or { kind: taggedValue, profile: X, tag: Y }
+     * - Legacy format (string): an alias ID like "ELEMENT_DESCRIPTION" — treated as DESCRIPTION kind
+     *   for simple cases, or fails with an error for complex aliases that need migration.
+     */
+    private static TargetSpec parseTarget(Map<String, Object> fields, String label, List<String> errors) {
+        Object rawTarget = fields.get("target");
+        if (rawTarget == null) return null;
+
+        if (rawTarget instanceof Map) {
+            // New format: target is a map with kind + optional fields
+            Map<String, Object> targetMap = castMap(rawTarget);
+            String kindStr = optString(targetMap, "kind", null);
+            if (kindStr == null || kindStr.trim().isEmpty()) {
+                errors.add(label + ": target map missing required field 'kind'");
+                return null;
+            }
+            try {
+                AliasKind kind = AliasKind.fromString(kindStr);
+                TargetSpec.Builder b = TargetSpec.builder().kind(kind);
+                b.profileName(optString(targetMap, "profile", optString(targetMap, "profileName", null)));
+                b.tagName(optString(targetMap, "tag", optString(targetMap, "tagName", null)));
+                b.stereotypeName(optString(targetMap, "stereotypeName", null));
+                String typeStr = optString(targetMap, "type", null);
+                if (typeStr != null) {
+                    b.valueType(ValueType.fromString(typeStr));
+                }
+                b.values(optStringList(targetMap, "values"));
+                return b.build();
+            } catch (IllegalArgumentException e) {
+                errors.add(label + ": invalid target: " + e.getMessage());
+                return null;
+            }
+        }
+
+        // Legacy format: target is a plain string (old alias ID reference)
+        String targetStr = rawTarget.toString().trim();
+        if (targetStr.isEmpty()) return null;
+
+        // Try to interpret common legacy alias IDs as simple kinds
+        String lower = targetStr.toLowerCase();
+        switch (lower) {
+            case "description":
+            case "element_description":
+                return TargetSpec.builder().kind(AliasKind.DESCRIPTION).build();
+            case "name":
+            case "element_name":
+                return TargetSpec.builder().kind(AliasKind.NAME).build();
+            case "port_type":
+            case "porttype":
+                return TargetSpec.builder().kind(AliasKind.PORT_TYPE).build();
+            case "port_direction":
+            case "portdirection":
+                return TargetSpec.builder().kind(AliasKind.PORT_DIRECTION).build();
+            case "port_multiplicity":
+            case "portmultiplicity":
+                return TargetSpec.builder().kind(AliasKind.PORT_MULTIPLICITY).build();
+            default:
+                // Unknown legacy alias ID — cannot auto-migrate complex aliases (taggedValue etc.)
+                errors.add(label + ": target '" + targetStr + "' is a legacy alias ID that cannot be "
+                        + "auto-resolved. Please update the config to use the new target format: "
+                        + "target: { kind: taggedValue, profile: ..., tag: ... }");
+                return null;
+        }
     }
 
 

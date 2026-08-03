@@ -9,12 +9,6 @@
 # results table — the group verdict is a post-processing overlay.
 # ══════════════════════════════════════════════════════════════════════════
 schemaVersion: 1
-mode: lenient
-
-aliases:
-  ELEMENT_DESCRIPTION:
-    kind: description
-    title: "Element description"
 
 elementSets:
   AllBlocks:
@@ -27,7 +21,8 @@ rules:
     type: REQUIRED_VALUE
     group: BLOCK_COMPLIANCE
     appliesTo: { set: AllBlocks }
-    target: ELEMENT_DESCRIPTION
+    target:
+      kind: description
     params:
       nonEmpty: true
     message: "Missing description on block '{elementName}'"

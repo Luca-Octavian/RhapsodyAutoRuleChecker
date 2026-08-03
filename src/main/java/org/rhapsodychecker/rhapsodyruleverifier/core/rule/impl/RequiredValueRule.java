@@ -1,6 +1,7 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/core/rule/impl/RequiredValueRule.java
 package org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl;
 
+import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.ComparisonOperator;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
@@ -19,7 +20,7 @@ public final class RequiredValueRule implements Rule {
     private String id;
     private String title;
     private String message;
-    private String targetAlias;
+    private TargetSpec target;
     private boolean passIfAbsent;
 
     // Params
@@ -46,7 +47,10 @@ public final class RequiredValueRule implements Rule {
         this.id = requireString(params, "ruleId");
         this.title = optString(params, "ruleTitle");
         this.message = optString(params, "ruleMessage");
-        this.targetAlias = requireString(params, "target");
+        Object targetObj = params.get("target");
+        if (targetObj == null) throw new IllegalArgumentException("Missing required param: target");
+        if (!(targetObj instanceof TargetSpec)) throw new IllegalArgumentException("target must be a TargetSpec");
+        this.target = (TargetSpec) targetObj;
 
         Map<String, Object> p = optMap(params, "params");
         if (p == null) p = Collections.emptyMap();
@@ -78,7 +82,7 @@ public final class RequiredValueRule implements Rule {
     public RuleResult evaluate(ElementRecord element, EvaluationContext context) {
         try {
             AliasResolver resolver = context.aliases();
-            ResolvedValue resolved = resolver.resolveValue(element, targetAlias);
+            ResolvedValue resolved = resolver.resolveValue(element, target);
 
             // Check presence
             if (!resolved.isPresent()) {

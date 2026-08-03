@@ -13,7 +13,7 @@ import java.util.Optional;
 public interface EvaluationContext {
 
     /**
-     * Resolver for aliases (description, tags, stereotypes, etc.).
+     * Resolver for target specifications (description, tags, port properties, etc.).
      */
     AliasResolver aliases();
 
@@ -24,7 +24,7 @@ public interface EvaluationContext {
     int countMatchingRelations(ElementRecord element, RelationQuery query);
 
     /**
-     * Global option (e.g., lenient/strict mode).
+     * Global option for evaluation configuration.
      */
     Optional<Object> getOption(String key);
     Optional<ElementRecord> findElementByGuid(String guid);

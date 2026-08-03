@@ -6,5 +6,5 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.rule;
 public enum RuleStatus {
     PASS,
     FAIL,
-    SKIPPED // Not applicable or could not be evaluated (lenient behavior)
+    SKIPPED // Not applicable or could not be evaluated
 }

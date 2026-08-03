@@ -3,7 +3,6 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState.RuleRequest;
-import org.rhapsodychecker.rhapsodyruleverifier.config.AliasDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 
 
@@ -15,8 +14,6 @@ import java.util.List;
 
 /**
  * Pasul final de review:
- *  - Scope + Mode (text read-only)
- *  - Aliases (text read-only)
  *  - Element Sets (text read-only)
  *  - Rules — câte un JCheckBox per regulă; debifat = disabled
  */
@@ -36,10 +33,6 @@ public class ReviewStepPanel extends JPanel {
 
     // ── API public ────────────────────────────────────────────────────────────
 
-    /**
-     * Apelat de WizardDialog înainte de a afișa panelul.
-     * Reconstruiește întregul conținut pe baza stării curente.
-     */
     public void refresh() {
         removeAll();
         ruleCheckBoxes.clear();
@@ -48,10 +41,6 @@ public class ReviewStepPanel extends JPanel {
         repaint();
     }
 
-    /**
-     * Sincronizează starea checkbox-urilor înapoi în WizardState.
-     * Apelat de WizardDialog înainte de Finish / Save.
-     */
     public void applyToState() {
         List<RuleRequest> rules = state.rules();
         for (int i = 0; i < ruleCheckBoxes.size() && i < rules.size(); i++) {
@@ -65,10 +54,6 @@ public class ReviewStepPanel extends JPanel {
         JPanel content = new JPanel();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
 
-        content.add(buildScopeSection());
-        content.add(Box.createVerticalStrut(6));
-        content.add(buildAliasesSection());
-        content.add(Box.createVerticalStrut(6));
         content.add(buildSetsSection());
         content.add(Box.createVerticalStrut(6));
         content.add(buildRulesSection());
@@ -77,36 +62,6 @@ public class ReviewStepPanel extends JPanel {
         scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         add(scroll, BorderLayout.CENTER);
-    }
-
-    private JPanel buildScopeSection() {
-        JPanel p = titledPanel("Configuration");
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.add(scopeRow("Mode:", state.mode()));
-        return p;
-    }
-
-    private JPanel scopeRow(String labelText, String value) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        row.setOpaque(false);
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.add(label(labelText));
-        row.add(readOnly(value));
-        return row;
-    }
-
-    private JPanel buildAliasesSection() {
-        JPanel p = titledPanel("Aliases (" + state.aliases().size() + ")");
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-
-        if (state.aliases().isEmpty()) {
-            p.add(readOnly("(none)"));
-        } else {
-            for (AliasDefinition alias : state.aliases()) {
-                p.add(readOnly(alias.id() + "  →  " + alias.kind()));
-            }
-        }
-        return p;
     }
 
     private JPanel buildSetsSection() {
@@ -154,10 +109,6 @@ public class ReviewStepPanel extends JPanel {
         JPanel p = new JPanel() {
             @Override
             public Dimension getMaximumSize() {
-                // BoxLayout never stretches a child wider than its preferred
-                // size unless maximumSize says otherwise — without this
-                // override, a section with just 1-2 short rows shrinks to a
-                // narrow box instead of filling the available width.
                 return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
             }
         };
