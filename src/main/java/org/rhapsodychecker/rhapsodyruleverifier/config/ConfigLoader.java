@@ -144,7 +144,6 @@ public final class ConfigLoader {
                 TargetSpec target = parseTarget(fields, label, errors);
                 switch (type) {
                     case REQUIRED_VALUE:
-                    case NAMING_PATTERN:
                         if (target == null) {
                             errors.add(label + ": " + type + " requires a target");
                             continue;

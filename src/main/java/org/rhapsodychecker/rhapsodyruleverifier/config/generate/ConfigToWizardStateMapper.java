@@ -142,6 +142,7 @@ public final class ConfigToWizardStateMapper {
                 case "PACKAGE":         result.add("Package");        break;
                 case "REQUIREMENT":     result.add("Requirement");    break;
                 case "CONNECTOR":       result.add("connector");      break;
+                case "FLOW_PROPERTY":   result.add("FlowProperty");   break;
                 default: break;
             }
         }

@@ -9,6 +9,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.progress.ProgressReporter;
 
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.Locale;
 
 public final class RhapsodyModelLoader {
 
@@ -59,15 +60,46 @@ public final class RhapsodyModelLoader {
 
             String typeGuid = null;
             String typeName = null;
+            String initialValue = null;
+            boolean isFlowProperty = false;
             if (elt instanceof IRPAttribute) {
                 IRPClassifier t = safeAttributeType((IRPAttribute) elt);
                 if (t != null) { typeGuid = safeStr(t.getGUID()); typeName = safeStr(t.getName()); }
+                // Detect FlowProperty via user-defined metaclass
+                String udmc = safeGetUserDefinedMetaClass(elt);
+                if ("FlowProperty".equals(udmc)) {
+                    isFlowProperty = true;
+                    initialValue = safeGetDefaultValue((IRPAttribute) elt);
+                    // Re-read tags using getAllTags() which captures SysML profile tags
+                    // like "direction" that getTags() may miss
+                    Map<String, String> allTags = readAllTagsViaGetAllTags(elt);
+                    if (!allTags.isEmpty()) {
+                        if (tagValues.isEmpty()) {
+                            tagValues = allTags;
+                        } else {
+                            // Merge: getAllTags results take precedence
+                            Map<String, String> merged = new LinkedHashMap<>(tagValues);
+                            merged.putAll(allTags);
+                            tagValues = merged;
+                        }
+                    }
+                }
             } else if (elt instanceof IRPPort) {
                 IRPClassifier t = safePortType((IRPPort) elt);
                 if (t != null) { typeGuid = safeStr(t.getGUID()); typeName = safeStr(t.getName()); }
             }
 
             ElementKind kind = classify(metaClass, stereotypes);
+
+            // Override classification for FlowProperties
+            if (isFlowProperty && kind == ElementKind.OTHER) {
+                kind = ElementKind.FLOW_PROPERTY;
+            }
+
+            // Override classification for InterfaceBlocks via user-defined metaclass
+            if (kind == ElementKind.OTHER && "InterfaceBlock".equals(safeGetUserDefinedMetaClass(elt))) {
+                kind = ElementKind.INTERFACE_BLOCK;
+            }
 
             collectRelation(metaClass, guid, ownerGuid, stereotypes, elt, relationsByOwner);
 
@@ -100,6 +132,7 @@ public final class RhapsodyModelLoader {
                     .description(description)
                     .portDirection(portDirection)
                     .portMultiplicity(portMultiplicity)
+                    .initialValue(initialValue)
                     .tagValues(tagValues)
                     .build());
             handleByGuid.put(guid, elt);
@@ -351,8 +384,9 @@ public final class RhapsodyModelLoader {
     public static ElementKind classify(String metaClass, Set<String> stereotypes) {
         String mc = metaClass == null ? "" : metaClass.trim();
         if ("Class".equals(mc)) {
+            // Check InterfaceBlock BEFORE Block — "InterfaceBlock" contains "Block"
+            if (containsStereoContainsIgnoreCase(stereotypes, "interfaceblock")) return ElementKind.INTERFACE_BLOCK;
             if (containsStereo(stereotypes, "Block"))          return ElementKind.BLOCK;
-            if (containsStereo(stereotypes, "InterfaceBlock")) return ElementKind.INTERFACE_BLOCK;
             return ElementKind.OTHER;
         }
         if ("Object".equals(mc))    return ElementKind.OTHER;
@@ -618,9 +652,97 @@ public final class RhapsodyModelLoader {
         return tags.isEmpty() ? Collections.<String, String>emptyMap() : tags;
     }
 
+    /**
+     * Reads all tagged values from a model element using getAllTags() instead of getTags().
+     * getAllTags() returns inherited/profile-level tags (like SysML "direction" on FlowProperties)
+     * that getTags() may not include.
+     * Reusable from IncrementalCacheUpdater.
+     */
+    public static Map<String, String> readAllTagsViaGetAllTags(IRPModelElement elt) {
+        Map<String, String> tags = new LinkedHashMap<String, String>();
+
+        try {
+            Method getAllTags = elt.getClass().getMethod("getAllTags");
+            Object tagsObj = getAllTags.invoke(elt);
+            if (tagsObj instanceof IRPCollection) {
+                IRPCollection tagColl = (IRPCollection) tagsObj;
+                for (int i = 1; i <= tagColl.getCount(); i++) {
+                    Object item = tagColl.getItem(i);
+                    if (item == null) continue;
+
+                    String tagName = null;
+                    String tagValue = null;
+
+                    if (item instanceof IRPTag) {
+                        IRPTag tag = (IRPTag) item;
+                        try { tagName = tag.getName(); } catch (Throwable t) { continue; }
+                        try { tagValue = tag.getValue(); } catch (Throwable t) { /* no value */ }
+                    } else if (item instanceof IRPModelElement) {
+                        IRPModelElement tagElt = (IRPModelElement) item;
+                        try { tagName = tagElt.getName(); } catch (Throwable t) { continue; }
+                        try {
+                            Method getVal = tagElt.getClass().getMethod("getValue");
+                            Object v = getVal.invoke(tagElt);
+                            if (v instanceof String) {
+                                tagValue = (String) v;
+                            }
+                        } catch (Throwable t) { /* no value */ }
+                    } else {
+                        try { tagName = (String) item.getClass().getMethod("getName").invoke(item); }
+                        catch (Throwable t) { continue; }
+                        try {
+                            Object v = item.getClass().getMethod("getValue").invoke(item);
+                            tagValue = v != null ? v.toString() : null;
+                        } catch (Throwable t) { /* no value */ }
+                    }
+
+                    if (tagName != null && !tagName.trim().isEmpty()) {
+                        String trimmedValue = (tagValue != null) ? tagValue.trim() : "";
+                        tags.put(tagName.trim(), trimmedValue);
+                    }
+                }
+            }
+        } catch (Throwable t) { /* ignore */ }
+
+        return tags.isEmpty() ? Collections.<String, String>emptyMap() : tags;
+    }
+
     public static String safeGetDescription(IRPModelElement elt) {
         try { String d = elt.getDescription(); return d == null ? null : d.trim(); }
         catch (Throwable t) { return null; }
+    }
+
+    /**
+     * Reads the user-defined metaclass from a model element (e.g. "FlowProperty" for
+     * IRPAttribute elements that represent SysML FlowProperties).
+     * Returns null if not available or on error.
+     */
+    public static String safeGetUserDefinedMetaClass(IRPModelElement elt) {
+        try {
+            Method m = elt.getClass().getMethod("getUserDefinedMetaClass");
+            Object result = m.invoke(elt);
+            if (result instanceof String) {
+                String s = ((String) result).trim();
+                return s.isEmpty() ? null : s;
+            }
+        } catch (Throwable t) { /* ignore */ }
+        return null;
+    }
+
+    /**
+     * Reads the default (initial) value from an IRPAttribute.
+     * Returns null if not available, empty, or on error.
+     */
+    public static String safeGetDefaultValue(IRPAttribute attr) {
+        try {
+            Method m = attr.getClass().getMethod("getDefaultValue");
+            Object result = m.invoke(attr);
+            if (result instanceof String) {
+                String s = ((String) result).trim();
+                return s.isEmpty() ? null : s;
+            }
+        } catch (Throwable t) { /* ignore */ }
+        return null;
     }
 
     private static boolean containsStereo(Set<String> set, String exact) {
@@ -630,6 +752,19 @@ public final class RhapsodyModelLoader {
     private static boolean containsStereoAnyCase(Set<String> set, String name) {
         if (set == null || name == null) return false;
         for (String s : set) { if (s.equalsIgnoreCase(name)) return true; }
+        return false;
+    }
+
+    /**
+     * Case-insensitive substring match against stereotype names.
+     * Handles stereotype names like "SysML::InterfaceBlock", "interfaceBlock", etc.
+     */
+    private static boolean containsStereoContainsIgnoreCase(Set<String> set, String substring) {
+        if (set == null || substring == null) return false;
+        String lower = substring.toLowerCase(Locale.ROOT);
+        for (String s : set) {
+            if (s != null && s.toLowerCase(Locale.ROOT).contains(lower)) return true;
+        }
         return false;
     }
 

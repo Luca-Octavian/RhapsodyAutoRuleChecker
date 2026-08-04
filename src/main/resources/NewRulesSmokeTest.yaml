@@ -1,0 +1,32 @@
+schemaVersion: 1
+
+elementSets:
+  InterfaceBlocks:
+    kinds: [INTERFACE_BLOCK]
+  FlowProperties:
+    kinds: [FLOW_PROPERTY]
+
+rules:
+  # Rule 1: InterfaceBlock naming — names must start with "if"
+  - id: interface-block-prefix
+    type: NAMING_PATTERN
+    title: InterfaceBlock names must start with 'if'
+    appliesTo:
+      set: InterfaceBlocks
+    params:
+      startsWith: if
+      caseSensitive: true
+
+  # Rule 2: FlowProperty constraints — type and direction required
+  - id: flow-property-required-fields
+    type: FLOW_PROPERTY_CONSTRAINT
+    title: FlowProperties must have type and direction
+    appliesTo:
+      set: FlowProperties
+    params:
+      type:
+        required: true
+      direction:
+        required: true
+        allowed: [In, Out, Bidirectional]
+        caseSensitive: false

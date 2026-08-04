@@ -9,7 +9,7 @@ import java.util.Map;
  */
 public final class CacheMetadata {
 
-    public static final int CURRENT_VERSION = 2;
+    public static final int CURRENT_VERSION = 3;
 
     private String projectName;
     private String projectGuid;

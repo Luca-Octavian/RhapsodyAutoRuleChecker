@@ -266,6 +266,7 @@ public final class ModelCacheManager {
         c.setStereotypes(r.stereotypes().isEmpty() ? null : new LinkedHashSet<String>(r.stereotypes()));
         c.setPortDirection(r.portDirection().orElse(null));
         c.setPortMultiplicity(r.portMultiplicity().orElse(null));
+        c.setInitialValue(r.initialValue().orElse(null));
         c.setTagValues(r.tagValues().isEmpty() ? null : new LinkedHashMap<String, String>(r.tagValues()));
         return c;
     }
@@ -284,6 +285,7 @@ public final class ModelCacheManager {
                 .stereotypes(c.getStereotypes() != null ? c.getStereotypes() : Collections.<String>emptySet())
                 .portDirection(c.getPortDirection())
                 .portMultiplicity(c.getPortMultiplicity())
+                .initialValue(c.getInitialValue())
                 .tagValues(c.getTagValues() != null ? c.getTagValues() : Collections.<String, String>emptyMap())
                 .build();
     }

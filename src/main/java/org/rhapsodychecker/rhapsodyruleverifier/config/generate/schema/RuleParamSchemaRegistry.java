@@ -15,7 +15,8 @@ import java.util.Map;
  *
  * Schemele reflectă exact parametrii acceptați de implementările Rule:
  *   RequiredValueRule, RequiredStereotypeRule, RequiredStereotypeOneOfRule,
- *   RelationExistsRule, OwnerStereotypeConstraintRule.
+ *   RelationExistsRule, OwnerStereotypeConstraintRule, NamingPatternRule,
+ *   FlowPropertyConstraintRule.
  */
 public final class RuleParamSchemaRegistry {
 
@@ -30,6 +31,8 @@ public final class RuleParamSchemaRegistry {
         schemas.put(RuleType.REQUIRED_STEREOTYPE_ONE_OF, buildRequiredStereotypeOneOfSchema());
         schemas.put(RuleType.RELATION_EXISTS,            buildRelationExistsSchema());
         schemas.put(RuleType.OWNER_STEREOTYPE_CONSTRAINT, buildOwnerStereotypeConstraintSchema());
+        schemas.put(RuleType.NAMING_PATTERN,             buildNamingPatternSchema());
+        schemas.put(RuleType.FLOW_PROPERTY_CONSTRAINT,   buildFlowPropertyConstraintSchema());
     }
 
     public static RuleParamSchemaRegistry getInstance() { return INSTANCE; }
@@ -44,8 +47,6 @@ public final class RuleParamSchemaRegistry {
 
     // -------------------------------------------------------------------------
     // RequiredValue
-    // Parametri: nonEmpty, passIfAbsent, minLength, maxLength, operator, value,
-    //            min, max, values[], pattern
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRequiredValueSchema() {
@@ -130,7 +131,6 @@ public final class RuleParamSchemaRegistry {
 
     // -------------------------------------------------------------------------
     // RequiredStereotype
-    // Parametri: requiredStereotypes[] — TOATE trebuie prezente pe element
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRequiredStereotypeSchema() {
@@ -148,7 +148,6 @@ public final class RuleParamSchemaRegistry {
 
     // -------------------------------------------------------------------------
     // RequiredStereotypeOneOf
-    // Parametri: anyOf[] — cel puțin unul trebuie prezent pe element
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRequiredStereotypeOneOfSchema() {
@@ -166,9 +165,6 @@ public final class RuleParamSchemaRegistry {
 
     // -------------------------------------------------------------------------
     // RelationExists
-    // Parametri: relationKind, direction, relationStereotypes[],
-    //            targetSet, targetTypes[], targetStereotypes[],
-    //            targetPackages[], operator, value
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildRelationExistsSchema() {
@@ -229,7 +225,6 @@ public final class RuleParamSchemaRegistry {
 
     // -------------------------------------------------------------------------
     // OwnerStereotypeConstraint
-    // Parametri: ownerStereotype (string), allowedKinds[] (ElementKind names)
     // -------------------------------------------------------------------------
 
     private RuleParamSchema buildOwnerStereotypeConstraintSchema() {
@@ -253,4 +248,97 @@ public final class RuleParamSchemaRegistry {
         ));
     }
 
+    // -------------------------------------------------------------------------
+    // NamingPattern
+    // -------------------------------------------------------------------------
+
+    private RuleParamSchema buildNamingPatternSchema() {
+        return new RuleParamSchema(RuleType.NAMING_PATTERN, Arrays.asList(
+
+                FieldSpec.builder()
+                        .paramKey("startsWith")
+                        .label("Name must start with")
+                        .fieldType(FieldType.TEXT)
+                        .required(false)
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("endsWith")
+                        .label("Name must end with")
+                        .fieldType(FieldType.TEXT)
+                        .required(false)
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("contains")
+                        .label("Name must contain")
+                        .fieldType(FieldType.TEXT)
+                        .required(false)
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("caseSensitive")
+                        .label("Case-sensitive matching")
+                        .fieldType(FieldType.BOOLEAN)
+                        .required(false)
+                        .defaultValue("true")
+                        .build()
+        ));
+    }
+
+    // -------------------------------------------------------------------------
+    // FlowPropertyConstraint
+    // -------------------------------------------------------------------------
+
+    private RuleParamSchema buildFlowPropertyConstraintSchema() {
+        return new RuleParamSchema(RuleType.FLOW_PROPERTY_CONSTRAINT, Arrays.asList(
+
+                FieldSpec.builder()
+                        .paramKey("type.required")
+                        .label("Type is required")
+                        .fieldType(FieldType.BOOLEAN)
+                        .required(false)
+                        .defaultValue("false")
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("type.allowed")
+                        .label("Allowed type names")
+                        .fieldType(FieldType.MULTI_SELECT)
+                        .required(false)
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("initialValue.required")
+                        .label("Initial value is required")
+                        .fieldType(FieldType.BOOLEAN)
+                        .required(false)
+                        .defaultValue("false")
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("initialValue.mustBeEmpty")
+                        .label("Initial value must be empty")
+                        .fieldType(FieldType.BOOLEAN)
+                        .required(false)
+                        .defaultValue("false")
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("direction.required")
+                        .label("Direction is required")
+                        .fieldType(FieldType.BOOLEAN)
+                        .required(false)
+                        .defaultValue("false")
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("direction.allowed")
+                        .label("Allowed direction values")
+                        .fieldType(FieldType.MULTI_SELECT)
+                        .required(false)
+                        .fixedOptions(Arrays.asList("In", "Out", "Bidirectional"))
+                        .build()
+        ));
+    }
 }

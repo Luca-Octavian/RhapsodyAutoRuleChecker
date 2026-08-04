@@ -518,11 +518,30 @@ public final class IncrementalCacheUpdater {
 
             String typeGuid = null;
             String typeName = null;
+            String initialValue = null;
+            boolean isFlowProperty = false;
             if (elt instanceof IRPAttribute) {
                 IRPClassifier cls = RhapsodyModelLoader.safeAttributeType((IRPAttribute) elt);
                 if (cls != null) {
                     typeGuid = RhapsodyModelLoader.safeStr(cls.getGUID());
                     typeName = RhapsodyModelLoader.safeStr(cls.getName());
+                }
+                // Detect FlowProperty via user-defined metaclass
+                String udmc = RhapsodyModelLoader.safeGetUserDefinedMetaClass(elt);
+                if ("FlowProperty".equals(udmc)) {
+                    isFlowProperty = true;
+                    initialValue = RhapsodyModelLoader.safeGetDefaultValue((IRPAttribute) elt);
+                    // Re-read tags using getAllTags() to capture SysML profile tags like "direction"
+                    Map<String, String> allTags = RhapsodyModelLoader.readAllTagsViaGetAllTags(elt);
+                    if (!allTags.isEmpty()) {
+                        if (tagValues.isEmpty()) {
+                            tagValues = allTags;
+                        } else {
+                            Map<String, String> merged = new LinkedHashMap<>(tagValues);
+                            merged.putAll(allTags);
+                            tagValues = merged;
+                        }
+                    }
                 }
             } else if (elt instanceof IRPPort) {
                 IRPClassifier cls = RhapsodyModelLoader.safePortType((IRPPort) elt);
@@ -533,6 +552,11 @@ public final class IncrementalCacheUpdater {
             }
 
             ElementKind kind = RhapsodyModelLoader.classify(metaClass, stereotypes);
+
+            // Override classification for FlowProperties
+            if (isFlowProperty && kind == ElementKind.OTHER) {
+                kind = ElementKind.FLOW_PROPERTY;
+            }
 
             String portDirection = null;
             String portMultiplicity = null;
@@ -563,6 +587,7 @@ public final class IncrementalCacheUpdater {
                     .description(description)
                     .portDirection(portDirection)
                     .portMultiplicity(portMultiplicity)
+                    .initialValue(initialValue)
                     .tagValues(tagValues)
                     .build();
         } catch (Throwable t) {
@@ -724,6 +749,7 @@ public final class IncrementalCacheUpdater {
                 .stereotypes(c.getStereotypes() != null ? c.getStereotypes() : Collections.<String>emptySet())
                 .portDirection(c.getPortDirection())
                 .portMultiplicity(c.getPortMultiplicity())
+                .initialValue(c.getInitialValue())
                 .tagValues(c.getTagValues() != null ? c.getTagValues() : Collections.<String, String>emptyMap())
                 .build();
     }

@@ -16,6 +16,7 @@ public enum ElementKind {
     PACKAGE,        // optional: package elements
     REQUIREMENT,    // optional: requirement elements
     CONNECTOR,      // optional: connectors/links
+    FLOW_PROPERTY,  // FlowProperty attributes inside InterfaceBlocks
     OTHER;
 
     public boolean isPortKind() {

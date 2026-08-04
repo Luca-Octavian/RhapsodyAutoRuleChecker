@@ -35,6 +35,9 @@ public final class ElementRecord {
     private final String portDirection;
     private final String portMultiplicity;
 
+    // FlowProperty initial value (native attribute data, not a profile tag)
+    private final String initialValue;
+
     // Stereotypes applied to this element
     private final Set<String> stereotypes;
 
@@ -52,6 +55,7 @@ public final class ElementRecord {
     private final Optional<String> descriptionOpt;
     private final Optional<String> portDirectionOpt;
     private final Optional<String> portMultiplicityOpt;
+    private final Optional<String> initialValueOpt;
 
     private ElementRecord(Builder b) {
         this.guid = requireNonBlank(b.guid, "guid");
@@ -68,6 +72,7 @@ public final class ElementRecord {
 
         this.portDirection = emptyToNull(trimOrNull(b.portDirection));
         this.portMultiplicity = emptyToNull(trimOrNull(b.portMultiplicity));
+        this.initialValue = emptyToNull(trimOrNull(b.initialValue));
 
         Set<String> st = (b.stereotypes == null) ? Collections.emptySet() : defensiveCopySet(b.stereotypes);
         this.stereotypes = st.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(st);
@@ -95,6 +100,7 @@ public final class ElementRecord {
         this.descriptionOpt = Optional.ofNullable(this.description);
         this.portDirectionOpt = Optional.ofNullable(this.portDirection);
         this.portMultiplicityOpt = Optional.ofNullable(this.portMultiplicity);
+        this.initialValueOpt = Optional.ofNullable(this.initialValue);
     }
 
     public String guid() { return guid; }
@@ -108,6 +114,7 @@ public final class ElementRecord {
     public Optional<String> description() { return descriptionOpt; }
     public Optional<String> portDirection() { return portDirectionOpt; }
     public Optional<String> portMultiplicity() { return portMultiplicityOpt; }
+    public Optional<String> initialValue() { return initialValueOpt; }
 
     public Set<String> stereotypes() { return stereotypes; }
 
@@ -132,6 +139,7 @@ public final class ElementRecord {
                 .description(this.description)
                 .portDirection(this.portDirection)
                 .portMultiplicity(this.portMultiplicity)
+                .initialValue(this.initialValue)
                 .tagValues(this.tagValues)
                 .build();
     }
@@ -155,6 +163,7 @@ public final class ElementRecord {
                 .description(this.description)
                 .portDirection(this.portDirection)
                 .portMultiplicity(this.portMultiplicity)
+                .initialValue(this.initialValue)
                 .tagValues(this.tagValues)
                 .build();
     }
@@ -207,6 +216,7 @@ public final class ElementRecord {
         private String description;
         private String portDirection;
         private String portMultiplicity;
+        private String initialValue;
         private Set<String> stereotypes;
         private Map<String, String> tagValues;
 
@@ -223,6 +233,7 @@ public final class ElementRecord {
         public Builder description(String description) { this.description = description; return this; }
         public Builder portDirection(String portDirection) { this.portDirection = portDirection; return this; }
         public Builder portMultiplicity(String portMultiplicity) { this.portMultiplicity = portMultiplicity; return this; }
+        public Builder initialValue(String initialValue) { this.initialValue = initialValue; return this; }
 
         public Builder tagValues(Map<String, String> tagValues) {
             this.tagValues = tagValues;

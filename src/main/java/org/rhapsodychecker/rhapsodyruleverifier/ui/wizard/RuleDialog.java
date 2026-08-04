@@ -92,7 +92,10 @@ public final class RuleDialog extends JDialog {
     private CheckboxListField oneOfStereoField;
 
     // NamingPattern
-    private final JTextField patternField = new JTextField(25);
+    private static final String[] NP_MODES = {"Starts with", "Ends with", "Contains"};
+    private final JComboBox<String> npModeCombo = new JComboBox<>(NP_MODES);
+    private final JTextField npValueField = new JTextField(25);
+    private final JCheckBox npCaseSensitiveCheck = new JCheckBox("Case-sensitive", true);
 
     // ── RelationExists fields ─────────────────────────────────────────────────
     private static final List<String> KNOWN_RELATION_KINDS = Arrays.asList(
@@ -120,6 +123,15 @@ public final class RuleDialog extends JDialog {
         }
         ALL_ELEMENT_KINDS = Collections.unmodifiableList(kinds);
     }
+
+    // FlowPropertyConstraint
+    private final JCheckBox fpTypeRequiredCheck = new JCheckBox("Type is required");
+    private final JTextField fpTypeAllowedField = new JTextField(25);
+    private final JCheckBox fpInitValRequiredCheck = new JCheckBox("Initial value is required");
+    private final JCheckBox fpInitValMustBeEmptyCheck = new JCheckBox("Initial value must be empty");
+    private final JCheckBox fpDirRequiredCheck = new JCheckBox("Direction is required");
+    private CheckboxListField fpDirAllowedField;
+    private static final List<String> FP_DIRECTIONS = Arrays.asList("In", "Out", "Bidirectional");
 
     private WizardState.RuleRequest result = null;
     private final JButton okBtn = new JButton("Save Rule");
@@ -231,7 +243,7 @@ public final class RuleDialog extends JDialog {
         if (pre != null) prefill(pre);
 
         FieldValidation.onChange(idField,      this::revalidateLive);
-        FieldValidation.onChange(patternField, this::revalidateLive);
+        FieldValidation.onChange(npValueField, this::revalidateLive);
         FieldValidation.onChange(targetKindCombo,  this::revalidateLive);
         revalidateLive();
 
@@ -364,7 +376,14 @@ public final class RuleDialog extends JDialog {
                 break;
 
             case NAMING_PATTERN:
-                addFormRow(paramsPanel, gbc, row++, "Regex pattern *", "rule.params.namingPattern.pattern", patternField);
+                addFormRow(paramsPanel, gbc, row++, "Match Mode *",
+                        "rule.params.namingPattern.mode", npModeCombo);
+                addFormRow(paramsPanel, gbc, row++, "Value *",
+                        "rule.params.namingPattern.value", npValueField);
+                gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+                paramsPanel.add(npCaseSensitiveCheck, gbc);
+                npModeCombo.addActionListener(e -> revalidateLive());
+                npCaseSensitiveCheck.addActionListener(e -> revalidateLive());
                 break;
 
             case RELATION_EXISTS:
@@ -414,6 +433,58 @@ public final class RuleDialog extends JDialog {
                 gbc.gridy = row++; gbc.weighty = 1; gbc.fill = GridBagConstraints.BOTH;
                 paramsPanel.add(allowedKindsField, gbc);
                 gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
+                break;
+
+            case FLOW_PROPERTY_CONSTRAINT:
+                // Type constraints
+                gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+                paramsPanel.add(HelpIcon.labelWithHelp("Type Constraints:",
+                        "rule.params.flowProperty.type"), gbc);
+                gbc.gridy = row++;
+                paramsPanel.add(fpTypeRequiredCheck, gbc);
+                addFormRow(paramsPanel, gbc, row++, "Allowed types",
+                        "rule.params.flowProperty.type.allowed", fpTypeAllowedField);
+
+                // Initial Value constraints
+                gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+                paramsPanel.add(HelpIcon.labelWithHelp("Initial Value Constraints:",
+                        "rule.params.flowProperty.initialValue"), gbc);
+                gbc.gridy = row++;
+                paramsPanel.add(fpInitValRequiredCheck, gbc);
+                gbc.gridy = row++;
+                paramsPanel.add(fpInitValMustBeEmptyCheck, gbc);
+
+                // Mutual exclusion: required vs mustBeEmpty
+                fpInitValRequiredCheck.addActionListener(e -> {
+                    if (fpInitValRequiredCheck.isSelected()) {
+                        fpInitValMustBeEmptyCheck.setSelected(false);
+                    }
+                    revalidateLive();
+                });
+                fpInitValMustBeEmptyCheck.addActionListener(e -> {
+                    if (fpInitValMustBeEmptyCheck.isSelected()) {
+                        fpInitValRequiredCheck.setSelected(false);
+                    }
+                    revalidateLive();
+                });
+
+                // Direction constraints
+                gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+                paramsPanel.add(HelpIcon.labelWithHelp("Direction Constraints:",
+                        "rule.params.flowProperty.direction"), gbc);
+                gbc.gridy = row++;
+                paramsPanel.add(fpDirRequiredCheck, gbc);
+                gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+                paramsPanel.add(HelpIcon.labelWithHelp("Allowed directions:",
+                        "rule.params.flowProperty.direction.allowed"), gbc);
+                fpDirAllowedField = new CheckboxListField(FP_DIRECTIONS);
+                gbc.gridy = row++; gbc.weighty = 0.5; gbc.fill = GridBagConstraints.BOTH;
+                paramsPanel.add(fpDirAllowedField, gbc);
+                gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
+
+                // Live validation listeners
+                fpTypeRequiredCheck.addActionListener(e -> revalidateLive());
+                fpDirRequiredCheck.addActionListener(e -> revalidateLive());
                 break;
         }
 
@@ -534,7 +605,21 @@ public final class RuleDialog extends JDialog {
                 break;
 
             case NAMING_PATTERN:
-                if (p.get("pattern") != null) patternField.setText(p.get("pattern").toString());
+                if (p.get("startsWith") != null) {
+                    npModeCombo.setSelectedItem("Starts with");
+                    npValueField.setText(p.get("startsWith").toString());
+                } else if (p.get("endsWith") != null) {
+                    npModeCombo.setSelectedItem("Ends with");
+                    npValueField.setText(p.get("endsWith").toString());
+                } else if (p.get("contains") != null) {
+                    npModeCombo.setSelectedItem("Contains");
+                    npValueField.setText(p.get("contains").toString());
+                }
+                if (p.containsKey("caseSensitive")) {
+                    Object cs = p.get("caseSensitive");
+                    npCaseSensitiveCheck.setSelected(
+                            cs instanceof Boolean ? (Boolean) cs : Boolean.parseBoolean(cs.toString()));
+                }
                 break;
 
             case RELATION_EXISTS:
@@ -565,6 +650,10 @@ public final class RuleDialog extends JDialog {
                             ? (List<String>) v : Collections.singletonList(v.toString()));
                 }
                 break;
+
+            case FLOW_PROPERTY_CONSTRAINT:
+                prefillFlowPropertyConstraint(p);
+                break;
         }
     }
 
@@ -594,7 +683,7 @@ public final class RuleDialog extends JDialog {
 
     private void updateTargetVisibility() {
         RuleType type = (RuleType) typeCombo.getSelectedItem();
-        boolean needsTarget = type == RuleType.REQUIRED_VALUE || type == RuleType.NAMING_PATTERN;
+        boolean needsTarget = type == RuleType.REQUIRED_VALUE;
         if (targetKindLabel != null) targetKindLabel.setVisible(needsTarget);
         if (targetKindCombo != null) targetKindCombo.setVisible(needsTarget);
         if (!needsTarget) {
@@ -631,9 +720,9 @@ public final class RuleDialog extends JDialog {
                     valid = valid && oneOfOk;
                     break;
                 case NAMING_PATTERN:
-                    boolean patternOk = !patternField.getText().trim().isEmpty();
-                    if (patternOk) FieldValidation.markValid(patternField); else FieldValidation.markInvalid(patternField);
-                    valid = valid && patternOk;
+                    boolean npValueOk = !npValueField.getText().trim().isEmpty();
+                    if (npValueOk) FieldValidation.markValid(npValueField); else FieldValidation.markInvalid(npValueField);
+                    valid = valid && npValueOk;
                     break;
                 case OWNER_STEREOTYPE_CONSTRAINT:
                     boolean ownerOk = ownerStereoField != null && !ownerStereoField.getSelectedValues().isEmpty();
@@ -641,6 +730,15 @@ public final class RuleDialog extends JDialog {
                     boolean kindsOk = allowedKindsField != null && !allowedKindsField.getSelectedValues().isEmpty();
                     if (allowedKindsField != null) allowedKindsField.setValid(kindsOk);
                     valid = valid && ownerOk && kindsOk;
+                    break;
+                case FLOW_PROPERTY_CONSTRAINT:
+                    boolean fpAny = fpTypeRequiredCheck.isSelected()
+                            || !fpTypeAllowedField.getText().trim().isEmpty()
+                            || fpInitValRequiredCheck.isSelected()
+                            || fpInitValMustBeEmptyCheck.isSelected()
+                            || fpDirRequiredCheck.isSelected()
+                            || (fpDirAllowedField != null && !fpDirAllowedField.getSelectedValues().isEmpty());
+                    valid = valid && fpAny;
                     break;
                 default:
                     break;
@@ -678,17 +776,8 @@ public final class RuleDialog extends JDialog {
                 }
                 break;
             case NAMING_PATTERN:
-                if (patternField.getText().trim().isEmpty()) {
-                    warn("Pattern is required."); return false;
-                }
-                AliasKind npKind = (AliasKind) targetKindCombo.getSelectedItem();
-                if (npKind == AliasKind.TAGGED_VALUE) {
-                    if (targetProfileField.getText().trim().isEmpty()) {
-                        warn("Profile Name is required for Tagged Value targets."); return false;
-                    }
-                    if (targetTagNameField.getText().trim().isEmpty()) {
-                        warn("Tag Name is required for Tagged Value targets."); return false;
-                    }
+                if (npValueField.getText().trim().isEmpty()) {
+                    warn("Match value is required."); return false;
                 }
                 break;
             case OWNER_STEREOTYPE_CONSTRAINT:
@@ -697,6 +786,17 @@ public final class RuleDialog extends JDialog {
                 }
                 if (allowedKindsField == null || allowedKindsField.getSelectedValues().isEmpty()) {
                     warn("At least one Allowed Kind is required."); return false;
+                }
+                break;
+            case FLOW_PROPERTY_CONSTRAINT:
+                boolean fpHasAny = fpTypeRequiredCheck.isSelected()
+                        || !fpTypeAllowedField.getText().trim().isEmpty()
+                        || fpInitValRequiredCheck.isSelected()
+                        || fpInitValMustBeEmptyCheck.isSelected()
+                        || fpDirRequiredCheck.isSelected()
+                        || (fpDirAllowedField != null && !fpDirAllowedField.getSelectedValues().isEmpty());
+                if (!fpHasAny) {
+                    warn("At least one FlowProperty constraint must be configured."); return false;
                 }
                 break;
         }
@@ -752,7 +852,12 @@ public final class RuleDialog extends JDialog {
                 break;
 
             case NAMING_PATTERN:
-                params.put("pattern", patternField.getText().trim());
+                String npMode = (String) npModeCombo.getSelectedItem();
+                String npVal = npValueField.getText().trim();
+                if ("Starts with".equals(npMode)) params.put("startsWith", npVal);
+                else if ("Ends with".equals(npMode)) params.put("endsWith", npVal);
+                else params.put("contains", npVal);
+                params.put("caseSensitive", npCaseSensitiveCheck.isSelected());
                 break;
 
             case RELATION_EXISTS:
@@ -770,6 +875,10 @@ public final class RuleDialog extends JDialog {
                     params.put("ownerStereotype", ownerStereoField.getSelectedValues().get(0));
                 if (allowedKindsField != null && !allowedKindsField.getSelectedValues().isEmpty())
                     params.put("allowedKinds", allowedKindsField.getSelectedValues());
+                break;
+
+            case FLOW_PROPERTY_CONSTRAINT:
+                buildFlowPropertyParams(params);
                 break;
         }
 
@@ -792,7 +901,7 @@ public final class RuleDialog extends JDialog {
     /** Builds a TargetSpec from the current target UI fields. */
     private TargetSpec buildTargetSpec() {
         RuleType type = (RuleType) typeCombo.getSelectedItem();
-        boolean needsTarget = type == RuleType.REQUIRED_VALUE || type == RuleType.NAMING_PATTERN;
+        boolean needsTarget = type == RuleType.REQUIRED_VALUE;
         if (!needsTarget) return null;
 
         AliasKind kind = (AliasKind) targetKindCombo.getSelectedItem();
@@ -844,6 +953,68 @@ public final class RuleDialog extends JDialog {
         if (comp.startsWith("at most"))      return "lte";
         if (comp.equals("between"))          return "between";
         return "eq";
+    }
+
+    // ── FlowPropertyConstraint helpers ────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private void prefillFlowPropertyConstraint(Map<String, Object> p) {
+        // Type
+        Object typeBlock = p.get("type");
+        if (typeBlock instanceof Map) {
+            Map<String, Object> t = (Map<String, Object>) typeBlock;
+            if (Boolean.TRUE.equals(t.get("required"))) fpTypeRequiredCheck.setSelected(true);
+            Object allowed = t.get("allowed");
+            if (allowed instanceof List) {
+                StringBuilder sb = new StringBuilder();
+                for (Object item : (List<?>) allowed) {
+                    if (sb.length() > 0) sb.append(", ");
+                    sb.append(item);
+                }
+                fpTypeAllowedField.setText(sb.toString());
+            }
+        }
+        // InitialValue
+        Object ivBlock = p.get("initialValue");
+        if (ivBlock instanceof Map) {
+            Map<String, Object> iv = (Map<String, Object>) ivBlock;
+            if (Boolean.TRUE.equals(iv.get("required"))) fpInitValRequiredCheck.setSelected(true);
+            if (Boolean.TRUE.equals(iv.get("mustBeEmpty"))) fpInitValMustBeEmptyCheck.setSelected(true);
+        }
+        // Direction
+        Object dirBlock = p.get("direction");
+        if (dirBlock instanceof Map) {
+            Map<String, Object> d = (Map<String, Object>) dirBlock;
+            if (Boolean.TRUE.equals(d.get("required"))) fpDirRequiredCheck.setSelected(true);
+            Object allowed = d.get("allowed");
+            if (allowed instanceof List && fpDirAllowedField != null) {
+                List<String> vals = new ArrayList<>();
+                for (Object item : (List<?>) allowed) vals.add(item.toString());
+                fpDirAllowedField.setSelectedValues(vals);
+            }
+        }
+    }
+
+    private void buildFlowPropertyParams(Map<String, Object> params) {
+        // Type block
+        Map<String, Object> typeBlock = new LinkedHashMap<>();
+        if (fpTypeRequiredCheck.isSelected()) typeBlock.put("required", true);
+        List<String> typeAllowed = splitValues(fpTypeAllowedField.getText());
+        if (!typeAllowed.isEmpty()) typeBlock.put("allowed", typeAllowed);
+        if (!typeBlock.isEmpty()) params.put("type", typeBlock);
+
+        // InitialValue block
+        Map<String, Object> ivBlock = new LinkedHashMap<>();
+        if (fpInitValRequiredCheck.isSelected()) ivBlock.put("required", true);
+        if (fpInitValMustBeEmptyCheck.isSelected()) ivBlock.put("mustBeEmpty", true);
+        if (!ivBlock.isEmpty()) params.put("initialValue", ivBlock);
+
+        // Direction block
+        Map<String, Object> dirBlock = new LinkedHashMap<>();
+        if (fpDirRequiredCheck.isSelected()) dirBlock.put("required", true);
+        if (fpDirAllowedField != null && !fpDirAllowedField.getSelectedValues().isEmpty())
+            dirBlock.put("allowed", fpDirAllowedField.getSelectedValues());
+        if (!dirBlock.isEmpty()) params.put("direction", dirBlock);
     }
 
     // ── General helpers ───────────────────────────────────────────────────────

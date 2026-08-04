@@ -80,6 +80,8 @@ public final class ConfigBuilder {
             case "NAMINGPATTERN":             return RuleType.NAMING_PATTERN;
             case "OWNER_STEREOTYPE_CONSTRAINT":
             case "OWNERSTEREOTYPECONSTRAINT":  return RuleType.OWNER_STEREOTYPE_CONSTRAINT;
+            case "FLOW_PROPERTY_CONSTRAINT":
+            case "FLOWPROPERTYCONSTRAINT":     return RuleType.FLOW_PROPERTY_CONSTRAINT;
             default:
                 throw new IllegalArgumentException("Unknown rule type from wizard: " + raw);
         }

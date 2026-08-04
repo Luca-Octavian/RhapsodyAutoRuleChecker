@@ -18,7 +18,8 @@ public final class ElementSetDialog extends JDialog {
     private static final List<String> KNOWN_KINDS = Arrays.asList(
             "BLOCK", "INTERFACE_BLOCK", "PART",
             "PORT", "PORT_FULL", "PORT_PROXY", "PORT_FLOW",
-            "INTERFACE", "PACKAGE", "REQUIREMENT", "CONNECTOR"
+            "INTERFACE", "PACKAGE", "REQUIREMENT", "CONNECTOR",
+            "FLOW_PROPERTY"
     );
 
     private final FastDetectionResult fast;

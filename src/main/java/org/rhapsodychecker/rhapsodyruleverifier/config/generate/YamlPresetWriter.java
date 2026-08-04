@@ -82,7 +82,7 @@ public final class YamlPresetWriter {
         if (!r.params().isEmpty()) {
             out.add("    params:");
             for (Map.Entry<String, Object> e : r.params().entrySet()) {
-                out.add("      " + e.getKey() + ": " + paramValueYaml(e.getValue()));
+                writeParamEntry(e.getKey(), e.getValue(), 6, out);
             }
         }
         if (r.message() != null && !r.message().isEmpty()) {
@@ -152,6 +152,20 @@ public final class YamlPresetWriter {
         return false;
     }
 
+    @SuppressWarnings("unchecked")
+    private static void writeParamEntry(String key, Object value, int indent, List<String> out) {
+        String pad = spaces(indent);
+        if (value instanceof Map) {
+            out.add(pad + key + ":");
+            Map<String, Object> map = (Map<String, Object>) value;
+            for (Map.Entry<String, Object> sub : map.entrySet()) {
+                writeParamEntry(sub.getKey(), sub.getValue(), indent + 2, out);
+            }
+        } else {
+            out.add(pad + key + ": " + paramValueYaml(value));
+        }
+    }
+
     private static String paramValueYaml(Object value) {
         if (value == null) return "";
         if (value instanceof List) {
@@ -165,6 +179,12 @@ public final class YamlPresetWriter {
             return value.toString();
         }
         return value.toString();
+    }
+
+    private static String spaces(int count) {
+        StringBuilder sb = new StringBuilder(count);
+        for (int i = 0; i < count; i++) sb.append(' ');
+        return sb.toString();
     }
 
     private static String escape(String s) {

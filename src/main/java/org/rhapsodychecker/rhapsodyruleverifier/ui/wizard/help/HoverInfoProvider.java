@@ -142,9 +142,18 @@ public final class HoverInfoProvider {
                         + "ungrouped rules.");
 
         // ── Rule params: NamingPattern ──────────────────────────────────────
-        put("rule.params.namingPattern.pattern", "Pattern",
-                "Regular expression that the name must match.",
-                "e.g. ^[A-Z][a-zA-Z0-9]*$");
+        put("rule.params.namingPattern.mode", "Match Mode",
+                "How the element name is checked against the value.\n\n"
+                + "• Starts with — name must begin with the given text.\n"
+                + "• Ends with — name must end with the given text.\n"
+                + "• Contains — name must contain the given text anywhere.");
+        put("rule.params.namingPattern.value", "Value",
+                "The text to match against the element name. "
+                + "This is plain string matching (not regex).",
+                "e.g. IFB_ (for 'Starts with')");
+        put("rule.params.namingPattern.caseSensitive", "Case-Sensitive",
+                "Whether the name comparison is case-sensitive. "
+                + "Checked = exact case match; unchecked = case-insensitive.");
 
         // ── Rule params: RelationExists ─────────────────────────────────────
         put("rule.params.relationExists.relationKind", "Relation Kind",
@@ -175,6 +184,24 @@ public final class HoverInfoProvider {
         // ── Rule params: RequiredStereotypeOneOf ─────────────────────────────
         put("rule.params.requiredStereotypeOneOf.stereotypes", "Stereotypes",
                 "At least one of these stereotypes must be present.");
+
+        // ── Rule params: FlowPropertyConstraint ──────────────────────────────
+        put("rule.params.flowProperty.type", "Type Constraints",
+                "Constraints on the FlowProperty's type (data type). "
+                + "You can require that a type is set and/or restrict it to specific allowed types.");
+        put("rule.params.flowProperty.type.allowed", "Allowed Types",
+                "Comma-separated list of type names the FlowProperty is allowed to have. "
+                + "Leave empty to allow any type.",
+                "e.g. int, boolean, float");
+        put("rule.params.flowProperty.initialValue", "Initial Value Constraints",
+                "Constraints on the FlowProperty's initial value. "
+                + "You can require it to be present, or require it to be empty.");
+        put("rule.params.flowProperty.direction", "Direction Constraints",
+                "Constraints on the FlowProperty's direction tag value. "
+                + "You can require a direction to be set and/or restrict it to specific values.");
+        put("rule.params.flowProperty.direction.allowed", "Allowed Directions",
+                "Which direction values are accepted. Select from the checkboxes.",
+                "e.g. In, Out, Bidirectional");
 
         // ── Rule params: OwnerStereotypeConstraint ───────────────────────────
         put("rule.params.ownerConstraint.ownerStereotype", "Owner Stereotype",

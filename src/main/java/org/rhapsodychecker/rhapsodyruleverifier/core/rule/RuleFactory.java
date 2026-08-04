@@ -24,6 +24,8 @@ public final class RuleFactory {
         register(RuleType.REQUIRED_STEREOTYPE,         RequiredStereotypeRule::new);
         register(RuleType.REQUIRED_STEREOTYPE_ONE_OF,  RequiredStereotypeOneOfRule::new);
         register(RuleType.RELATION_EXISTS,             RelationExistsRule::new);
+        register(RuleType.NAMING_PATTERN,              NamingPatternRule::new);
+        register(RuleType.FLOW_PROPERTY_CONSTRAINT,    FlowPropertyConstraintRule::new);
     }
 
     private RuleFactory() {}

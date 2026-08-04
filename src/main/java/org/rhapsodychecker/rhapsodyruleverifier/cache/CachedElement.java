@@ -22,6 +22,7 @@ public final class CachedElement {
     private Set<String> stereotypes;
     private String portDirection;
     private String portMultiplicity;
+    private String initialValue;
     private Map<String, String> tagValues;
 
     /** Jackson needs no-arg constructor. */
@@ -62,6 +63,9 @@ public final class CachedElement {
 
     public String getPortMultiplicity() { return portMultiplicity; }
     public void setPortMultiplicity(String v) { this.portMultiplicity = v; }
+
+    public String getInitialValue() { return initialValue; }
+    public void setInitialValue(String v) { this.initialValue = v; }
 
     public Map<String, String> getTagValues() { return tagValues; }
     public void setTagValues(Map<String, String> v) { this.tagValues = v; }
