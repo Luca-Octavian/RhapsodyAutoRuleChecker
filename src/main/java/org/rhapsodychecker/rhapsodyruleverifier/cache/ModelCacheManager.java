@@ -2,7 +2,6 @@
 package org.rhapsodychecker.rhapsodyruleverifier.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
@@ -19,8 +18,11 @@ import java.util.*;
  */
 public final class ModelCacheManager {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .enable(SerializationFeature.INDENT_OUTPUT);
+    // INDENT_OUTPUT removed: this file is a machine-only cache (written and read only by
+    // this class, never hand-edited), so pretty-printing only adds CPU on every write/read
+    // and inflates the file on disk. If you want a human-readable dump for debugging,
+    // add a separate debug export method that enables INDENT_OUTPUT locally.
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ModelCacheManager() {}
 

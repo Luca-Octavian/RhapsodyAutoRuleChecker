@@ -8,8 +8,8 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.model.Multiplicity;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.PortDirection;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.PortInfo;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.PortInfoResolver;
+import org.rhapsodychecker.rhapsodyruleverifier.core.util.ReflectiveMethodCache;
 
-import java.lang.reflect.Method;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -164,35 +164,30 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
     // ---- Low-level helpers ----
 
     private static Optional<String> tryCallString(Object target, String method) {
-        try {
-            Method m = target.getClass().getMethod(method);
-            Object val = m.invoke(target);
-            if (val instanceof String) {
-                String s = ((String) val).trim();
-                return s.isEmpty() ? Optional.empty() : Optional.of(s);
-            }
-            if (val != null) {
-                String s = val.toString().trim();
-                return s.isEmpty() ? Optional.empty() : Optional.of(s);
-            }
-        } catch (Throwable ignore) {}
+        Object val = ReflectiveMethodCache.invokeOrNull(target, method);
+        if (val instanceof String) {
+            String s = ((String) val).trim();
+            return s.isEmpty() ? Optional.empty() : Optional.of(s);
+        }
+        if (val != null) {
+            String s = val.toString().trim();
+            return s.isEmpty() ? Optional.empty() : Optional.of(s);
+        }
         return Optional.empty();
     }
 
     private static Optional<Integer> tryCallInt(Object target, String method) {
-        try {
-            Method m = target.getClass().getMethod(method);
-            Object val = m.invoke(target);
-            if (val instanceof Integer) return Optional.of((Integer) val);
-            if (val instanceof String) return parseInt((String) val);
-        } catch (Throwable ignore) {}
+        Object val = ReflectiveMethodCache.invokeOrNull(target, method);
+        if (val instanceof Integer) return Optional.of((Integer) val);
+        if (val instanceof String) return parseInt((String) val);
         return Optional.empty();
     }
 
     private static Optional<String> tryReadTagValue(IRPModelElement elt, String tagName) {
         try {
-            IRPCollection tags = (IRPCollection) elt.getClass().getMethod("getTags").invoke(elt);
-            if (tags == null) return Optional.empty();
+            Object tagsObj = ReflectiveMethodCache.invokeOrNull(elt, "getTags");
+            if (!(tagsObj instanceof IRPCollection)) return Optional.empty();
+            IRPCollection tags = (IRPCollection) tagsObj;
             int count = tags.getCount();
             for (int i = 1; i <= count; i++) {
                 Object tag = tags.getItem(i);
@@ -210,27 +205,18 @@ public final class RhapsodyPortInfoResolver implements PortInfoResolver {
     }
 
     private static String tryGetName(Object tagObj) {
-        try {
-            Method m = tagObj.getClass().getMethod("getName");
-            Object v = m.invoke(tagObj);
-            return (v instanceof String) ? ((String) v).trim() : null;
-        } catch (Throwable t) { return null; }
+        Object v = ReflectiveMethodCache.invokeOrNull(tagObj, "getName");
+        return (v instanceof String) ? ((String) v).trim() : null;
     }
 
     private static String tryGetValue(Object tagObj) {
-        try {
-            Method m = tagObj.getClass().getMethod("getValue");
-            Object v = m.invoke(tagObj);
-            return (v instanceof String) ? (String) v : (v != null ? v.toString() : null);
-        } catch (Throwable t) { return null; }
+        Object v = ReflectiveMethodCache.invokeOrNull(tagObj, "getValue");
+        return (v instanceof String) ? (String) v : (v != null ? v.toString() : null);
     }
 
     private static IRPCollection safeInvokeCollection(Object target, String method) {
-        try {
-            Method m = target.getClass().getMethod(method);
-            Object v = m.invoke(target);
-            return (v instanceof IRPCollection) ? (IRPCollection) v : null;
-        } catch (Throwable t) { return null; }
+        Object v = ReflectiveMethodCache.invokeOrNull(target, method);
+        return (v instanceof IRPCollection) ? (IRPCollection) v : null;
     }
 
     private static int countCollection(IRPCollection c) {

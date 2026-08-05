@@ -55,6 +55,7 @@ public final class SwingProgressReporter implements ProgressReporter {
     public void onStepCompleted(String step) {
         SwingUtilities.invokeLater(() -> {
             progressBar.setIndeterminate(false);
+            progressBar.setValue(0);
             progressBar.setString(step + " — done");
         });
     }

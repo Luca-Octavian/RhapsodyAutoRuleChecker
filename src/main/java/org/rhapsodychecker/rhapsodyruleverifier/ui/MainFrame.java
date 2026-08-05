@@ -8,6 +8,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.controller.MainFrameController;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientProgressBar;
 
 import javax.swing.*;
 import java.awt.*;
@@ -39,18 +40,24 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     private final ResultsTablePanel resultsPanel = new ResultsTablePanel();
 
     private final JLabel       statusBar   = new JLabel("  Ready");
-    private final JProgressBar progressBar = new JProgressBar();
+    private final JProgressBar progressBar = new GradientProgressBar();
 
     // ── Controller ──────────────────────────────────────────────────────────
     private final MainFrameController controller;
 
     // ── Constructor ─────────────────────────────────────────────────────────
 
+    private static final Dimension MIN_SIZE = new Dimension(1000, 600);
+
     public MainFrame() {
         super("Rhapsody Model Checker");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1200, 700);
+        setSize(1600, 900);
+        setMinimumSize(MIN_SIZE);
         setLocationRelativeTo(null);
+
+        // Guard against external resize interference (e.g. Rhapsody COM automation)
+        AppTheme.guardMinimumSize(this, MIN_SIZE);
 
         controller = new MainFrameController(this,
                 new SwingProgressReporter(progressBar, statusBar));
@@ -76,26 +83,40 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         modelPathField.setEditable(true);
         configPathField.setEditable(true);
 
-        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
-        topPanel.add(new JLabel("Model (.rpyx):"), gbc);
-        gbc.gridx = 1; gbc.weightx = 1;
-        topPanel.add(modelPathField, gbc);
-        gbc.gridx = 2; gbc.weightx = 0;
-        topPanel.add(modelBrowseBtn, gbc);
+        // Wrap Model + Config rows in a visually grouped sub-panel
+        JPanel pathGroup = new JPanel(new GridBagLayout());
+        pathGroup.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1),
+                BorderFactory.createEmptyBorder(12, 16, 12, 16)));
+        pathGroup.putClientProperty("FlatLaf.style", "arc: 12");
 
-        gbc.gridx = 0; gbc.gridy = 1;
-        topPanel.add(new JLabel("Config (.yaml):"), gbc);
-        gbc.gridx = 1; gbc.weightx = 1;
-        topPanel.add(configPathField, gbc);
-        gbc.gridx = 2; gbc.weightx = 0;
-        topPanel.add(configBrowseBtn, gbc);
+        GridBagConstraints pgbc = new GridBagConstraints();
+        pgbc.insets = new Insets(2, 5, 2, 5);
+        pgbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // Styling
-        modelBrowseBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
-        loadModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
-        updateModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
+        pgbc.gridx = 0; pgbc.gridy = 0; pgbc.weightx = 0;
+        pathGroup.add(new JLabel("Model (.rpyx):"), pgbc);
+        pgbc.gridx = 1; pgbc.weightx = 1;
+        pathGroup.add(modelPathField, pgbc);
+        pgbc.gridx = 2; pgbc.weightx = 0;
+        pathGroup.add(modelBrowseBtn, pgbc);
+
+        pgbc.gridx = 0; pgbc.gridy = 1;
+        pathGroup.add(new JLabel("Config (.yaml):"), pgbc);
+        pgbc.gridx = 1; pgbc.weightx = 1;
+        pathGroup.add(configPathField, pgbc);
+        pgbc.gridx = 2; pgbc.weightx = 0;
+        pathGroup.add(configBrowseBtn, pgbc);
+
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 3; gbc.weightx = 1;
+        topPanel.add(pathGroup, gbc);
+
+        // Styling — Orange 200 marks model actions and the post-load cache
+        // choice. The Cache folder utility stays neutral. Run has only a soft
+        // orange focus/hover border, while purple remains for wizard/config actions.
+        loadModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_FILL_STYLE);
+        updateModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_FILL_STYLE);
         runBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
-        configBrowseBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         newConfigWizardBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         editConfigWizardBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         openCacheBtn.setToolTipText("Open cache folder in Explorer");
@@ -114,7 +135,7 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         buttonPanel.add(leftButtons, BorderLayout.WEST);
         buttonPanel.add(rightButtons, BorderLayout.EAST);
 
-        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 3; gbc.weightx = 1;
+        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 3; gbc.weightx = 1;
         topPanel.add(buttonPanel, gbc);
         add(topPanel, BorderLayout.NORTH);
 
@@ -123,6 +144,7 @@ public class MainFrame extends JFrame implements MainFrameController.View {
                 JSplitPane.HORIZONTAL_SPLIT, treePanel, resultsPanel);
         splitPane.setDividerLocation(300);
         splitPane.setResizeWeight(0.3);
+        splitPane.setDividerSize(6);
         add(splitPane, BorderLayout.CENTER);
 
         // Bottom
@@ -269,6 +291,7 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     public static void main(String[] args) {
         System.setProperty("sun.java2d.dpiaware", "true");
         System.setProperty("sun.java2d.uiScale.enabled", "true");
+        System.setProperty("sun.java2d.d3d", "false");
         AppLogger.init();
         Runtime.getRuntime().addShutdownHook(new Thread(AppLogger::close));
         AppTheme.apply();

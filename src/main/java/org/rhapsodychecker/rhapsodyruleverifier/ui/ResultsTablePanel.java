@@ -4,9 +4,11 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
-import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleGrouping;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.EmptyStatePanel;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -23,10 +25,10 @@ import java.util.function.Consumer;
 /**
  * Displays rule evaluation failures in a tree layout.
  *
- * <p>Ungrouped rule failures appear as flat root-level nodes.
- * Grouped rule failures are nested: a parent node per (group, element)
- * shows a summary ("2 of 3 rules failed"), and expanding it reveals
- * each individual failing rule as a child node.
+ * <p>Ungrouped failures identify the rule, element, and reason directly.
+ * Grouped failures are nested: a parent node identifies the group and element
+ * with a failure summary, and its children identify each failed rule and reason.
+ * Full path and message details appear in the Details pane.
  *
  * <p>Double-click navigates to the element in Rhapsody — only on
  * individual rule nodes (leaf), not on group summary nodes.
@@ -73,6 +75,32 @@ public final class ResultsTablePanel extends JPanel {
         }
     }
 
+    // ── Small dot icon drawn via Graphics2D ────────────────────────────────
+
+    /** A tiny filled-circle icon for tree rows. */
+    private static final class DotIcon implements Icon {
+        private final Color color;
+        private static final int SIZE = 8;
+
+        DotIcon(Color color) { this.color = color; }
+
+        @Override public int getIconWidth()  { return SIZE; }
+        @Override public int getIconHeight() { return SIZE; }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                                RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillOval(x, y, SIZE, SIZE);
+            g2.dispose();
+        }
+    }
+
+    private static final Icon GROUP_DOT = new DotIcon(Color.decode(AccentColors.PURPLE_HEX));
+    private static final Icon RULE_DOT  = new DotIcon(Color.GRAY);
+
     // ── UI components ─────────────────────────────────────────────────────
 
     private final JTree tree;
@@ -81,7 +109,16 @@ public final class ResultsTablePanel extends JPanel {
     private final JTextField filterField;
     private final JLabel statusLabel;
 
+    /* ── Detail pane: grid (top) + text area (bottom) ──────────────────── */
+    private final JLabel detailLabel1Key   = new JLabel();
+    private final JLabel detailLabel1Value = new JLabel();
+    private final JLabel detailLabel2Key   = new JLabel("Element:");
+    private final JLabel detailLabel2Value = new JLabel();
+    private final JLabel detailLabel3Key   = new JLabel("Path:");
+    private final JLabel detailLabel3Value = new JLabel();
+    private final JPanel detailGrid;
     private final JTextArea detailArea;
+
     private final JSplitPane splitPane;
 
     private final CardLayout centerLayout = new CardLayout();
@@ -99,7 +136,7 @@ public final class ResultsTablePanel extends JPanel {
     public ResultsTablePanel() {
         setLayout(new BorderLayout(5, 5));
 
-        // Filter bar
+        /* ── Header + filter bar (NORTH) ──────────────────────────────── */
         JPanel filterPanel = new JPanel(new BorderLayout(5, 0));
         filterPanel.add(new JLabel("  Filter: "), BorderLayout.WEST);
         filterField = new JTextField();
@@ -111,6 +148,11 @@ public final class ResultsTablePanel extends JPanel {
         });
         filterPanel.add(filterField, BorderLayout.CENTER);
 
+        JPanel northPanel = new JPanel();
+        northPanel.setLayout(new BoxLayout(northPanel, BoxLayout.Y_AXIS));
+        northPanel.add(new SectionHeader("Results"));
+        northPanel.add(filterPanel);
+
         // Tree
         rootNode = new DefaultMutableTreeNode("Results");
         treeModel = new DefaultTreeModel(rootNode);
@@ -118,8 +160,10 @@ public final class ResultsTablePanel extends JPanel {
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
         tree.setCellRenderer(new ResultTreeCellRenderer());
-        tree.setRowHeight(24);
+        // HTML renderer content uses one or two lines depending on the result type.
+        tree.setRowHeight(0);
         tree.setToggleClickCount(1);
+        ToolTipManager.sharedInstance().registerComponent(tree);
 
         // Double-click: navigate only on individual rule nodes (leaf), not groups
         tree.addMouseListener(new MouseAdapter() {
@@ -144,27 +188,31 @@ public final class ResultsTablePanel extends JPanel {
 
         JScrollPane treeScroll = new JScrollPane(tree);
 
-        // Detail pane
+        // Detail pane — structured grid + free-form text
+        detailGrid = buildDetailGrid();
         detailArea = new JTextArea(5, 40);
         detailArea.setEditable(false);
         detailArea.setLineWrap(true);
         detailArea.setWrapStyleWord(true);
         detailArea.setText(DETAIL_HINT);
-        JScrollPane detailScroll = new JScrollPane(detailArea);
-        detailScroll.setBorder(BorderFactory.createTitledBorder("Details"));
 
-        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, treeScroll, detailScroll);
+        JPanel detailPane = new JPanel(new BorderLayout(0, 4));
+        detailPane.add(detailGrid, BorderLayout.NORTH);
+        detailPane.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        detailPane.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createTitledBorder("Details"),
+                BorderFactory.createEmptyBorder(4, 4, 4, 4)));
+
+        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, treeScroll, detailPane);
         splitPane.setResizeWeight(0.75);
         splitPane.setContinuousLayout(true);
-        splitPane.setOneTouchExpandable(true);
+        splitPane.setDividerSize(6);
 
-        // Placeholder
-        JLabel placeholderLabel = new JLabel(
-                "<html><div style='text-align:center;'>No output. Run a config file to see its output here.</div></html>",
-                SwingConstants.CENTER);
-        placeholderLabel.setForeground(Color.GRAY);
-        JPanel placeholderPanel = new JPanel(new GridBagLayout());
-        placeholderPanel.add(placeholderLabel);
+        // Placeholder — empty state
+        EmptyStatePanel placeholderPanel = new EmptyStatePanel(
+                "",
+                "No output",
+                "Run a config file to see its results here.");
 
         centerPanel.add(splitPane, CARD_TREE);
         centerPanel.add(placeholderPanel, CARD_PLACEHOLDER);
@@ -174,7 +222,7 @@ public final class ResultsTablePanel extends JPanel {
         statusLabel = new JLabel("  No results");
         statusLabel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
 
-        add(filterPanel, BorderLayout.NORTH);
+        add(northPanel, BorderLayout.NORTH);
         add(centerPanel, BorderLayout.CENTER);
         add(statusLabel, BorderLayout.SOUTH);
     }
@@ -212,9 +260,52 @@ public final class ResultsTablePanel extends JPanel {
         lastSpecs = Collections.emptyList();
         lastIndex = null;
         statusLabel.setText("  No results");
-        detailArea.setText(DETAIL_HINT);
+        clearDetailPane();
         filterField.setText("");
         centerLayout.show(centerPanel, CARD_PLACEHOLDER);
+    }
+
+    // ── Detail pane construction ──────────────────────────────────────────
+
+    private JPanel buildDetailGrid() {
+        JPanel grid = new JPanel(new GridBagLayout());
+        grid.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        gbc.insets = new Insets(1, 0, 1, 8);
+
+        // Style key labels as muted
+        Font keyFont = detailLabel1Key.getFont().deriveFont(Font.PLAIN, 12f);
+        Color keyColor = Color.GRAY;
+        for (JLabel key : new JLabel[]{detailLabel1Key, detailLabel2Key, detailLabel3Key}) {
+            key.setFont(keyFont);
+            key.setForeground(keyColor);
+        }
+
+        Font valueFont = detailLabel1Value.getFont().deriveFont(Font.PLAIN, 12f);
+        for (JLabel val : new JLabel[]{detailLabel1Value, detailLabel2Value, detailLabel3Value}) {
+            val.setFont(valueFont);
+        }
+
+        // Row 0
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
+        grid.add(detailLabel1Key, gbc);
+        gbc.gridx = 1; gbc.weightx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        grid.add(detailLabel1Value, gbc);
+
+        // Row 1
+        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0; gbc.fill = GridBagConstraints.NONE;
+        grid.add(detailLabel2Key, gbc);
+        gbc.gridx = 1; gbc.weightx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        grid.add(detailLabel2Value, gbc);
+
+        // Row 2
+        gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0; gbc.fill = GridBagConstraints.NONE;
+        grid.add(detailLabel3Key, gbc);
+        gbc.gridx = 1; gbc.weightx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        grid.add(detailLabel3Value, gbc);
+
+        return grid;
     }
 
     // ── Tree construction ─────────────────────────────────────────────────
@@ -345,7 +436,7 @@ public final class ResultsTablePanel extends JPanel {
         status.append("  —  double-click a rule to navigate in Rhapsody");
         statusLabel.setText(status.toString());
 
-        detailArea.setText(DETAIL_HINT);
+        clearDetailPane();
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -372,25 +463,35 @@ public final class ResultsTablePanel extends JPanel {
 
     // ── Detail pane ───────────────────────────────────────────────────────
 
+    private void clearDetailPane() {
+        detailLabel1Key.setText("");
+        detailLabel1Value.setText("");
+        detailLabel2Value.setText("");
+        detailLabel3Value.setText("");
+        detailGrid.setVisible(false);
+        detailArea.setText(DETAIL_HINT);
+    }
+
     private void updateDetailPane() {
         TreePath selPath = tree.getSelectionPath();
         if (selPath == null) {
-            detailArea.setText(DETAIL_HINT);
+            clearDetailPane();
             return;
         }
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) selPath.getLastPathComponent();
         Object userObj = node.getUserObject();
 
-        StringBuilder sb = new StringBuilder();
-
         if (userObj instanceof GroupNode) {
             GroupNode gn = (GroupNode) userObj;
-            sb.append("Group:    ").append(gn.group).append("\n");
-            sb.append("Element:  ").append(gn.elementName).append("\n");
-            sb.append("Location: ").append(gn.location).append("\n\n");
+            detailLabel1Key.setText("Group:");
+            detailLabel1Value.setText(gn.group);
+            detailLabel2Value.setText(gn.elementName);
+            detailLabel3Value.setText(gn.location);
+            detailGrid.setVisible(true);
+
+            StringBuilder sb = new StringBuilder();
             sb.append(gn.failedCount).append(" of ").append(gn.totalCount)
               .append(" rules in this group failed for this element:\n\n");
-
             for (int i = 0; i < node.getChildCount(); i++) {
                 DefaultMutableTreeNode childNode = (DefaultMutableTreeNode) node.getChildAt(i);
                 if (childNode.getUserObject() instanceof RuleNode) {
@@ -399,15 +500,18 @@ public final class ResultsTablePanel extends JPanel {
                       .append(": ").append(rn.reason).append("\n");
                 }
             }
+            detailArea.setText(sb.toString());
         } else if (userObj instanceof RuleNode) {
             RuleNode rn = (RuleNode) userObj;
-            sb.append("Rule:     ").append(rn.ruleId).append("\n");
-            sb.append("Element:  ").append(rn.elementName).append("\n");
-            sb.append("Location: ").append(rn.location).append("\n\n");
-            sb.append("Reason:\n  ").append(rn.reason);
+            detailLabel1Key.setText("Rule:");
+            detailLabel1Value.setText(rn.ruleId);
+            detailLabel2Value.setText(rn.elementName);
+            detailLabel3Value.setText(rn.location);
+            detailGrid.setVisible(true);
+
+            detailArea.setText(rn.reason);
         }
 
-        detailArea.setText(sb.toString());
         detailArea.setCaretPosition(0);
     }
 
@@ -422,12 +526,12 @@ public final class ResultsTablePanel extends JPanel {
     // ── Custom tree cell renderer ─────────────────────────────────────────
 
     /**
-     * Renders tree nodes with a multi-column appearance:
-     *   GroupNode:  "▶ GROUP_NAME  |  ElementName  |  Location  |  N of M failed"
-     *   RuleNode:   "  RULE_ID  |  ElementName  |  Location  |  Reason"
-     *   (for children under a group, element/location are hidden to reduce noise)
+     * Renders concise, labelled summaries. Paths and full messages stay in
+     * the Details pane so tree rows remain easy to scan.
      */
     private static final class ResultTreeCellRenderer extends DefaultTreeCellRenderer {
+
+        private static final int MAX_REASON_LENGTH = 180;
 
         @Override
         public Component getTreeCellRendererComponent(JTree tree, Object value,
@@ -438,31 +542,59 @@ public final class ResultsTablePanel extends JPanel {
             if (!(value instanceof DefaultMutableTreeNode)) return this;
             Object userObj = ((DefaultMutableTreeNode) value).getUserObject();
 
-            setIcon(null);
-
             if (userObj instanceof GroupNode) {
                 GroupNode gn = (GroupNode) userObj;
-                setText(gn.group + "  |  " + gn.elementName
-                        + "  |  " + gn.location
-                        + "  |  " + gn.failedCount + " of " + gn.totalCount + " failed");
+                setIcon(GROUP_DOT);
                 setFont(getFont().deriveFont(Font.BOLD));
+                setText("<html><b>Group:</b> " + html(gn.group)
+                        + " &nbsp;&bull;&nbsp; <b>Element:</b> " + html(gn.elementName)
+                        + " &nbsp;&bull;&nbsp; <b>" + gn.failedCount + " of "
+                        + gn.totalCount + " failed</b></html>");
+                setToolTipText("Group: " + gn.group + " | Element: " + gn.elementName
+                        + " | " + gn.failedCount + " of " + gn.totalCount + " rules failed");
             } else if (userObj instanceof RuleNode) {
                 RuleNode rn = (RuleNode) userObj;
+                setIcon(RULE_DOT);
+                setFont(getFont().deriveFont(Font.PLAIN));
                 DefaultMutableTreeNode treeNode = (DefaultMutableTreeNode) value;
-                boolean isChild = treeNode.getParent() != null
-                        && treeNode.getParent() instanceof DefaultMutableTreeNode
+                boolean isChild = treeNode.getParent() instanceof DefaultMutableTreeNode
                         && ((DefaultMutableTreeNode) treeNode.getParent()).getUserObject() instanceof GroupNode;
+                String reason = abbreviate(rn.reason);
 
                 if (isChild) {
-                    setText(rn.ruleId + "  |  " + rn.reason);
+                    // The group parent already identifies the element.
+                    setText("<html><b>Rule:</b> " + html(rn.ruleId)
+                            + " &nbsp;&bull;&nbsp; <b>Why:</b> " + html(reason) + "</html>");
                 } else {
-                    setText(rn.ruleId + "  |  " + rn.elementName
-                            + "  |  " + rn.location + "  |  " + rn.reason);
+                    setText("<html><b>Rule:</b> " + html(rn.ruleId)
+                            + " &nbsp;&bull;&nbsp; <b>Element:</b> " + html(rn.elementName)
+                            + "<br><span style='color:#777777'><b>Why:</b> "
+                            + html(reason) + "</span></html>");
                 }
-                setFont(getFont().deriveFont(Font.PLAIN));
+                setToolTipText("Rule: " + rn.ruleId + " | Element: " + rn.elementName
+                        + " | Why: " + rn.reason);
+            } else {
+                setIcon(null);
+                setToolTipText(null);
             }
 
             return this;
+        }
+
+        private static String abbreviate(String text) {
+            if (text == null || text.length() <= MAX_REASON_LENGTH) {
+                return text == null ? "" : text;
+            }
+            return text.substring(0, MAX_REASON_LENGTH - 1) + "\u2026";
+        }
+
+        private static String html(String text) {
+            if (text == null) return "";
+            String ampersand = String.valueOf((char) 38);
+            return text.replace(ampersand, ampersand + "amp;")
+                    .replace("<", ampersand + "lt;")
+                    .replace(">", ampersand + "gt;")
+                    .replace(String.valueOf((char) 34), ampersand + "quot;");
         }
     }
 }

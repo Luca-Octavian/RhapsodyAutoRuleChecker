@@ -36,10 +36,6 @@ public final class RuleStepPanel extends JPanel {
     }
 
     private void build() {
-        JLabel title = new JLabel("Add Rules");
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 15f));
-        add(title, BorderLayout.NORTH);
-
         ruleList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
         JLabel emptyLabel = new JLabel(
@@ -53,7 +49,7 @@ public final class RuleStepPanel extends JPanel {
         centerPanel.add(emptyLabel, CARD_EMPTY);
         add(centerPanel, BorderLayout.CENTER);
 
-        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
         editBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         removeBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
 

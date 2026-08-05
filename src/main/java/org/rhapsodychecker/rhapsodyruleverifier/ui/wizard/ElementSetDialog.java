@@ -4,6 +4,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.CollapsibleSection;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
 
@@ -44,8 +46,10 @@ public final class ElementSetDialog extends JDialog {
                             ElementSetDefinition prefill) {
         super(parent, "Define Element Set", ModalityType.APPLICATION_MODAL);
         this.fast = fast;
-        setSize(680, 700);
+        setSize(860, 780);
+        setMinimumSize(new Dimension(700, 620));
         setLocationRelativeTo(parent);
+        AppTheme.guardMinimumSize(this, new Dimension(700, 620));
 
         kindsField = new CheckboxListField(KNOWN_KINDS);
 
@@ -104,17 +108,31 @@ public final class ElementSetDialog extends JDialog {
         form.add(stereoField, gbc);
         gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // ── Include / Exclude packages ────────────────────────────────────────
-        gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0; gbc.gridx = 0;
-        form.add(HelpIcon.labelWithHelp("Include packages (regex CSV):", "elementSet.includePackages"), gbc);
-        gbc.gridx = 1; gbc.weightx = 1;
-        form.add(inclField, gbc);
-        gbc.gridx = 0;
+        // ── Advanced section (Include / Exclude packages) ─────────────────────
+        JPanel advancedContent = new JPanel(new GridBagLayout());
+        GridBagConstraints agbc = new GridBagConstraints();
+        agbc.insets  = new Insets(3, 5, 3, 5);
+        agbc.anchor  = GridBagConstraints.NORTHWEST;
+        agbc.fill    = GridBagConstraints.HORIZONTAL;
 
-        gbc.gridy = row++; gbc.gridwidth = 1; gbc.weightx = 0;
-        form.add(HelpIcon.labelWithHelp("Exclude packages (regex CSV):", "elementSet.excludePackages"), gbc);
-        gbc.gridx = 1; gbc.weightx = 1;
-        form.add(exclField, gbc);
+        agbc.gridy = 0; agbc.gridx = 0; agbc.weightx = 0;
+        advancedContent.add(HelpIcon.labelWithHelp("Include packages (regex CSV):", "elementSet.includePackages"), agbc);
+        agbc.gridx = 1; agbc.weightx = 1;
+        advancedContent.add(inclField, agbc);
+
+        agbc.gridy = 1; agbc.gridx = 0; agbc.weightx = 0;
+        advancedContent.add(HelpIcon.labelWithHelp("Exclude packages (regex CSV):", "elementSet.excludePackages"), agbc);
+        agbc.gridx = 1; agbc.weightx = 1;
+        advancedContent.add(exclField, agbc);
+
+        boolean startExpanded = pre != null
+                && (!pre.includePackages().isEmpty() || !pre.excludePackages().isEmpty());
+
+        CollapsibleSection advancedSection =
+                new CollapsibleSection("Advanced", advancedContent, startExpanded);
+
+        gbc.gridy = row++; gbc.gridx = 0; gbc.gridwidth = 2; gbc.weightx = 1;
+        form.add(advancedSection, gbc);
 
         // ── Total count ───────────────────────────────────────────────────────
         gbc.gridy = row++; gbc.gridx = 0; gbc.gridwidth = 2; gbc.weightx = 1;
@@ -144,7 +162,7 @@ public final class ElementSetDialog extends JDialog {
 
         // Buttons
         JButton cancelBtn = new JButton("Cancel");
-        okBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        okBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
         cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnRow.add(cancelBtn);

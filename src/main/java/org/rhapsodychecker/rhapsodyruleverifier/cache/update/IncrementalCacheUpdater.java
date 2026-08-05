@@ -4,12 +4,15 @@ package org.rhapsodychecker.rhapsodyruleverifier.cache.update;
 import com.telelogic.rhapsody.core.*;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelLoader;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
+import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.load.ModelRecordPostProcessor;
+import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.load.RhapsodyElementReader;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedRelation;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedElement;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCache;
 import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
+import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.ComLoadDiagnostics;
 import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.PhaseTimer;
 import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.PipelineProfiler;
 import org.rhapsodychecker.rhapsodyruleverifier.core.progress.LoadingStep;
@@ -321,7 +324,7 @@ public final class IncrementalCacheUpdater {
                 updatedRecords.add(record);
                 updatedHandles.put(guid, elt);
 
-                readReferences(elt, guid, updatedRefs);
+                readReferences(elt, guid, updatedRefs, fingerprints);
             }
 
             fullReadDone++;
@@ -496,100 +499,15 @@ public final class IncrementalCacheUpdater {
                                           Map<String, String> guidToOwnerGuid,
                                           Map<String, String> ownerPathCache) {
         try {
-            String guid = RhapsodyModelLoader.safeStr(elt.getGUID());
-            String name = RhapsodyModelLoader.safeStr(elt.getName());
-            String metaClass = RhapsodyModelLoader.safeStr(elt.getMetaClass());
-            if (guid.isEmpty() || name.isEmpty()) return null;
+            RhapsodyElementReader reader =
+                    new RhapsodyElementReader(ComLoadDiagnostics.disabled());
+            ElementRecord record = reader.read(elt, null);
+            if (record == null) return null;
 
-            String ownerGuid = null;
-            try {
-                IRPModelElement owner = elt.getOwner();
-                if (owner != null && !(owner instanceof IRPProject)) {
-                    ownerGuid = RhapsodyModelLoader.safeStr(owner.getGUID());
-                }
-            } catch (Throwable t) { /* ignore */ }
-
-            String ownerPath = RhapsodyModelLoader.buildOwnerPathLocal(
-                    ownerGuid, guidToName, guidToOwnerGuid, ownerPathCache);
-
-            Set<String> stereotypes = RhapsodyModelLoader.readStereotypeNames(elt);
-            String description = RhapsodyModelLoader.safeGetDescription(elt);
-            Map<String, String> tagValues = RhapsodyModelLoader.readAllTags(elt);
-
-            String typeGuid = null;
-            String typeName = null;
-            String initialValue = null;
-            boolean isFlowProperty = false;
-            if (elt instanceof IRPAttribute) {
-                IRPClassifier cls = RhapsodyModelLoader.safeAttributeType((IRPAttribute) elt);
-                if (cls != null) {
-                    typeGuid = RhapsodyModelLoader.safeStr(cls.getGUID());
-                    typeName = RhapsodyModelLoader.safeStr(cls.getName());
-                }
-                // Detect FlowProperty via user-defined metaclass
-                String udmc = RhapsodyModelLoader.safeGetUserDefinedMetaClass(elt);
-                if ("FlowProperty".equals(udmc)) {
-                    isFlowProperty = true;
-                    initialValue = RhapsodyModelLoader.safeGetDefaultValue((IRPAttribute) elt);
-                    // Re-read tags using getAllTags() to capture SysML profile tags like "direction"
-                    Map<String, String> allTags = RhapsodyModelLoader.readAllTagsViaGetAllTags(elt);
-                    if (!allTags.isEmpty()) {
-                        if (tagValues.isEmpty()) {
-                            tagValues = allTags;
-                        } else {
-                            Map<String, String> merged = new LinkedHashMap<>(tagValues);
-                            merged.putAll(allTags);
-                            tagValues = merged;
-                        }
-                    }
-                }
-            } else if (elt instanceof IRPPort) {
-                IRPClassifier cls = RhapsodyModelLoader.safePortType((IRPPort) elt);
-                if (cls != null) {
-                    typeGuid = RhapsodyModelLoader.safeStr(cls.getGUID());
-                    typeName = RhapsodyModelLoader.safeStr(cls.getName());
-                }
-            }
-
-            ElementKind kind = RhapsodyModelLoader.classify(metaClass, stereotypes);
-
-            // Override classification for FlowProperties
-            if (isFlowProperty && kind == ElementKind.OTHER) {
-                kind = ElementKind.FLOW_PROPERTY;
-            }
-
-            String portDirection = null;
-            String portMultiplicity = null;
-            if (kind.isPortKind()) {
-                portDirection = RhapsodyModelLoader.safeCallString(elt, "getPortDirection");
-                if (portDirection == null) {
-                    portDirection = RhapsodyModelLoader.safeCallString(elt, "getDirection");
-                }
-                portMultiplicity = RhapsodyModelLoader.safeCallString(elt, "getMultiplicity");
-
-                if (typeGuid == null || typeGuid.isEmpty()) {
-                    try {
-                        java.lang.reflect.Method getType = elt.getClass().getMethod("getType");
-                        Object cls = getType.invoke(elt);
-                        if (cls instanceof IRPModelElement) {
-                            typeGuid = RhapsodyModelLoader.safeStr(((IRPModelElement) cls).getGUID());
-                            typeName = RhapsodyModelLoader.safeStr(((IRPModelElement) cls).getName());
-                        }
-                    } catch (Throwable t) { /* ignore */ }
-                }
-            }
-
-            return ElementRecord.builder()
-                    .guid(guid).name(name).metaClass(metaClass).kind(kind)
-                    .ownerGuid(ownerGuid).ownerPath(ownerPath)
-                    .stereotypes(stereotypes)
-                    .typeGuid(typeGuid).typeName(typeName)
-                    .description(description)
-                    .portDirection(portDirection)
-                    .portMultiplicity(portMultiplicity)
-                    .initialValue(initialValue)
-                    .tagValues(tagValues)
-                    .build();
+            String ownerPath = ModelRecordPostProcessor.buildOwnerPath(
+                    record.ownerGuid().orElse(null),
+                    guidToName, guidToOwnerGuid, ownerPathCache);
+            return ownerPath != null ? record.withOwnerPath(ownerPath) : record;
         } catch (Throwable t) {
             AppLogger.warn("Failed to read element: " + t.getMessage());
             return null;
@@ -597,20 +515,31 @@ public final class IncrementalCacheUpdater {
     }
 
     private void readReferences(IRPModelElement elt, String guid,
-                                Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> refMap) {
+                                Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> refMap,
+                                Map<String, ElementFingerprint> fingerprints) {
         try {
             IRPCollection refs = elt.getReferences();
-            if (refs != null && refs.getCount() > 0) {
+            int refCount = refs != null ? refs.getCount() : 0;
+            if (refCount > 0) {
                 List<RhapsodyModelSnapshot.ReferenceInfo> refList =
-                        new ArrayList<RhapsodyModelSnapshot.ReferenceInfo>();
-                for (int ri = 1; ri <= refs.getCount(); ri++) {
+                        new ArrayList<RhapsodyModelSnapshot.ReferenceInfo>(refCount);
+                for (int ri = 1; ri <= refCount; ri++) {
                     Object ro = refs.getItem(ri);
                     if (ro instanceof IRPModelElement) {
                         IRPModelElement refElt = (IRPModelElement) ro;
                         String refGuid = RhapsodyModelLoader.safeStr(refElt.getGUID());
                         if (!refGuid.isEmpty()) {
-                            String refMeta = RhapsodyModelLoader.safeStr(refElt.getMetaClass());
-                            Set<String> refStereos = RhapsodyModelLoader.readStereotypeNames(refElt);
+                            ElementFingerprint fp = fingerprints.get(refGuid);
+                            String refMeta;
+                            Set<String> refStereos;
+                            if (fp != null) {
+                                // Reuse Phase 1's scan instead of a second COM round-trip.
+                                refMeta = fp.metaClass();
+                                refStereos = fp.stereotypes();
+                            } else {
+                                refMeta = RhapsodyModelLoader.safeStr(refElt.getMetaClass());
+                                refStereos = RhapsodyModelLoader.readStereotypeNames(refElt);
+                            }
                             refList.add(new RhapsodyModelSnapshot.ReferenceInfo(
                                     refGuid, refMeta, refStereos));
                         }

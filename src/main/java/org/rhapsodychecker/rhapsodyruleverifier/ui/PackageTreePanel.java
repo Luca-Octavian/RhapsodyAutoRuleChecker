@@ -1,63 +1,88 @@
-// File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/ui/PackageTreePanel.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui;
 
-import javax.swing.*;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreeSelectionModel;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.EmptyStatePanel;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
+
 import java.awt.*;
 
-/**
- * Panel containing a JTree that displays the package hierarchy.
- * User selects a node to scope the rule evaluation.
- */
-public final class PackageTreePanel extends JPanel {
+import javax.swing.*;
+import javax.swing.tree.*;
 
-    private final JTree tree;
-    private final DefaultTreeModel treeModel;
-    private final DefaultMutableTreeNode rootNode;
+/**
+ * A tree view of the model's package hierarchy.
+ *
+ * <p>Uses a CardLayout to flip between an empty-state placeholder
+ * (when no model is loaded) and the actual tree scroll pane.
+ */
+public class PackageTreePanel extends JPanel {
+
+    private static final String CARD_TREE        = "tree";
+    private static final String CARD_PLACEHOLDER = "placeholder";
+
+    private final CardLayout centerLayout = new CardLayout();
+    private final JPanel     centerPanel  = new JPanel(centerLayout);
+
+    private DefaultMutableTreeNode rootNode;
+    private DefaultTreeModel       treeModel;
+    private JTree                  tree;
 
     public PackageTreePanel() {
         setLayout(new BorderLayout());
 
-        rootNode = new DefaultMutableTreeNode("No model loaded");
+        add(new SectionHeader("Package Hierarchy"), BorderLayout.NORTH);
+
+        rootNode  = new DefaultMutableTreeNode("Model");
         treeModel = new DefaultTreeModel(rootNode);
-        tree = new JTree(treeModel);
-        tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
-        tree.setRootVisible(true);
+        tree      = new JTree(treeModel);
+        tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
 
-        JScrollPane scrollPane = new JScrollPane(tree);
-        scrollPane.setPreferredSize(new Dimension(300, 400));
+        JScrollPane treeScroll = new JScrollPane(tree);
 
-        add(new JLabel("  Package Hierarchy", SwingConstants.LEFT), BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        EmptyStatePanel placeholder = new EmptyStatePanel(
+                "\uD83D\uDCC2",
+                "No model loaded",
+                "");
+        placeholder.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        // Wrap in a JScrollPane so the placeholder gets the same FlatLaf
+        // border that the tree scroll pane provides when data is loaded.
+        JScrollPane placeholderScroll = new JScrollPane(placeholder);
+        placeholderScroll.getViewport().setOpaque(false);
+        placeholderScroll.setOpaque(false);
+
+        centerPanel.add(treeScroll, CARD_TREE);
+        centerPanel.add(placeholderScroll, CARD_PLACEHOLDER);
+        centerLayout.show(centerPanel, CARD_PLACEHOLDER);
+
+        add(centerPanel, BorderLayout.CENTER);
     }
 
     /**
-     * Populate the tree from a scanned PackageNode hierarchy.
+     * Populate the tree from a {@link PackageNode} hierarchy.
+     * The root PackageNode itself is shown as the top-level visible node.
      */
     public void loadTree(PackageNode root) {
         rootNode.removeAllChildren();
-        rootNode.setUserObject(root);
-        buildTreeNodes(rootNode, root);
+        DefaultMutableTreeNode topNode = new DefaultMutableTreeNode(root);
+        rootNode.add(topNode);
+        addChildren(topNode, root);
         treeModel.reload();
-        expandFirstLevel();
+        // Expand the top-level node so its children are visible
+        tree.expandPath(new TreePath(topNode.getPath()));
+        centerLayout.show(centerPanel, CARD_TREE);
     }
 
-    /**
-     * Empties the tree, e.g. while a new model is being scanned in the
-     * background so the previous model's hierarchy isn't shown as if it
-     * were still current.
-     */
+    /** Clear the tree. */
     public void clear() {
         rootNode.removeAllChildren();
-        rootNode.setUserObject("Loading model...");
         treeModel.reload();
+        centerLayout.show(centerPanel, CARD_PLACEHOLDER);
     }
 
     /**
-     * Get the currently selected PackageNode, or null if root/nothing selected.
+     * Return the selected {@link PackageNode}, or {@code null} if nothing
+     * is selected.
      */
     public PackageNode getSelectedPackage() {
         Object selected = tree.getLastSelectedPathComponent();
@@ -70,30 +95,20 @@ public final class PackageTreePanel extends JPanel {
         return null;
     }
 
-
     /**
-     * Get the qualified path of the selected package, or empty string for root.
+     * Return the qualified path of the currently selected tree node,
+     * or empty string if nothing is selected (meaning "no scope filter").
      */
     public String getSelectedPath() {
         PackageNode selected = getSelectedPackage();
         return selected != null ? selected.qualifiedPath() : "";
     }
 
-    public JTree getTree() {
-        return tree;
-    }
-
-    private void buildTreeNodes(DefaultMutableTreeNode parentTreeNode, PackageNode parentPkg) {
-        for (PackageNode child : parentPkg.children()) {
-            DefaultMutableTreeNode childTreeNode = new DefaultMutableTreeNode(child);
-            parentTreeNode.add(childTreeNode);
-            buildTreeNodes(childTreeNode, child);
-        }
-    }
-
-    private void expandFirstLevel() {
-        for (int i = 0; i < tree.getRowCount() && i < 20; i++) {
-            tree.expandRow(i);
+    private void addChildren(DefaultMutableTreeNode parent, PackageNode node) {
+        for (PackageNode child : node.children()) {
+            DefaultMutableTreeNode treeChild = new DefaultMutableTreeNode(child);
+            parent.add(treeChild);
+            addChildren(treeChild, child);
         }
     }
 }

@@ -5,6 +5,8 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.YamlPresetWriter;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.StepIndicator;
 
 import javax.swing.*;
 import java.awt.*;
@@ -34,6 +36,8 @@ public final class WizardDialog extends JDialog {
     private final JButton    nextBtn     = new JButton("Next →");
     private final JButton    cancelBtn   = new JButton("Cancel");
     private final JButton    saveAsBtn   = new JButton("Save As...");
+    private final StepIndicator stepIndicator =
+            new StepIndicator(new String[]{"Element sets", "Rules", "Review"});
     private final JLabel     stepLabel   = new JLabel();
 
     private final WizardState       wizardState;
@@ -46,9 +50,11 @@ public final class WizardDialog extends JDialog {
         super(parent, "Config Wizard", true);
         this.wizardState = initialState != null ? initialState : new WizardState();
 
-        setSize(800, 620);
+        setSize(1100, 820);
+        setMinimumSize(new Dimension(800, 600));
         setLocationRelativeTo(parent);
         setResizable(true);
+        AppTheme.guardMinimumSize(this, new Dimension(800, 600));
 
         // Construieste pașii
         reviewPanel = new ReviewStepPanel(wizardState);
@@ -66,9 +72,19 @@ public final class WizardDialog extends JDialog {
         setLayout(new BorderLayout(5, 5));
 
         // ── Header ────────────────────────────────────────────────────────────
+        stepIndicator.setBorder(BorderFactory.createEmptyBorder(10, 15, 0, 15));
+        stepIndicator.setAlignmentX(Component.CENTER_ALIGNMENT);
+
         stepLabel.setFont(stepLabel.getFont().deriveFont(Font.BOLD, 13f));
-        stepLabel.setBorder(BorderFactory.createEmptyBorder(10, 15, 5, 15));
-        add(stepLabel, BorderLayout.NORTH);
+        stepLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        stepLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        stepLabel.setBorder(BorderFactory.createEmptyBorder(2, 15, 5, 15));
+
+        JPanel headerPanel = new JPanel();
+        headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
+        headerPanel.add(stepIndicator);
+        headerPanel.add(stepLabel);
+        add(headerPanel, BorderLayout.NORTH);
 
         // ── Conținut pași ─────────────────────────────────────────────────────
         add(cardPanel, BorderLayout.CENTER);
@@ -76,7 +92,7 @@ public final class WizardDialog extends JDialog {
         // ── Navigare ──────────────────────────────────────────────────────────
         cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         backBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-        nextBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        nextBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
         saveAsBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
 
         saveAsBtn.setVisible(false);
@@ -121,10 +137,9 @@ public final class WizardDialog extends JDialog {
 
         cardLayout.show(cardPanel, STEP_ORDER[currentStep]);
 
-        int total = STEP_ORDER.length;
-        stepLabel.setText("Step " + (currentStep + 1) + " of " + total
-                + "  —  " + stepTitle(STEP_ORDER[currentStep]));
+        stepLabel.setText(stepTitle(STEP_ORDER[currentStep]));
 
+        stepIndicator.setCurrentStep(currentStep);
         backBtn.setEnabled(currentStep > 0);
         nextBtn.setText(currentStep == STEP_ORDER.length - 1 ? "Save & Close" : "Next →");
 

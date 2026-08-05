@@ -1,0 +1,119 @@
+schemaVersion: 1
+mode: strict
+
+elementSets:
+  ArchElements:
+    kinds: [BLOCK, INTERFACE_BLOCK, PART, PORT, PORT_FULL, PORT_PROXY, PORT_FLOW]
+  allBlocks:
+    kinds: [BLOCK, INTERFACE_BLOCK]
+  AllPorts:
+    kinds: [PORT, PORT_FULL, PORT_PROXY, PORT_FLOW]
+  Logical_Ports:
+    kinds: [PORT_PROXY, PORT_FLOW]
+  TechnicalPorts:
+    kinds: [PORT]
+
+rules:
+  - id: Arch_Asil_Required
+    title: "Arch_Asil_Required"
+    type: REQUIRED_STEREOTYPE_ONE_OF
+    group: Arch_compliance
+    appliesTo: { set: ArchElements }
+    params:
+      anyOf: [ASIL_A, ASIL_A_to_A]
+    message: "element has no asil stereotype assigned"
+
+  - id: Arch_Description_Required
+    title: "Arch_Description_Required"
+    type: REQUIRED_VALUE
+    group: Arch_compliance
+    appliesTo: { set: ArchElements }
+    target: description
+    params:
+      nonEmpty: true
+    message: "element has no description"
+
+  - id: Block_Must_Have_Stereotype
+    title: "Block_Must_Have_Stereotype"
+    type: REQUIRED_STEREOTYPE_ONE_OF
+    appliesTo: { set: allBlocks }
+    params:
+      anyOf: [Block, interfaceBlock]
+    message: "block has no description"
+
+  - id: Ports_must_have_stereotype
+    title: "Ports_must_have_stereotype"
+    type: REQUIRED_STEREOTYPE_ONE_OF
+    appliesTo: { set: AllPorts }
+    params:
+      anyOf: [ASIL_A, ASIL_A_to_A, flowPort, fullPort]
+    message: "Port has no stereotype"
+
+  - id: Logical_Port_Must_Have_Data_Type
+    title: "Logical_Port_Must_Have_Data_Type"
+    type: REQUIRED_VALUE
+    appliesTo: { set: Logical_Ports }
+    target: port_type
+    params:
+      nonEmpty: true
+    message: "Logical Port has no data type"
+
+  - id: Logical_Port_must_have_direction
+    title: "Logical Port must have direction"
+    type: REQUIRED_VALUE
+    appliesTo: { set: Logical_Ports }
+    target: port_direction
+    params:
+      nonEmpty: true
+      operator: in
+      values: [IN, OUT, INOUT]
+    message: "Logical Port has no direction"
+
+  - id: Technical_Port_No_multiplicity
+    title: "Technical Port No multiplicity"
+    type: REQUIRED_VALUE
+    appliesTo: { set: TechnicalPorts }
+    target: port_multiplicity
+    params:
+      operator: in
+      values: ["1", "1..1"]
+    message: "technical port must not use multiplicity"
+
+  - id: Arch_Must_be_connected
+    title: "Arch_Must_be_connected"
+    type: RELATION_EXISTS
+    group: Arch_compliance
+    appliesTo: { set: ArchElements }
+    params:
+      direction: any
+      operator: gte
+      value: 1
+    message: "Element is isolated"
+
+  - id: Satisfy_Refine_Required
+    title: "Satisfy_Refine_Required"
+    type: RELATION_EXISTS
+    appliesTo: { set: ArchElements }
+    params:
+      relationKind: dependency
+      direction: any
+      relationStereotypes: [refine, satisfy]
+    message: "element has no satisfy/refine"
+
+  - id: Logical_Ports_Must_Be_Flow
+    title: "Logical_Ports_Must_Be_Flow"
+    type: OWNER_STEREOTYPE_CONSTRAINT
+    appliesTo: { set: AllPorts }
+    params:
+      ownerStereotype: Logical-Element
+      allowedKinds: [PORT_PROXY, PORT_FLOW]
+    message: "Port must be a flowport"
+
+  - id: Technical_Ports_must_be_port
+    title: "Technical_Ports_must_be_port"
+    type: OWNER_STEREOTYPE_CONSTRAINT
+    appliesTo: { set: AllPorts }
+    params:
+      ownerStereotype: Technical-Element
+      allowedKinds: [PORT]
+    message: "Port must be a standard port"

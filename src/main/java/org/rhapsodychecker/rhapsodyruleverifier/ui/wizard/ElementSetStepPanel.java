@@ -34,10 +34,6 @@ public final class ElementSetStepPanel extends JPanel {
     }
 
     private void build() {
-        JLabel title = new JLabel("Define Element Sets");
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 15f));
-        add(title, BorderLayout.NORTH);
-
         setList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
         JLabel emptyLabel = new JLabel(
@@ -54,7 +50,7 @@ public final class ElementSetStepPanel extends JPanel {
         centerPanel.add(emptyLabel, CARD_EMPTY);
         add(centerPanel, BorderLayout.CENTER);
 
-        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
         editBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
         removeBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
 

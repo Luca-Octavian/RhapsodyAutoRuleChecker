@@ -15,6 +15,10 @@ public final class LoadingStep {
     public static final String LOADING_ELEMENTS  = "Loading elements";
     public static final String BUILDING_INDEX    = "Building index";
     public static final String FAST_DETECTION    = "Detecting stereotypes & types";
+    public static final String BUILDING_PACKAGE_TREE  = "Building package tree";
+    public static final String BUILDING_ELEMENT_INDEX = "Indexing elements";
+    public static final String WRITING_CACHE          = "Saving cache";
+    public static final String READING_REFERENCES     = "Reading references";
 
     // ── Incremental update steps ──────────────────────────────────────────────
     public static final String INCREMENTAL_SCANNING = "Scanning for changes";

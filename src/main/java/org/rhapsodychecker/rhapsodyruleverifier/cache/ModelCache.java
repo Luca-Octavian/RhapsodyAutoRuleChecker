@@ -1,6 +1,8 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/cache/ModelCache.java
 package org.rhapsodychecker.rhapsodyruleverifier.cache;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import java.util.List;
 import java.util.Map;
 
@@ -8,6 +10,7 @@ import java.util.Map;
  * Top-level serializable cache container for the entire model snapshot.
  * Designed for JSON serialization via Jackson.
  */
+@JsonPropertyOrder({"metadata", "elements", "relationsByOwner", "referencesByElement"})
 public final class ModelCache {
 
     private CacheMetadata metadata;

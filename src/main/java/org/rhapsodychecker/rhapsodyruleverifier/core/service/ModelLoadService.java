@@ -121,22 +121,28 @@ public final class ModelLoadService {
         tConn.stop();
         profiler.record(tConn);
 
-        PhaseTimer tScan = profiler.startPhase("Package scan (COM)");
-        reporter.onStepStarted(LoadingStep.SCANNING_PACKAGES);
-        RhapsodyPackageScanner scanner = new RhapsodyPackageScanner();
-        PackageNode packageTree = scanner.scanPackages(conn.getProject());
-        reporter.onStepCompleted(LoadingStep.SCANNING_PACKAGES);
-        tScan.stop();
-        profiler.record(tScan);
-
         PhaseTimer tLoad = profiler.startPhase("loadModel (COM)");
         RhapsodyModelLoader loader = new RhapsodyModelLoader(reporter);
         RhapsodyModelSnapshot snapshot = loader.loadModel(conn.getProject());
         tLoad.stop().items(snapshot.records().size());
         profiler.record(tLoad);
 
+        // Build package tree from already-collected records (no extra COM traversal).
+        // Previously this was a separate RhapsodyPackageScanner phase that re-walked
+        // the entire model via getNestedElements() on every package.
+        PhaseTimer tTree = profiler.startPhase("buildPackageTree (in-memory)");
+        reporter.onStepStarted(LoadingStep.BUILDING_PACKAGE_TREE);
+        String projectName = conn.getProject().getName();
+        PackageNode packageTree = buildPackageTreeFromRecords(
+                snapshot.records(), projectName);
+        reporter.onStepCompleted(LoadingStep.BUILDING_PACKAGE_TREE);
+        tTree.stop();
+        profiler.record(tTree);
+
         PhaseTimer tIndex = profiler.startPhase("ElementIndex.build()");
+        reporter.onStepStarted(LoadingStep.BUILDING_ELEMENT_INDEX);
         ElementIndex index = ElementIndex.build(snapshot.records());
+        reporter.onStepCompleted(LoadingStep.BUILDING_ELEMENT_INDEX);
         tIndex.stop().items(snapshot.records().size());
         profiler.record(tIndex);
 
@@ -152,8 +158,8 @@ public final class ModelLoadService {
         profiler.record(tDetect);
 
         PhaseTimer tCache = profiler.startPhase("Cache write (JSON)");
+        reporter.onStepStarted(LoadingStep.WRITING_CACHE);
         try {
-            String projectName = conn.getProject().getName();
             String projectGuid = conn.getProject().getGUID();
             File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
             ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile, modelPath);
@@ -166,6 +172,7 @@ public final class ModelLoadService {
             profiler.record(tCache);
             AppLogger.warn("Cache write failed: " + cacheErr.getMessage());
         }
+        reporter.onStepCompleted(LoadingStep.WRITING_CACHE);
 
         profiler.stopPipeline();
         AppLogger.info(profiler.summary());
@@ -308,17 +315,22 @@ public final class ModelLoadService {
         RhapsodyModelSnapshot snapshot = updateResult.snapshot();
         DiffResult diff = updateResult.diff();
 
+        reporter.onStepStarted(LoadingStep.BUILDING_ELEMENT_INDEX);
         ElementIndex index = ElementIndex.build(snapshot.records());
+        reporter.onStepCompleted(LoadingStep.BUILDING_ELEMENT_INDEX);
         String projectName = conn.getProject().getName();
 
         // Use the live-scanned package tree (already built during warm-up)
         // instead of rebuilding from records, since we have it from the scanner
+        reporter.onStepStarted(LoadingStep.FAST_DETECTION);
         FastDetectionResult detectionResult = buildDetectionFromRecords(snapshot.records());
+        reporter.onStepCompleted(LoadingStep.FAST_DETECTION);
 
         // Write updated cache (with file timestamps for fast-skip) — but only if
         // the scan was complete. An incomplete scan should not overwrite the cache
         // because it would lose the OSLC proxy elements that weren't scanned.
         if (!diff.wasIncomplete()) {
+            reporter.onStepStarted(LoadingStep.WRITING_CACHE);
             try {
                 String projectGuid = conn.getProject().getGUID();
                 ModelCacheManager.writeCache(snapshot, projectName, projectGuid, cacheFile, modelPath);
@@ -327,6 +339,7 @@ public final class ModelLoadService {
             } catch (Throwable cacheErr) {
                 AppLogger.warn("Cache write failed after incremental update: " + cacheErr.getMessage());
             }
+            reporter.onStepCompleted(LoadingStep.WRITING_CACHE);
         } else {
             AppLogger.info("Skipping cache write — scan was incomplete ("
                     + diff.deferredRemovalCount() + " removals deferred)");

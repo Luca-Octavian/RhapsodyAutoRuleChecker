@@ -22,6 +22,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.service.NavigationService;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.prefs.RecentFilesStore;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.WizardDialog;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 
 import javax.swing.*;
 import java.io.File;
@@ -96,23 +97,48 @@ public final class MainFrameController {
 
         File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
         if (ModelCacheManager.cacheExists(cacheFile)) {
-            int choice = JOptionPane.showOptionDialog(view.frame(),
-                    "A cached version of this model was found.\n"
-                    + "Load from cache (fast) or reload from Rhapsody?",
-                    "Cache Available",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE,
-                    null,
-                    new String[]{"Load from Cache", "Reload from Rhapsody"},
-                    "Load from Cache");
+            int choice = showCacheLoadChoice();
             if (choice == 0) {
                 doLoadFromCache(modelPath, cacheFile);
-            } else {
+            } else if (choice == 1) {
                 doLoadFromRhapsody(modelPath);
             }
         } else {
             doLoadFromRhapsody(modelPath);
         }
+    }
+
+    /**
+     * Offers the cached-model choice after Load Model. Load from Cache is the
+     * only orange-filled action here; reloading from Rhapsody stays neutral.
+     */
+    private int showCacheLoadChoice() {
+        JOptionPane pane = new JOptionPane(
+                "A cached version of this model was found.\n"
+                + "Load from cache (fast) or reload from Rhapsody?",
+                JOptionPane.QUESTION_MESSAGE,
+                JOptionPane.DEFAULT_OPTION);
+
+        JButton loadFromCacheButton = new JButton("Load from Cache");
+        loadFromCacheButton.putClientProperty("FlatLaf.style", AccentColors.ORANGE_FILL_STYLE);
+        JButton reloadButton = new JButton("Reload from Rhapsody");
+
+        pane.setOptions(new Object[]{loadFromCacheButton, reloadButton});
+        JDialog dialog = pane.createDialog(view.frame(), "Cache Available");
+        dialog.setModal(true);
+
+        final int[] choice = {JOptionPane.CLOSED_OPTION};
+        loadFromCacheButton.addActionListener(e -> {
+            choice[0] = 0;
+            dialog.dispose();
+        });
+        reloadButton.addActionListener(e -> {
+            choice[0] = 1;
+            dialog.dispose();
+        });
+
+        dialog.setVisible(true);
+        return choice[0];
     }
 
     public void onUpdateModel() {
@@ -182,7 +208,13 @@ public final class MainFrameController {
                     AppLogger.error("Evaluation failed: " + error);
                     view.setStatus("  Evaluation error");
                     view.showError("Error: " + error, "Run Failed");
+                } else if (evalResult == null) {
+                    AppLogger.error("Evaluation returned no result");
+                    view.setStatus("  Evaluation returned no result");
+                    view.showError("Evaluation completed but returned no result.", "Run Failed");
                 } else {
+                	System.out.println("SCOPE: '" + scopePath + "'");
+                    System.out.println("RESULTS: " + evalResult.results().size());
                     config = evalResult.config();
                     lastResults = evalResult.results();
                     view.loadResults(lastResults, index, config.rules());
