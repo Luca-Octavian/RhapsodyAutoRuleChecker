@@ -101,7 +101,7 @@ public final class RuleParameterEditor extends JPanel {
         this.onChange = onChange != null ? onChange : new Runnable() {
             @Override public void run() {}
         };
-        setBorder(BorderFactory.createTitledBorder("Rule Parameters"));
+        setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         installStableListeners();
     }
 

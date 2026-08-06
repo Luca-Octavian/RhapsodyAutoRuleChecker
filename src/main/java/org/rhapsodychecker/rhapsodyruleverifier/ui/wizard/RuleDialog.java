@@ -8,6 +8,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.CollapsibleSection;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
@@ -60,7 +61,9 @@ public final class RuleDialog extends JDialog {
     private JComponent targetValuesLabel;
 
     private final RuleParameterEditor parameterEditor;
-    private final JButton saveButton = new JButton("Save Rule");
+    // Save Rule commits the dialog, so it is PRIMARY purple; Cancel supports it.
+    private final GradientAccentButton saveButton =
+            GradientAccentButton.primary("Save Rule", AccentColors.PURPLE_HEX);
     private WizardState.RuleRequest result;
 
     public RuleDialog(Window parent, WizardState state,
@@ -178,11 +181,8 @@ public final class RuleDialog extends JDialog {
     }
 
     private JPanel buildButtons() {
-        JButton cancelButton = new JButton("Cancel");
-        saveButton.putClientProperty(
-                "FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
-        cancelButton.putClientProperty(
-                "FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        GradientAccentButton cancelButton =
+                GradientAccentButton.secondary("Cancel", AccentColors.PURPLE_HEX);
 
         cancelButton.addActionListener(e -> dispose());
         saveButton.addActionListener(e -> save());

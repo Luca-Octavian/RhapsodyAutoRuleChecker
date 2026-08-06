@@ -6,6 +6,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.generate.YamlPresetWriter
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.StepIndicator;
 
 import javax.swing.*;
@@ -32,10 +33,13 @@ public final class WizardDialog extends JDialog {
 
     private final CardLayout cardLayout  = new CardLayout();
     private final JPanel     cardPanel   = new JPanel(cardLayout);
-    private final JButton    backBtn     = new JButton("← Back");
-    private final JButton    nextBtn     = new JButton("Next →");
-    private final JButton    cancelBtn   = new JButton("Cancel");
-    private final JButton    saveAsBtn   = new JButton("Save As...");
+    // Purple is the wizard/config accent. Next is the one action that advances
+    // the flow, so it is PRIMARY; Cancel/Back/Save As support it and stay
+    // SECONDARY — same silhouette and height, quieter at rest.
+    private final GradientAccentButton backBtn   = GradientAccentButton.secondary("← Back", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton nextBtn   = GradientAccentButton.primary("Next →", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton cancelBtn = GradientAccentButton.secondary("Cancel", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton saveAsBtn = GradientAccentButton.secondary("Save As...", AccentColors.PURPLE_HEX);
     private final StepIndicator stepIndicator =
             new StepIndicator(new String[]{"Element sets", "Rules", "Review"});
     private final JLabel     stepLabel   = new JLabel();
@@ -90,11 +94,7 @@ public final class WizardDialog extends JDialog {
         add(cardPanel, BorderLayout.CENTER);
 
         // ── Navigare ──────────────────────────────────────────────────────────
-        cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-        backBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-        nextBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
-        saveAsBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-
+        // Variants are set on the field declarations above.
         saveAsBtn.setVisible(false);
 
         JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));

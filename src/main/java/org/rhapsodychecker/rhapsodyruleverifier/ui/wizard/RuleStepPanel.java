@@ -4,6 +4,7 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 
 import javax.swing.*;
 import java.awt.*;
@@ -18,9 +19,11 @@ public final class RuleStepPanel extends JPanel {
 
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String>            ruleList  = new JList<>(listModel);
-    private final JButton addBtn    = new JButton("Add Rule...");
-    private final JButton editBtn   = new JButton("Edit...");
-    private final JButton removeBtn = new JButton("Remove");
+    // Mirrors ElementSetStepPanel so the two wizard steps feel identical:
+    // Add is PRIMARY purple, Edit is supporting, Remove carries the red accent.
+    private final GradientAccentButton addBtn    = GradientAccentButton.primary("Add Rule...", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton editBtn   = GradientAccentButton.secondary("Edit...", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton removeBtn = GradientAccentButton.secondary("Remove", AccentColors.RED_HEX);
 
     private static final String CARD_LIST  = "list";
     private static final String CARD_EMPTY = "empty";
@@ -49,10 +52,7 @@ public final class RuleStepPanel extends JPanel {
         centerPanel.add(emptyLabel, CARD_EMPTY);
         add(centerPanel, BorderLayout.CENTER);
 
-        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
-        editBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-        removeBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-
+        // Variants/colours are set on the field declarations above.
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnPanel.add(addBtn);
         btnPanel.add(editBtn);

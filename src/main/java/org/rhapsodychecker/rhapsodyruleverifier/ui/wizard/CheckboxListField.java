@@ -24,7 +24,7 @@ public final class CheckboxListField extends JPanel {
     private final JLabel          noSuggestionsLabel;
     private final JLabel          noMatchesLabel;
     private JScrollPane           scroll;
-    private static final Color    NORMAL_BORDER_COLOR  = Color.LIGHT_GRAY;
+    private static final Color    NORMAL_BORDER_COLOR  = borderColor();
     private static final Color    INVALID_BORDER_COLOR = new Color(200, 60, 60);
     private final List<Runnable> changeListeners = new ArrayList<>();
 
@@ -98,6 +98,11 @@ public final class CheckboxListField extends JPanel {
         customPanel.add(customLabel,  BorderLayout.WEST);
         customPanel.add(customField,  BorderLayout.CENTER);
         add(customPanel, BorderLayout.SOUTH);
+    }
+
+    private static Color borderColor() {
+        Color color = UIManager.getColor("Component.borderColor");
+        return color != null ? color : Color.LIGHT_GRAY;
     }
 
     /**
@@ -192,7 +197,7 @@ public final class CheckboxListField extends JPanel {
      */
     public void setValid(boolean valid) {
         scroll.setBorder(BorderFactory.createLineBorder(
-                valid ? NORMAL_BORDER_COLOR : INVALID_BORDER_COLOR, valid ? 1 : 2));
+                valid ? NORMAL_BORDER_COLOR : INVALID_BORDER_COLOR, 1));
     }
 
     /**

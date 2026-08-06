@@ -10,11 +10,21 @@ public final class AccentColors {
     // Brand Orange 200 is used sparingly for model/cache actions and progress.
     // Purple remains the wizard/config accent; neither colour is used for every
     // action so the mostly-neutral interface stays calm.
-    public static final String ORANGE_HEX = "#ff906e";
+    public static final String ORANGE_HEX = "#ff4208";
     public static final String PURPLE_HEX = "#6a5fc4";
+    // Excel-flavoured green, used only for the export action.
+    public static final String GREEN_HEX = "#217346";
+    // Destructive actions (Remove). Muted rather than alarm-red — these are
+    // routine list edits, not irreversible data loss.
+    public static final String RED_HEX = "#c0392b";
+    // The neutral grey that starts every gradient ring and colours the
+    // NEUTRAL button variant. Used when an action carries no semantic colour.
+    public static final String NEUTRAL_HEX = "#a8acb2";
 
-    public static final String ORANGE_FAINT_HEX = "#ffd2c5";
+    public static final String ORANGE_FAINT_HEX = "#ffb39c";
     public static final String PURPLE_FAINT_HEX = "#c3bbe8";
+    public static final String GREEN_FAINT_HEX = "#9ccbae";
+    public static final String RED_FAINT_HEX = "#e6a49d";
 
     public static final String DEFAULT_FAINT_HEX = toHex(UIManager.getColor("Component.focusColor"));
 
@@ -39,8 +49,28 @@ public final class AccentColors {
      * rather than a filled style. Applied via the FlatLaf.style client
      * property, same as the hover styles above.
      */
-    public static final String ORANGE_FILL_STYLE = fillStyle(ORANGE_HEX, ORANGE_FAINT_HEX, "#4a2418");
+    public static final String ORANGE_FILL_STYLE = fillStyle(ORANGE_HEX, ORANGE_FAINT_HEX, "#ffffff");
     public static final String PURPLE_FILL_STYLE = fillStyle(PURPLE_HEX, PURPLE_FAINT_HEX, "#ffffff");
+
+    /**
+     * Outline button styles — neutral background at rest with a light accent
+     * border, full bright accent fill on hover, darkened on press.  Use for
+     * primary-action buttons that should <em>not</em> be permanently filled.
+     */
+    public static final String ORANGE_OUTLINE_STYLE = outlineStyle(ORANGE_HEX, ORANGE_FAINT_HEX, "#ffffff");
+    public static final String PURPLE_OUTLINE_STYLE = outlineStyle(PURPLE_HEX, PURPLE_FAINT_HEX, "#ffffff");
+
+    private static String outlineStyle(String baseHex, String faintHex, String hoverForegroundHex) {
+        return "borderWidth: 1.5; " +
+                "borderColor: " + faintHex + "; " +
+                "hoverBorderColor: " + baseHex + "; " +
+                "focusedBorderColor: " + faintHex + "; " +
+                "background: $Button.background; " +
+                "foreground: $Button.foreground; " +
+                "hoverBackground: " + baseHex + "; " +
+                "hoverForeground: " + hoverForegroundHex + "; " +
+                "pressedBackground: " + darken(baseHex, 0.15f) + ";";
+    }
 
     private static String fillStyle(String baseHex, String faintHex, String foregroundHex) {
         return "background: " + baseHex + "; " +

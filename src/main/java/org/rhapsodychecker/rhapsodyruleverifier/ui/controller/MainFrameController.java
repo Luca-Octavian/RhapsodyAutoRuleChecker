@@ -23,6 +23,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResul
 import org.rhapsodychecker.rhapsodyruleverifier.prefs.RecentFilesStore;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.WizardDialog;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 
 import javax.swing.*;
 import java.io.File;
@@ -109,8 +110,7 @@ public final class MainFrameController {
     }
 
     /**
-     * Offers the cached-model choice after Load Model. Load from Cache is the
-     * only orange-filled action here; reloading from Rhapsody stays neutral.
+     * Offers the cached-model choice after Load Model.
      */
     private int showCacheLoadChoice() {
         JOptionPane pane = new JOptionPane(
@@ -119,9 +119,14 @@ public final class MainFrameController {
                 JOptionPane.QUESTION_MESSAGE,
                 JOptionPane.DEFAULT_OPTION);
 
-        JButton loadFromCacheButton = new JButton("Load from Cache");
-        loadFromCacheButton.putClientProperty("FlatLaf.style", AccentColors.ORANGE_FILL_STYLE);
-        JButton reloadButton = new JButton("Reload from Rhapsody");
+        // Loading from cache is the fast, recommended path, so it reads as the
+        // PRIMARY orange model action; the full Rhapsody reload supports it.
+        // Both are GradientAccentButtons so this prompt matches the rest of the
+        // app rather than showing stock JOptionPane buttons.
+        GradientAccentButton loadFromCacheButton =
+                GradientAccentButton.primary("Load from Cache", AccentColors.ORANGE_HEX);
+        GradientAccentButton reloadButton =
+                GradientAccentButton.secondary("Reload from Rhapsody", AccentColors.ORANGE_HEX);
 
         pane.setOptions(new Object[]{loadFromCacheButton, reloadButton});
         JDialog dialog = pane.createDialog(view.frame(), "Cache Available");

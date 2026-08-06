@@ -5,6 +5,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.CollapsibleSection;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.FieldValidation;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.help.HelpIcon;
@@ -32,7 +33,8 @@ public final class ElementSetDialog extends JDialog {
     private final CheckboxListField  stereoField;
     private final JTextField         inclField   = new JTextField(30);
     private final JTextField         exclField   = new JTextField(30);
-    private final JButton            okBtn       = new JButton("Save");
+    // Save commits the dialog, so it is PRIMARY purple; Cancel supports it.
+    private final GradientAccentButton okBtn     = GradientAccentButton.primary("Save", AccentColors.PURPLE_HEX);
 
     // Count labels per section + total
     private final JLabel kindsCountLabel  = createCountLabel();
@@ -137,7 +139,9 @@ public final class ElementSetDialog extends JDialog {
         // ── Total count ───────────────────────────────────────────────────────
         gbc.gridy = row++; gbc.gridx = 0; gbc.gridwidth = 2; gbc.weightx = 1;
         gbc.insets = new Insets(8, 5, 3, 5);
-        totalCountLabel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
+        Color borderColor = UIManager.getColor("Component.borderColor");
+        if (borderColor == null) borderColor = Color.LIGHT_GRAY;
+        totalCountLabel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, borderColor));
         form.add(totalCountLabel, gbc);
 
         // Prefill
@@ -161,9 +165,8 @@ public final class ElementSetDialog extends JDialog {
         updateCounts();
 
         // Buttons
-        JButton cancelBtn = new JButton("Cancel");
-        okBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
-        cancelBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        GradientAccentButton cancelBtn =
+                GradientAccentButton.secondary("Cancel", AccentColors.PURPLE_HEX);
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnRow.add(cancelBtn);
         btnRow.add(okBtn);

@@ -5,6 +5,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,9 +17,13 @@ public final class ElementSetStepPanel extends JPanel {
 
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String>            setList   = new JList<>(listModel);
-    private final JButton addBtn    = new JButton("Add Set...");
-    private final JButton editBtn   = new JButton("Edit...");
-    private final JButton removeBtn = new JButton("Remove");
+    // Add is the action this step exists for, so it is PRIMARY purple. Edit
+    // supports it. Remove is destructive, so it carries the red accent — still
+    // SECONDARY weight, since deleting a list entry here is routine and
+    // reversible by re-adding, not something to shout about at rest.
+    private final GradientAccentButton addBtn    = GradientAccentButton.primary("Add Set...", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton editBtn   = GradientAccentButton.secondary("Edit...", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton removeBtn = GradientAccentButton.secondary("Remove", AccentColors.RED_HEX);
 
     private static final String CARD_LIST  = "list";
     private static final String CARD_EMPTY = "empty";
@@ -50,10 +55,7 @@ public final class ElementSetStepPanel extends JPanel {
         centerPanel.add(emptyLabel, CARD_EMPTY);
         add(centerPanel, BorderLayout.CENTER);
 
-        addBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_FILL_STYLE);
-        editBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-        removeBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-
+        // Variants/colours are set on the field declarations above.
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnPanel.add(addBtn);
         btnPanel.add(editBtn);

@@ -1,6 +1,8 @@
 package org.rhapsodychecker.rhapsodyruleverifier.ui;
 
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.EmptyStatePanel;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.IndentGuideTree;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
 
 import java.awt.*;
@@ -29,15 +31,28 @@ public class PackageTreePanel extends JPanel {
     public PackageTreePanel() {
         setLayout(new BorderLayout());
 
+        // The pane frames itself. Relying on the split-pane divider alone left
+        // this panel and the results panel bleeding into one another, since
+        // they share a background and the divider is only a few pixels wide.
+        setBorder(AppTheme.panelBorder());
+
         add(new SectionHeader("Package Hierarchy"), BorderLayout.NORTH);
 
         rootNode  = new DefaultMutableTreeNode("Model");
         treeModel = new DefaultTreeModel(rootNode);
-        tree      = new JTree(treeModel);
+        // Indent guides make the nesting level readable at a glance, which is
+        // the whole point of this pane; see IndentGuideTree.
+        tree      = new IndentGuideTree(treeModel);
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
+        // Chevron + inline child counts; see PackageTreeCellRenderer.
+        tree.setCellRenderer(new PackageTreeCellRenderer());
+        ToolTipManager.sharedInstance().registerComponent(tree);
 
         JScrollPane treeScroll = new JScrollPane(tree);
+        // The panel's own border above already frames this region, so the
+        // scroll pane's would sit a pixel inside it and read as a double rule.
+        treeScroll.setBorder(BorderFactory.createEmptyBorder());
 
         EmptyStatePanel placeholder = new EmptyStatePanel(
                 "\uD83D\uDCC2",
@@ -50,6 +65,7 @@ public class PackageTreePanel extends JPanel {
         JScrollPane placeholderScroll = new JScrollPane(placeholder);
         placeholderScroll.getViewport().setOpaque(false);
         placeholderScroll.setOpaque(false);
+        placeholderScroll.setBorder(BorderFactory.createEmptyBorder());
 
         centerPanel.add(treeScroll, CARD_TREE);
         centerPanel.add(placeholderScroll, CARD_PLACEHOLDER);

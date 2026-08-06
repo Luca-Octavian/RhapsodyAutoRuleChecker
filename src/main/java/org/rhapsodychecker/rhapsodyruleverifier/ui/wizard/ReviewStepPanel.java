@@ -4,10 +4,9 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState.RuleRequest;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
-
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
 
 import javax.swing.*;
-import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,15 +64,16 @@ public class ReviewStepPanel extends JPanel {
     }
 
     private JPanel buildSetsSection() {
-        JPanel p = titledPanel("Element Sets (" + state.sets().size() + ")");
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        JPanel p = sectionPanel("Element Sets (" + state.sets().size() + ")");
+        JPanel content = sectionContent();
+        p.add(content, BorderLayout.CENTER);
 
         if (state.sets().isEmpty()) {
-            p.add(readOnly("(none)"));
+            content.add(readOnly("(none)"));
         } else {
             for (ElementSetDefinition set : state.sets()) {
                 int filterCount = set.kinds().size() + set.types().size() + set.stereotypes().size();
-                p.add(readOnly(set.id() + "  —  " + filterCount + " filter(s)"));
+                content.add(readOnly(set.id() + "  —  " + filterCount + " filter(s)"));
             }
         }
         return p;
@@ -81,11 +81,12 @@ public class ReviewStepPanel extends JPanel {
 
 
     private JPanel buildRulesSection() {
-        JPanel p = titledPanel("Rules (" + state.rules().size() + ")  —  uncheck to disable");
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        JPanel p = sectionPanel("Rules (" + state.rules().size() + ")  —  uncheck to disable");
+        JPanel content = sectionContent();
+        p.add(content, BorderLayout.CENTER);
 
         if (state.rules().isEmpty()) {
-            p.add(readOnly("(none)"));
+            content.add(readOnly("(none)"));
         } else {
             List<RuleRequest> rules = state.rules();
             for (int i = 0; i < rules.size(); i++) {
@@ -97,7 +98,7 @@ public class ReviewStepPanel extends JPanel {
                                 ? "  |  " + r.message() : ""));
                 cb.setAlignmentX(Component.LEFT_ALIGNMENT);
                 ruleCheckBoxes.add(cb);
-                p.add(cb);
+                content.add(cb);
             }
         }
         return p;
@@ -105,20 +106,19 @@ public class ReviewStepPanel extends JPanel {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static JPanel titledPanel(String title) {
-        JPanel p = new JPanel() {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
-        p.setBorder(BorderFactory.createTitledBorder(
-                BorderFactory.createEtchedBorder(),
-                title,
-                TitledBorder.LEFT,
-                TitledBorder.TOP));
+    private static JPanel sectionPanel(String title) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.add(new SectionHeader(title), BorderLayout.NORTH);
         p.setAlignmentX(Component.LEFT_ALIGNMENT);
         return p;
+    }
+
+    private static JPanel sectionContent() {
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        content.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return content;
     }
 
     private static JLabel label(String text) {

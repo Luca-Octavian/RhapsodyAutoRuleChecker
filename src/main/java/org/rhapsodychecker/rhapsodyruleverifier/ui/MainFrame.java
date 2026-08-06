@@ -8,6 +8,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.controller.MainFrameController;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientProgressBar;
 
 import javax.swing.*;
@@ -25,16 +26,23 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     // ── Components ──────────────────────────────────────────────────────────
     private final JComboBox<String> modelPathField  = new JComboBox<>();
     private final JComboBox<String> configPathField = new JComboBox<>();
-    private final JButton modelBrowseBtn   = new JButton("Browse...");
-    private final JButton configBrowseBtn  = new JButton("Browse...");
+    // Compact neutral: these sit inline beside the path combo boxes, so they use
+    // the reduced padding that matches a combo's height instead of the taller
+    // standard button height used in the action bar below.
+    private final GradientAccentButton modelBrowseBtn  = GradientAccentButton.neutralCompact("Browse...");
+    private final GradientAccentButton configBrowseBtn = GradientAccentButton.neutralCompact("Browse...");
 
-    private final JButton loadModelBtn       = new JButton("Load Model");
-    private final JButton runBtn             = new JButton("Run");
-    private final JButton exportBtn          = new JButton("Export Excel");
-    private final JButton newConfigWizardBtn  = new JButton("New Config (Wizard)");
-    private final JButton editConfigWizardBtn = new JButton("Edit Config (Wizard)");
-    private final JButton updateModelBtn      = new JButton("Update Model");
-    private final JButton openCacheBtn        = new JButton("\uD83D\uDCC1 Cache");
+    // Action bar. Orange marks model actions, green the Excel export, purple the
+    // wizard/config actions. All are PRIMARY here because each is the headline
+    // action for its own concern rather than a supporting one.
+    private final GradientAccentButton loadModelBtn        = GradientAccentButton.primary("Load Model", AccentColors.ORANGE_HEX);
+    private final GradientAccentButton runBtn              = GradientAccentButton.primary("Run", AccentColors.ORANGE_HEX);
+    private final GradientAccentButton exportBtn           = GradientAccentButton.primary("Export Excel", AccentColors.GREEN_HEX);
+    private final GradientAccentButton newConfigWizardBtn  = GradientAccentButton.primary("New Config (Wizard)", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton editConfigWizardBtn = GradientAccentButton.primary("Edit Config (Wizard)", AccentColors.PURPLE_HEX);
+    private final GradientAccentButton updateModelBtn      = GradientAccentButton.primary("Update Model", AccentColors.ORANGE_HEX);
+    // Neutral: opening a folder in Explorer carries no semantic colour.
+    private final GradientAccentButton openCacheBtn        = GradientAccentButton.neutral("\uD83D\uDCC1 Cache");
 
     private final PackageTreePanel  treePanel    = new PackageTreePanel();
     private final ResultsTablePanel resultsPanel = new ResultsTablePanel();
@@ -75,7 +83,12 @@ public class MainFrame extends JFrame implements MainFrameController.View {
 
         // Top panel
         JPanel topPanel = new JPanel(new GridBagLayout());
-        topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 5, 10));
+        // A rule along the bottom, separating the control strip from the
+        // content below it. Without it the buttons appeared to float on the
+        // same surface as the trees, since everything shares one background.
+        topPanel.setBorder(BorderFactory.createCompoundBorder(
+                AppTheme.edgeBorder(0, 0, 1, 0),
+                BorderFactory.createEmptyBorder(10, 10, 10, 10)));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(2, 5, 2, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -83,12 +96,12 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         modelPathField.setEditable(true);
         configPathField.setEditable(true);
 
-        // Wrap Model + Config rows in a visually grouped sub-panel
+        // Wrap Model + Config rows in a visually grouped sub-panel.
+        // The stock Swing border is intentionally square; it cannot honor FlatLaf's arc property.
         JPanel pathGroup = new JPanel(new GridBagLayout());
         pathGroup.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1),
+                AppTheme.panelBorder(),
                 BorderFactory.createEmptyBorder(12, 16, 12, 16)));
-        pathGroup.putClientProperty("FlatLaf.style", "arc: 12");
 
         GridBagConstraints pgbc = new GridBagConstraints();
         pgbc.insets = new Insets(2, 5, 2, 5);
@@ -111,14 +124,8 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 3; gbc.weightx = 1;
         topPanel.add(pathGroup, gbc);
 
-        // Styling — Orange 200 marks model actions and the post-load cache
-        // choice. The Cache folder utility stays neutral. Run has only a soft
-        // orange focus/hover border, while purple remains for wizard/config actions.
-        loadModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_FILL_STYLE);
-        updateModelBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_FILL_STYLE);
-        runBtn.putClientProperty("FlatLaf.style", AccentColors.ORANGE_HOVER_STYLE);
-        newConfigWizardBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
-        editConfigWizardBtn.putClientProperty("FlatLaf.style", AccentColors.PURPLE_HOVER_STYLE);
+        // Colour/variant assignment lives on the field declarations above; see
+        // GradientAccentButton for the actual gradient-ring / hover-fill painting.
         openCacheBtn.setToolTipText("Open cache folder in Explorer");
 
         // Button bar
@@ -149,7 +156,7 @@ public class MainFrame extends JFrame implements MainFrameController.View {
 
         // Bottom
         statusBar.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
+                AppTheme.edgeBorder(1, 0, 0, 0),
                 BorderFactory.createEmptyBorder(3, 5, 3, 5)));
         progressBar.setStringPainted(true);
         progressBar.setString("");
