@@ -1,6 +1,8 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/cache/ModelCacheManager.java
 package org.rhapsodychecker.rhapsodyruleverifier.cache;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
@@ -9,12 +11,26 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
 /**
  * Reads and writes model cache to/from JSON files.
  * Converts between ElementRecord/RelationInfo and their cached representations.
+ *
+ * <p><b>Cache identity.</b> The cache file name is derived from a hash of the
+ * model's canonical path, not just its base name. Two different projects both
+ * called {@code System.rpy} used to collide on one temp file and silently
+ * overwrite each other; they now get distinct cache files.
+ *
+ * <p><b>Crash safety.</b> Writes go to a sibling {@code .tmp} file which is
+ * atomically moved into place only after serialization succeeded. A cancelled
+ * or crashed run can therefore never leave a half-written cache that later
+ * fails to parse.
  */
 public final class ModelCacheManager {
 
@@ -24,7 +40,14 @@ public final class ModelCacheManager {
     // add a separate debug export method that enables INDENT_OUTPUT locally.
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private static final String CACHE_DIR_NAME = ".rhapsody-cache";
+    private static final String CACHE_SUFFIX = "-cache.json";
+
     private ModelCacheManager() {}
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Write
+    // ══════════════════════════════════════════════════════════════════════
 
     /**
      * Write snapshot to a cache file.
@@ -43,6 +66,20 @@ public final class ModelCacheManager {
     public static void writeCache(RhapsodyModelSnapshot snapshot,
                                   String projectName, String projectGuid,
                                   File cacheFile, String modelPath) throws IOException {
+        writeCache(snapshot, projectName, projectGuid, cacheFile, modelPath, null, true);
+    }
+
+    /**
+     * Write snapshot to a cache file with full freshness metadata.
+     *
+     * @param saveUnitTimestamps Rhapsody save-unit markers (may be null/empty when unavailable)
+     * @param snapshotComplete   false when the producing scan was known to be incomplete
+     */
+    public static void writeCache(RhapsodyModelSnapshot snapshot,
+                                  String projectName, String projectGuid,
+                                  File cacheFile, String modelPath,
+                                  Map<String, String> saveUnitTimestamps,
+                                  boolean snapshotComplete) throws IOException {
         String timestamp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(new Date());
 
         CacheMetadata metadata = new CacheMetadata(
@@ -50,9 +87,16 @@ public final class ModelCacheManager {
                 timestamp,
                 snapshot.records().size());
 
+        metadata.setSnapshotComplete(snapshotComplete);
+
         // Capture model file timestamps for fast-skip detection
         if (modelPath != null) {
             metadata.setFileTimestamps(captureFileTimestamps(modelPath));
+            metadata.setCanonicalModelPath(canonicalPath(modelPath));
+        }
+
+        if (saveUnitTimestamps != null && !saveUnitTimestamps.isEmpty()) {
+            metadata.setSaveUnitTimestamps(new LinkedHashMap<String, String>(saveUnitTimestamps));
         }
 
         List<CachedElement> elements = new ArrayList<CachedElement>();
@@ -84,20 +128,67 @@ public final class ModelCacheManager {
 
         ModelCache cache = new ModelCache(metadata, elements, rels, refs);
 
-        cacheFile.getParentFile().mkdirs();
-        MAPPER.writeValue(cacheFile, cache);
+        writeAtomically(cache, cacheFile);
     }
 
     /**
+     * Serialize to a temp file next to the target, then atomically move it into
+     * place. If anything fails mid-write the previous (valid) cache survives
+     * untouched and the partial file is deleted.
+     */
+    private static void writeAtomically(ModelCache cache, File cacheFile) throws IOException {
+        File parent = cacheFile.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
+
+        // Unique temp name so two concurrent processes can't clobber each other's
+        // in-progress write (the final move is still last-writer-wins, but neither
+        // process can ever observe a torn file).
+        File tmp = new File(parent, cacheFile.getName() + "." + UUID.randomUUID() + ".tmp");
+
+        try {
+            MAPPER.writeValue(tmp, cache);
+
+            try {
+                Files.move(tmp.toPath(), cacheFile.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException atomicUnsupported) {
+                // Some filesystems (certain network shares) reject ATOMIC_MOVE.
+                // A plain replace is still far better than writing in place.
+                Files.move(tmp.toPath(), cacheFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            if (tmp.exists()) {
+                tmp.delete();
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Read
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
      * Read cache from file and reconstruct a snapshot (without IRPModelElement handles).
+     *
+     * @throws CacheReadException with a specific {@link CacheStatus} when the cache
+     *         exists but is unusable (corrupt / wrong version)
      */
     public static CacheLoadResult readCache(File cacheFile) throws IOException {
-        ModelCache cache = MAPPER.readValue(cacheFile, ModelCache.class);
+        return readCache(cacheFile, null);
+    }
 
-        if (cache.getMetadata().getCacheVersion() != CacheMetadata.CURRENT_VERSION) {
-            throw new IOException("Cache version mismatch: expected "
-                    + CacheMetadata.CURRENT_VERSION + ", got " + cache.getMetadata().getCacheVersion());
-        }
+    /**
+     * Read cache and, when {@code modelPath} is provided, additionally verify the
+     * cache actually belongs to that model.
+     *
+     * @param modelPath model whose cache this is expected to be; null skips the check
+     */
+    public static CacheLoadResult readCache(File cacheFile, String modelPath) throws IOException {
+        ModelCache cache = parseCache(cacheFile);
+        verifyVersion(cache, cacheFile);
+        verifyIdentity(cache.getMetadata(), modelPath, cacheFile);
 
         List<ElementRecord> records = new ArrayList<ElementRecord>();
         for (CachedElement c : cache.getElements()) {
@@ -150,14 +241,101 @@ public final class ModelCacheManager {
      * Read cache from file and return the raw ModelCache (for incremental updates).
      */
     public static ModelCache readCacheRaw(File cacheFile) throws IOException {
-        ModelCache cache = MAPPER.readValue(cacheFile, ModelCache.class);
+        ModelCache cache = parseCache(cacheFile);
+        verifyVersion(cache, cacheFile);
+        return cache;
+    }
 
-        if (cache.getMetadata().getCacheVersion() != CacheMetadata.CURRENT_VERSION) {
-            throw new IOException("Cache version mismatch: expected "
-                    + CacheMetadata.CURRENT_VERSION + ", got " + cache.getMetadata().getCacheVersion());
+    /**
+     * Read <i>only</i> the metadata block, without materializing elements,
+     * relations or references.
+     *
+     * <p>The previous "fast" freshness check deserialized the whole cache — on a
+     * large model that meant parsing tens of MB just to look at a handful of
+     * fields. This streams tokens and stops as soon as the metadata object has
+     * been consumed.
+     *
+     * @return metadata, or null if the file has no metadata block
+     */
+    public static CacheMetadata readMetadataOnly(File cacheFile) throws IOException {
+        JsonParser parser = null;
+        try {
+            parser = MAPPER.getFactory().createParser(cacheFile);
+
+            if (parser.nextToken() != JsonToken.START_OBJECT) {
+                throw new CacheReadException(CacheStatus.CACHE_CORRUPT,
+                        "Cache file is not a JSON object: " + cacheFile.getAbsolutePath());
+            }
+
+            while (parser.nextToken() == JsonToken.FIELD_NAME) {
+                String field = parser.getCurrentName();
+                parser.nextToken(); // advance to the value
+                if ("metadata".equals(field)) {
+                    return MAPPER.readValue(parser, CacheMetadata.class);
+                }
+                // Skip whole element/relation/reference arrays without building them
+                parser.skipChildren();
+            }
+            return null;
+        } catch (CacheReadException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new CacheReadException(CacheStatus.CACHE_CORRUPT,
+                    "Cache metadata is unreadable: " + e.getMessage(), e);
+        } finally {
+            if (parser != null) {
+                try { parser.close(); } catch (IOException ignored) { /* best effort */ }
+            }
+        }
+    }
+
+    private static ModelCache parseCache(File cacheFile) throws IOException {
+        try {
+            ModelCache cache = MAPPER.readValue(cacheFile, ModelCache.class);
+            if (cache == null || cache.getMetadata() == null) {
+                throw new CacheReadException(CacheStatus.CACHE_CORRUPT,
+                        "Cache file has no metadata block: " + cacheFile.getAbsolutePath());
+            }
+            if (cache.getElements() == null) {
+                throw new CacheReadException(CacheStatus.CACHE_CORRUPT,
+                        "Cache file has no element list: " + cacheFile.getAbsolutePath());
+            }
+            return cache;
+        } catch (CacheReadException e) {
+            throw e;
+        } catch (IOException e) {
+            // Truncated / malformed JSON, typically from an interrupted legacy write
+            throw new CacheReadException(CacheStatus.CACHE_CORRUPT,
+                    "Cache file could not be parsed: " + e.getMessage(), e);
+        }
+    }
+
+    private static void verifyVersion(ModelCache cache, File cacheFile) throws CacheReadException {
+        int version = cache.getMetadata().getCacheVersion();
+        if (version != CacheMetadata.CURRENT_VERSION) {
+            throw new CacheReadException(CacheStatus.CACHE_INVALID_VERSION,
+                    "Cache version mismatch: expected " + CacheMetadata.CURRENT_VERSION
+                            + ", got " + version + " (" + cacheFile.getName() + ")");
+        }
+    }
+
+    private static void verifyIdentity(CacheMetadata metadata, String modelPath, File cacheFile)
+            throws CacheReadException {
+        if (modelPath == null) return;
+
+        String cached = metadata.getCanonicalModelPath();
+        if (cached == null || cached.isEmpty()) {
+            // Written before identity tracking existed; nothing to compare against.
+            return;
         }
 
-        return cache;
+        String current = canonicalPath(modelPath);
+        if (!cached.equals(current)) {
+            throw new CacheReadException(CacheStatus.CACHE_INVALID_IDENTITY,
+                    "Cache belongs to a different model.\n  Cache: " + cached
+                            + "\n  Requested: " + current
+                            + "\n  File: " + cacheFile.getName());
+        }
     }
 
     /**
@@ -166,6 +344,10 @@ public final class ModelCacheManager {
     public static boolean cacheExists(File cacheFile) {
         return cacheFile.exists() && cacheFile.isFile() && cacheFile.canRead();
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Freshness helpers
+    // ══════════════════════════════════════════════════════════════════════
 
     /**
      * Capture file timestamps for the project and its unit files.
@@ -200,6 +382,10 @@ public final class ModelCacheManager {
      * Check if model files have changed since the cache was written.
      * Returns true if the cache is still fresh (no files changed).
      *
+     * <p>Note this only reflects <i>on-disk</i> state. Rhapsody keeps unsaved edits
+     * in memory, so a "fresh" answer here does not prove the live model matches —
+     * that requires the project/save-unit checks performed by the load service.
+     *
      * @param modelPath the .rpy file path
      * @param cacheFile the cache file to check
      * @return true if cache is fresh and can be reused without COM scan
@@ -207,12 +393,12 @@ public final class ModelCacheManager {
     public static boolean isCacheFresh(String modelPath, File cacheFile) {
         if (!cacheExists(cacheFile)) return false;
         try {
-            // Read just the metadata (fast — don't deserialize elements)
-            ModelCache cache = MAPPER.readValue(cacheFile, ModelCache.class);
-            if (cache.getMetadata() == null) return false;
-            if (cache.getMetadata().getCacheVersion() != CacheMetadata.CURRENT_VERSION) return false;
+            CacheMetadata metadata = readMetadataOnly(cacheFile);
+            if (metadata == null) return false;
+            if (metadata.getCacheVersion() != CacheMetadata.CURRENT_VERSION) return false;
+            if (!metadata.isSnapshotComplete()) return false;
 
-            Map<String, Long> storedTimestamps = cache.getMetadata().getFileTimestamps();
+            Map<String, Long> storedTimestamps = metadata.getFileTimestamps();
             if (storedTimestamps == null || storedTimestamps.isEmpty()) return false;
 
             // Check current timestamps against stored
@@ -234,25 +420,142 @@ public final class ModelCacheManager {
             }
 
             return true;
-        } catch (Throwable t) {
+        } catch (IOException e) {
             return false;
         }
     }
 
     /**
-     * Get the default cache file path for a given model path.
-     * Stored in the current user's temp directory to avoid polluting the model directory.
-     * e.g. C:\Users\<user>\AppData\Local\Temp\.rhapsody-cache\<ProjectName>-cache.json
+     * Compare freshly read save-unit markers against those stored in the cache.
+     *
+     * @return the unit paths whose marker differs (added, removed or changed).
+     *         Empty means every unit still matches. Never null.
      */
-    public static File defaultCacheFile(String modelPath) {
-        File modelFile = new File(modelPath);
-        String tempDir = System.getProperty("java.io.tmpdir");
-        File cacheDir = new File(tempDir, ".rhapsody-cache");
-        String baseName = modelFile.getName().replaceAll("\\.[^.]+$", "");
-        return new File(cacheDir, baseName + "-cache.json");
+    public static List<String> changedSaveUnits(CacheMetadata metadata,
+                                                Map<String, String> currentMarkers) {
+        List<String> changed = new ArrayList<String>();
+        if (metadata == null || currentMarkers == null) return changed;
+
+        Map<String, String> stored = metadata.getSaveUnitTimestamps();
+        if (stored == null) stored = Collections.emptyMap();
+
+        for (Map.Entry<String, String> entry : currentMarkers.entrySet()) {
+            String storedValue = stored.get(entry.getKey());
+            if (storedValue == null || !storedValue.equals(entry.getValue())) {
+                changed.add(entry.getKey());
+            }
+        }
+        for (String storedKey : stored.keySet()) {
+            if (!currentMarkers.containsKey(storedKey)) {
+                changed.add(storedKey);
+            }
+        }
+        return changed;
     }
 
-    // ---- Conversion helpers ----
+    // ══════════════════════════════════════════════════════════════════════
+    // Cache file location
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** The directory holding all cache files. */
+    public static File cacheDir() {
+        String tempDir = System.getProperty("java.io.tmpdir");
+        return new File(tempDir, CACHE_DIR_NAME);
+    }
+
+    /**
+     * Get the cache file path for a given model path.
+     * Stored in the current user's temp directory to avoid polluting the model directory.
+     *
+     * <p>The name includes a short hash of the model's canonical path so that two
+     * models sharing a base name (e.g. {@code System.rpy} in two different
+     * folders) do not share — and overwrite — one cache file.
+     *
+     * <p><b>Both</b> the readable prefix and the hash are derived from the same
+     * canonical path. Deriving the prefix from the caller's raw string instead
+     * would reintroduce the very collision this method exists to prevent:
+     * {@code System.rpy} and {@code SYSTEM.RPY} hash identically but would yield
+     * two differently-named cache files, so one model would silently end up with
+     * two divergent caches. The name is therefore lowercase — readability is
+     * worth less here than the guarantee that it is a deterministic function of
+     * the model.
+     *
+     * <p>e.g. {@code %TEMP%\.rhapsody-cache\system-3f9a1c22-cache.json}
+     */
+    public static File defaultCacheFile(String modelPath) {
+        String canonical = canonicalPath(modelPath);
+        String baseName = sanitize(stripExtension(new File(canonical).getName()));
+        String hash = shortHash(canonical);
+        return new File(cacheDir(), baseName + "-" + hash + CACHE_SUFFIX);
+    }
+
+    /**
+     * The pre-hash cache name ({@code &lt;base-name&gt;-cache.json}) used by
+     * earlier builds. Kept only so an existing cache can still be found once;
+     * the next successful write lands on the new unique path.
+     */
+    public static File legacyCacheFile(String modelPath) {
+        String baseName = stripExtension(new File(modelPath).getName());
+        return new File(cacheDir(), baseName + CACHE_SUFFIX);
+    }
+
+    /**
+     * Resolve which cache file to read for this model: the unique one if it
+     * exists, otherwise a legacy-named one, otherwise the unique path (so
+     * callers can use it as the write target).
+     */
+    public static File resolveCacheFile(String modelPath) {
+        File preferred = defaultCacheFile(modelPath);
+        if (cacheExists(preferred)) return preferred;
+
+        File legacy = legacyCacheFile(modelPath);
+        if (cacheExists(legacy)) return legacy;
+
+        return preferred;
+    }
+
+    /** Canonical, case-normalized absolute path used as the model's identity. */
+    public static String canonicalPath(String path) {
+        if (path == null) return "";
+        File f = new File(path);
+        String resolved;
+        try {
+            resolved = f.getCanonicalPath();
+        } catch (IOException e) {
+            resolved = f.getAbsolutePath();
+        }
+        // Windows paths are case-insensitive; normalize so C:\M.rpy and c:\m.rpy
+        // are recognized as the same model instead of producing two caches.
+        return resolved.replace('/', '\\').toLowerCase(Locale.ROOT);
+    }
+
+    private static String stripExtension(String fileName) {
+        return fileName.replaceAll("\\.[^.]+$", "");
+    }
+
+    private static String sanitize(String s) {
+        return s.replaceAll("[^A-Za-z0-9_.-]", "_");
+    }
+
+    /** First 8 hex chars of the SHA-256 of the input — enough to separate models. */
+    private static String shortHash(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(input.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 4; i++) {
+                sb.append(String.format("%02x", digest[i]));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            // Never fail cache naming over a hashing problem
+            return String.format("%08x", input.hashCode());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Conversion helpers
+    // ══════════════════════════════════════════════════════════════════════
 
     private static CachedElement toCachedElement(ElementRecord r) {
         CachedElement c = new CachedElement();

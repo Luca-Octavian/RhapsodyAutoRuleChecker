@@ -5,6 +5,9 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyAliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyEvaluationContext;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
+import org.rhapsodychecker.rhapsodyruleverifier.cache.CacheMetadata;
+import org.rhapsodychecker.rhapsodyruleverifier.cache.CacheReadException;
+import org.rhapsodychecker.rhapsodyruleverifier.cache.CacheStatus;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCacheManager;
 import org.rhapsodychecker.rhapsodyruleverifier.core.RhapsodyConnectionManager;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ConfigLoader;
@@ -96,9 +99,18 @@ public final class MainFrameController {
             return;
         }
 
-        File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
+        File cacheFile = ModelCacheManager.resolveCacheFile(modelPath);
         if (ModelCacheManager.cacheExists(cacheFile)) {
-            int choice = showCacheLoadChoice();
+            // Inspect the cache before offering it: a corrupt / foreign / outdated
+            // cache must be reported as such, not silently presented as an option.
+            CacheMetadata metadata = inspectCache(modelPath, cacheFile);
+            if (metadata == null) {
+                // inspectCache() already told the user why; go straight to Rhapsody.
+                doLoadFromRhapsody(modelPath);
+                return;
+            }
+
+            int choice = showCacheLoadChoice(metadata);
             if (choice == 0) {
                 doLoadFromCache(modelPath, cacheFile);
             } else if (choice == 1) {
@@ -110,12 +122,58 @@ public final class MainFrameController {
     }
 
     /**
+     * Validate a cache file before offering/using it.
+     *
+     * @return its metadata when usable, or null after warning the user why not
+     */
+    private CacheMetadata inspectCache(String modelPath, File cacheFile) {
+        try {
+            CacheMetadata metadata = ModelCacheManager.readMetadataOnly(cacheFile);
+            if (metadata == null) {
+                view.showWarning("The cache file contains no metadata and will be rebuilt.\n\n"
+                        + cacheFile.getAbsolutePath(), "Cache Unusable");
+                return null;
+            }
+            if (metadata.getCacheVersion() != CacheMetadata.CURRENT_VERSION) {
+                view.showWarning("This cache was written by a different version of the tool"
+                        + " (format " + metadata.getCacheVersion() + ", expected "
+                        + CacheMetadata.CURRENT_VERSION + ").\n\n"
+                        + "It will be rebuilt from Rhapsody.", "Cache Outdated");
+                return null;
+            }
+            String cachedPath = metadata.getCanonicalModelPath();
+            if (cachedPath != null && !cachedPath.isEmpty()
+                    && !cachedPath.equals(ModelCacheManager.canonicalPath(modelPath))) {
+                view.showWarning("The cache found for this file belongs to a different model:\n\n"
+                        + cachedPath + "\n\nIt will not be used.", "Cache Mismatch");
+                return null;
+            }
+            return metadata;
+        } catch (CacheReadException e) {
+            AppLogger.warn("Cache rejected (" + e.status() + "): " + e.getMessage());
+            view.showWarning(e.getMessage() + "\n\nThe model will be loaded from Rhapsody instead.",
+                    "Cache " + (e.status() == CacheStatus.CACHE_CORRUPT ? "Corrupted" : "Rejected"));
+            return null;
+        } catch (Exception e) {
+            AppLogger.warn("Cache could not be inspected: " + e.getMessage());
+            view.showWarning("The cache could not be read: " + e.getMessage()
+                    + "\n\nThe model will be loaded from Rhapsody instead.", "Cache Unreadable");
+            return null;
+        }
+    }
+
+    /**
      * Offers the cached-model choice after Load Model.
      */
-    private int showCacheLoadChoice() {
+    private int showCacheLoadChoice(CacheMetadata metadata) {
         JOptionPane pane = new JOptionPane(
-                "A cached version of this model was found.\n"
-                + "Load from cache (fast) or reload from Rhapsody?",
+                "A cached version of this model was found.\n\n"
+                + "  Captured:  " + metadata.getCachedAt() + "\n"
+                + "  Elements:  " + metadata.getElementCount() + "\n"
+                + (metadata.isSnapshotComplete()
+                        ? "" : "  Warning:   the cached scan was incomplete\n")
+                + "\nLoading from cache does not contact Rhapsody, so it reflects the\n"
+                + "model as of the time above rather than its current state.",
                 JOptionPane.QUESTION_MESSAGE,
                 JOptionPane.DEFAULT_OPTION);
 
@@ -156,8 +214,9 @@ public final class MainFrameController {
         // Use incremental update whenever a cache exists — works for both warm start
         // (Rhapsody already connected) and cold start (loaded from cache only).
         // loadIncrementalUpdate() handles Rhapsody connection + package scan warm-up
-        // internally. File timestamp fast-skip avoids COM entirely when nothing changed.
-        File cacheFile = ModelCacheManager.defaultCacheFile(modelPath);
+        // internally, and short-circuits entirely when Rhapsody reports the project
+        // clean or when no save unit changed.
+        File cacheFile = ModelCacheManager.resolveCacheFile(modelPath);
 
         if (ModelCacheManager.cacheExists(cacheFile)) {
             doIncrementalUpdate(modelPath, cacheFile);
@@ -310,7 +369,7 @@ public final class MainFrameController {
     public boolean hasConfig() { return config != null; }
     public boolean isCacheAvailable(String modelPath) {
         return !modelPath.isEmpty()
-                && ModelCacheManager.cacheExists(ModelCacheManager.defaultCacheFile(modelPath));
+                && ModelCacheManager.cacheExists(ModelCacheManager.resolveCacheFile(modelPath));
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────
@@ -328,7 +387,10 @@ public final class MainFrameController {
             @Override
             protected ModelLoadService.LoadResult doInBackground() {
                 try {
-                    loadResult = ModelLoadService.loadFromCache(cacheFile);
+                    // Offline path: no Rhapsody contact. Passing modelPath still lets
+                    // the reader reject a cache that belongs to a different project.
+                    loadResult = ModelLoadService.loadFromCache(
+                            cacheFile, modelPath, CacheStatus.OFFLINE_CACHE_UNVERIFIED);
                 } catch (Throwable t) {
                     error = t.getMessage();
                 }
@@ -435,6 +497,20 @@ public final class MainFrameController {
         view.setStatus("  " + result.statusMessage());
         recentFiles.addRecentModel(modelPath);
         view.refreshRecentModels(recentFiles.recentModels());
+
+        AppLogger.info("Snapshot provenance: " + result.cacheStatus()
+                + " (" + result.cacheStatus().describe() + ")");
+
+        // A partial snapshot silently retains cached data that may no longer exist
+        // in the model. That is a correctness caveat, so say it out loud once.
+        if (result.cacheStatus().isPartial()) {
+            view.showWarning(
+                    "The model scan was incomplete, so some cached data was kept.\n\n"
+                    + "Relation- and requirement-based results may reflect the previous\n"
+                    + "snapshot rather than the current model. Reload from Rhapsody for\n"
+                    + "an authoritative result.",
+                    "Incomplete Model Scan");
+        }
     }
 
     private void reloadConfigFromWizard(String path) {
