@@ -146,8 +146,9 @@ public final class ElementRecord {
 
     /**
      * Returns a copy of this record with a different kind and type info.
-     * Used during local part classification: Objects owned by Blocks
-     * are reclassified as PART with type info loaded from IRPInstance.getOtherClass().
+     * Used during part classification: typed Object elements (IRPInstance
+     * with a resolved getOtherClass()) are reclassified as PART regardless
+     * of their owner.
      */
     public ElementRecord withKindAndType(ElementKind newKind, String newTypeGuid, String newTypeName) {
         return new Builder()

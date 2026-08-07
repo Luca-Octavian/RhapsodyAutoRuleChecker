@@ -87,7 +87,7 @@ public final class RhapsodyModelLoader {
 
         reporter.onStepStarted(LoadingStep.BUILDING_INDEX);
         ModelRecordPostProcessor.resolveOwnerPaths(records);
-        ModelRecordPostProcessor.classifyOwnedParts(records, handleByGuid);
+        ModelRecordPostProcessor.classifyTypedObjects(records, handleByGuid);
 
         records.sort(Comparator
                 .comparing((ElementRecord r) -> r.ownerPath().orElse(""))
@@ -190,7 +190,10 @@ public final class RhapsodyModelLoader {
             if (containsStereo(stereotypes, "Block"))          return ElementKind.BLOCK;
             return ElementKind.OTHER;
         }
-        if ("Object".equals(mc))    return ElementKind.OTHER;
+        if ("Object".equals(mc)) {
+            if (containsStereoAnyCase(stereotypes, "Part")) return ElementKind.PART;
+            return ElementKind.OTHER;  // may be reclassified later if typed (IRPInstance with resolved type)
+        }
         if ("Attribute".equals(mc)) {
             if (containsStereoAnyCase(stereotypes, "Part")) return ElementKind.PART;
             return ElementKind.OTHER;
@@ -210,7 +213,15 @@ public final class RhapsodyModelLoader {
         if ("Package".equals(mc))     return ElementKind.PACKAGE;
         if ("Interface".equals(mc))   return ElementKind.INTERFACE;
         if ("Requirement".equals(mc)) return ElementKind.REQUIREMENT;
-        if ("Connector".equals(mc))   return ElementKind.CONNECTOR;
+
+        // "Link" (IRPLink) is a structural link between Parts/Ports in an IBD.
+        // "Connector" (IRPConnector) is a statechart/activity pseudostate.
+        // Only Junction connectors correspond to Rhapsody's user-visible
+        // "Connector" category (Ctrl+F search). The live refinement in
+        // RhapsodyElementReader.refineConnectorKind() promotes Junctions
+        // from STATE_CONNECTOR to CONNECTOR using getConnectorType().
+        if ("Link".equals(mc))        return ElementKind.LINK;
+        if ("Connector".equals(mc))   return ElementKind.STATE_CONNECTOR;
         return ElementKind.OTHER;
     }
 
@@ -347,7 +358,7 @@ public final class RhapsodyModelLoader {
 
     /**
      * Detects whether the given element is a relation (Dependency, Generalization,
-     * Association) and, if so, indexes it in the relationsByOwner map.
+     * Association, Connector/Link) and, if so, indexes it in the relationsByOwner map.
      *
      * <p>This method is intentionally static-compatible and reusable from
      * {@link org.rhapsodychecker.rhapsodyruleverifier.cache.update.IncrementalCacheUpdater}.
@@ -395,6 +406,17 @@ public final class RhapsodyModelLoader {
             } else {
                 otherEndGuid = safeCallReflect(elt, "getOtherClass");
             }
+        } else if ("Link".equals(metaClass)) {
+            // Structural link between Parts/Ports (IRPLink).
+            // NOTE: IRPLink.getOther() returns the *inverse IRPLink*, NOT the
+            // connected element — using it yields a link GUID and never a
+            // part/port. Resolve the real endpoints instead and pick the end
+            // that is not the owner.
+            otherEndGuid = resolveLinkOtherEnd(elt, ownerGuid);
+        } else if ("Connector".equals(metaClass)) {
+            // Statechart/activity pseudostate (IRPConnector). Not a structural
+            // relation between elements — do not index it as one.
+            return;
         } else {
             // Not a relation metaclass we track
             return;
@@ -409,6 +431,67 @@ public final class RhapsodyModelLoader {
             relationsByOwner.put(ownerGuid, list);
         }
         list.add(relInfo);
+    }
+
+    /**
+     * Resolves the far end of an assembly connector (IRPLink).
+     *
+     * <p>Prefers the port-level endpoints (SysML port, then plain port) because
+     * a connector in an IBD connects ports; falls back to the element-level
+     * endpoints. Whichever end is not the owner is returned; if neither matches
+     * the owner (e.g. the link is owned by an enclosing block rather than by an
+     * endpoint), the "to" end is used.
+     */
+    private static String resolveLinkOtherEnd(IRPModelElement elt, String ownerGuid) {
+        if (!(elt instanceof IRPLink)) {
+            return safeCallReflect(elt, "getToElement");
+        }
+        IRPLink link = (IRPLink) elt;
+
+        String fromGuid = firstGuid(
+                safeLinkEnd(link, LinkEnd.FROM_SYSML_PORT),
+                safeLinkEnd(link, LinkEnd.FROM_PORT),
+                safeLinkEnd(link, LinkEnd.FROM_ELEMENT));
+        String toGuid = firstGuid(
+                safeLinkEnd(link, LinkEnd.TO_SYSML_PORT),
+                safeLinkEnd(link, LinkEnd.TO_PORT),
+                safeLinkEnd(link, LinkEnd.TO_ELEMENT));
+
+        if (ownerGuid != null && ownerGuid.equals(fromGuid)) return toGuid;
+        if (ownerGuid != null && ownerGuid.equals(toGuid))   return fromGuid;
+        return toGuid != null ? toGuid : fromGuid;
+    }
+
+    private enum LinkEnd {
+        FROM_SYSML_PORT, FROM_PORT, FROM_ELEMENT,
+        TO_SYSML_PORT, TO_PORT, TO_ELEMENT
+    }
+
+    /** Reads a single IRPLink endpoint, tolerating unsupported/unset ends. */
+    private static IRPModelElement safeLinkEnd(IRPLink link, LinkEnd end) {
+        try {
+            switch (end) {
+                case FROM_SYSML_PORT: return link.getFromSysMLPort();
+                case FROM_PORT:       return link.getFromPort();
+                case FROM_ELEMENT:    return link.getFromElement();
+                case TO_SYSML_PORT:   return link.getToSysMLPort();
+                case TO_PORT:         return link.getToPort();
+                case TO_ELEMENT:      return link.getToElement();
+                default:              return null;
+            }
+        } catch (Throwable t) { return null; }
+    }
+
+    /** Returns the GUID of the first non-null candidate that has one. */
+    private static String firstGuid(IRPModelElement... candidates) {
+        for (IRPModelElement candidate : candidates) {
+            if (candidate == null) continue;
+            try {
+                String guid = safeStr(candidate.getGUID());
+                if (!guid.isEmpty()) return guid;
+            } catch (Throwable t) { /* try next */ }
+        }
+        return null;
     }
 
     /**

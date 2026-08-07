@@ -54,6 +54,7 @@ public final class RhapsodyElementReader {
         tags = specialized.tags;
 
         ElementKind kind = RhapsodyModelLoader.classify(metaClass, stereotypes);
+        kind = refineConnectorKind(element, kind);
         if (specialized.flowProperty && kind == ElementKind.OTHER) {
             kind = ElementKind.FLOW_PROPERTY;
         }
@@ -61,6 +62,10 @@ public final class RhapsodyElementReader {
                 && "InterfaceBlock".equals(
                         RhapsodyModelLoader.safeGetUserDefinedMetaClass(element))) {
             kind = ElementKind.INTERFACE_BLOCK;
+        }
+        if (kind == ElementKind.OTHER && "Object".equals(metaClass)
+                && specialized.typeGuid != null && !specialized.typeGuid.isEmpty()) {
+            kind = ElementKind.PART;
         }
 
         if (relationsByOwner != null) {
@@ -99,6 +104,41 @@ public final class RhapsodyElementReader {
                 .initialValue(specialized.initialValue)
                 .tagValues(tags)
                 .build();
+    }
+
+    /**
+     * Disambiguates connector/link kinds using the live API type, which is
+     * authoritative where the metaClass string alone is not.
+     *
+     * <p>{@code IRPLink} (metaClass "Link") is a structural link between
+     * Parts/Ports → {@code LINK}.
+     *
+     * <p>{@code IRPConnector} (metaClass "Connector") is a statechart/activity
+     * pseudostate. Only the {@code Junction} connector type corresponds to
+     * Rhapsody's user-visible "Connector" category (the elements returned by
+     * Ctrl+F search for "Connector"). Every other connector type (Condition,
+     * Diagram, EnterExit, Fork, History, Join, Termination, InPin, OutPin,
+     * InOutPin) remains {@code STATE_CONNECTOR}.
+     *
+     * <p>Elements that are neither keep the metaClass-based classification.
+     */
+    private ElementKind refineConnectorKind(
+            IRPModelElement element, ElementKind kind) {
+
+        if (element instanceof IRPLink) {
+            return ElementKind.LINK;
+        }
+        if (element instanceof IRPConnector) {
+            try {
+                String connectorType = ((IRPConnector) element).getConnectorType();
+                if (connectorType != null
+                        && "junction".equalsIgnoreCase(connectorType.trim())) {
+                    return ElementKind.CONNECTOR;
+                }
+            } catch (Throwable ignored) { /* fall through to STATE_CONNECTOR */ }
+            return ElementKind.STATE_CONNECTOR;
+        }
+        return kind;
     }
 
     private String readOwnerGuid(IRPModelElement element) {
@@ -153,6 +193,14 @@ public final class RhapsodyElementReader {
                 typeGuid = RhapsodyModelLoader.safeStr(type.getGUID());
                 typeName = RhapsodyModelLoader.safeStr(type.getName());
             }
+        } else if (element instanceof IRPInstance) {
+            try {
+                IRPClassifier type = ((IRPInstance) element).getOtherClass();
+                if (type != null) {
+                    typeGuid = RhapsodyModelLoader.safeStr(type.getGUID());
+                    typeName = RhapsodyModelLoader.safeStr(type.getName());
+                }
+            } catch (Throwable ignored) { /* ignore */ }
         }
 
         diagnostics.success("type/port preparation", started);

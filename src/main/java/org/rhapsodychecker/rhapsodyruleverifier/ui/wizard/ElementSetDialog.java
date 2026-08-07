@@ -18,10 +18,14 @@ import java.util.stream.Collectors;
 
 public final class ElementSetDialog extends JDialog {
 
+    // CONNECTOR = Junction pseudostate (matches Rhapsody Ctrl+F "Connector").
+    // STATE_CONNECTOR = non-Junction statechart/activity pseudostates.
+    // LINK = structural link between Parts/Ports (IRPLink).
     private static final List<String> KNOWN_KINDS = Arrays.asList(
             "BLOCK", "INTERFACE_BLOCK", "PART",
             "PORT", "PORT_FULL", "PORT_PROXY", "PORT_FLOW",
-            "INTERFACE", "PACKAGE", "REQUIREMENT", "CONNECTOR",
+            "INTERFACE", "PACKAGE", "REQUIREMENT",
+            "CONNECTOR", "STATE_CONNECTOR", "LINK",
             "FLOW_PROPERTY"
     );
 

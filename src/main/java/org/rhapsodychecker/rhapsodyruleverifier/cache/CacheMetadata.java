@@ -20,8 +20,17 @@ public final class CacheMetadata {
      * Bump when the persisted format changes.
      *
      * <p>v4: added canonicalModelPath, saveUnitTimestamps, snapshotComplete.
+     * <p>v5: ElementKind CONNECTOR was split into CONNECTOR (assembly
+     *       connector / IRPLink) and STATE_CONNECTOR (statechart pseudostate /
+     *       IRPConnector). A v4 cache stores statechart connectors under
+     *       CONNECTOR, so it must be rebuilt rather than reused — otherwise the
+     *       old, incorrect connector counts would survive the fix.
+     * <p>v6: CONNECTOR redefined to match Rhapsody's Ctrl+F "Connector"
+     *       category — only IRPConnector with getConnectorType()=="Junction".
+     *       IRPLink moved to new LINK kind. A v5 cache assigns links to
+     *       CONNECTOR, so a rebuild is required.
      */
-    public static final int CURRENT_VERSION = 4;
+    public static final int CURRENT_VERSION = 6;
 
     private String projectName;
     private String projectGuid;

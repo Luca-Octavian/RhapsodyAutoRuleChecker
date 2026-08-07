@@ -29,34 +29,39 @@ The application loads model data from IBM Rhapsody, evaluates enabled rules, sho
 - [Configuration reference](docs/CONFIG_REFERENCE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 
-## Requirements
+## Download
 
-- Windows
-- IBM Rhapsody 10.0.2 with the Java API available
-- Java 8 or later
-- Maven, if building from source
+Go to the [Releases](../../releases) page and download the latest `.zip` file. The zip contains everything you need to run the application:
 
-## Build
+| File | Purpose |
+|---|---|
+| `RhapsodyRuleVerifier.exe` | The application |
+| `RhapsodyRuleVerifier.l4j.ini` | JVM options (editable Rhapsody path) |
+| `jre/` | Bundled Java runtime |
+| `docs/` | User guide and configuration reference (HTML) |
 
-From the project root, run:
+Extract the zip to any folder and run `RhapsodyRuleVerifier.exe`. No separate Java installation is required.
 
-```bat
-mvn package
-```
+### Configuring the Rhapsody path
 
-The Maven build creates a shaded application JAR and a Windows executable under `target/`.
-
-The application needs access to the IBM Rhapsody Java API and its native libraries. The current Maven configuration expects the Rhapsody Java API libraries at:
+The application needs the Rhapsody Java API native libraries to connect to Rhapsody. By default it looks for them at:
 
 ```text
 C:\LegacyApp\Rhapsody_1002_64bit\Share\JavaAPI
 ```
 
-Update the path in `pom.xml` if Rhapsody is installed elsewhere.
+If your Rhapsody installation is in a different location, open `RhapsodyRuleVerifier.l4j.ini` in a text editor, update the path to point to your Rhapsody `Share\JavaAPI` folder, and restart the application.
+
+## Requirements
+
+- Windows
+- IBM Rhapsody 10.0.2 with the Java API available
+
+If building from source, you also need Java 8 or later and Maven.
 
 ## Quick start
 
-1. Start the application from the generated files in `target/`.
+1. Start the application from `RhapsodyRuleVerifier.exe`.
 2. Select an IBM Rhapsody project file.
 3. Load the model.
 4. Select an existing YAML configuration, or create one with **New Config (Wizard)**.
@@ -65,6 +70,33 @@ Update the path in `pom.xml` if Rhapsody is installed elsewhere.
 7. Export the failures to Excel if needed.
 
 See the [user guide](docs/USER_GUIDE.md) for the full workflow.
+
+## Build from source
+
+If you want to build the application yourself instead of using the release zip, run the following from the project root:
+
+```bat
+mvn package
+```
+
+This creates a shaded JAR and a Windows executable under `target/`. The build also copies `RhapsodyRuleVerifier.l4j.ini` into `target/` so that the exe and ini sit side by side.
+
+To create a distributable zip, copy the following from `target/` into a zip file:
+
+- `RhapsodyRuleVerifier.exe`
+- `RhapsodyRuleVerifier.l4j.ini`
+- A `jre/` folder containing a Java 8 runtime
+- The `docs/` folder (contains the generated HTML documentation)
+
+The `jre/` folder is not produced by Maven. You need to copy a JRE 8 installation into `target/jre/` (or into the zip directly) before distributing.
+
+The Maven build expects the Rhapsody Java API libraries at:
+
+```text
+C:\LegacyApp\Rhapsody_1002_64bit\Share\JavaAPI
+```
+
+Update the path in `pom.xml` if Rhapsody is installed elsewhere on your build machine.
 
 ## Example configuration
 
@@ -93,5 +125,5 @@ See the [configuration reference](docs/CONFIG_REFERENCE.md) for all supported ru
 ```text
 src/main/java/       Application source code
 src/main/resources/  Example YAML configurations and resources
+src/main/launch4j/   Launch4j companion files (ini template)
 docs/                User, configuration, and architecture documentation
-```

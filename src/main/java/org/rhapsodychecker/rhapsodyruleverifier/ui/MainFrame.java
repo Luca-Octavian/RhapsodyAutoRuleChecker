@@ -43,6 +43,8 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     private final GradientAccentButton updateModelBtn      = GradientAccentButton.primary("Update Model", AccentColors.ORANGE_HEX);
     // Neutral: opening a folder in Explorer carries no semantic colour.
     private final GradientAccentButton openCacheBtn        = GradientAccentButton.neutral("\uD83D\uDCC1 Cache");
+    // Neutral: help opens local HTML docs in the default browser.
+    private final GradientAccentButton helpBtn             = GradientAccentButton.neutral("Help");
 
     private final PackageTreePanel  treePanel    = new PackageTreePanel();
     private final ResultsTablePanel resultsPanel = new ResultsTablePanel();
@@ -138,6 +140,7 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         leftButtons.add(editConfigWizardBtn);
         leftButtons.add(updateModelBtn);
         JPanel rightButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        rightButtons.add(helpBtn);
         rightButtons.add(openCacheBtn);
         buttonPanel.add(leftButtons, BorderLayout.WEST);
         buttonPanel.add(rightButtons, BorderLayout.EAST);
@@ -181,6 +184,7 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         newConfigWizardBtn.addActionListener(e -> controller.onWizardNew());
         editConfigWizardBtn.addActionListener(e -> controller.onWizardEdit());
         openCacheBtn.addActionListener(e -> controller.onOpenCacheFolder());
+        helpBtn.addActionListener(e -> controller.onHelp());
 
         resultsPanel.setOnElementDoubleClick(controller::onNavigateToElement);
     }
@@ -228,6 +232,7 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         editConfigWizardBtn.setEnabled(enabled);
         updateModelBtn.setEnabled(enabled);
         openCacheBtn.setEnabled(enabled);
+        helpBtn.setEnabled(enabled);
     }
 
     @Override

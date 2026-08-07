@@ -15,7 +15,31 @@ public enum ElementKind {
     INTERFACE,      // optional: interface elements if you need them
     PACKAGE,        // optional: package elements
     REQUIREMENT,    // optional: requirement elements
-    CONNECTOR,      // optional: connectors/links
+
+    /**
+     * Rhapsody "Connector" — the element returned by Rhapsody's Ctrl+F search
+     * for "Connector". Per API tracing this maps exclusively to
+     * {@code IRPConnector} instances whose {@code getConnectorType()} returns
+     * {@code "Junction"}. These appear in statecharts and activity diagrams as
+     * merge/decision nodes and in IBDs as connector junctions.
+     */
+    CONNECTOR,
+
+    /**
+     * Non-junction statechart / activity pseudostate (Rhapsody metaClass
+     * "Connector", API type {@code IRPConnector}). Covers Condition, Diagram,
+     * EnterExit, Fork, History, Join, Termination, InPin, OutPin and
+     * InOutPin — all connector types except Junction.
+     */
+    STATE_CONNECTOR,
+
+    /**
+     * Instance-level structural link (Rhapsody metaClass "Link", API type
+     * {@code IRPLink}). Joins Parts and/or Ports in an IBD. This is NOT what
+     * Rhapsody's Ctrl+F calls a "Connector".
+     */
+    LINK,
+
     FLOW_PROPERTY,  // FlowProperty attributes inside InterfaceBlocks
     OTHER;
 
@@ -33,6 +57,20 @@ public enum ElementKind {
 
     public boolean isBlockLike() {
         return this == BLOCK || this == INTERFACE_BLOCK;
+    }
+
+    /**
+     * True for the Rhapsody-visible "Connector" category (Junction pseudostates).
+     */
+    public boolean isConnectorKind() {
+        return this == CONNECTOR;
+    }
+
+    /**
+     * True for structural links between parts and ports (IRPLink).
+     */
+    public boolean isLinkKind() {
+        return this == LINK;
     }
 
     public boolean isPart() {

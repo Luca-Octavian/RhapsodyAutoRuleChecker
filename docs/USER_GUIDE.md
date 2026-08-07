@@ -4,6 +4,16 @@ Rhapsody Rule Verifier checks an IBM Rhapsody model against rules stored in a YA
 
 For the YAML format and rule settings, see the [Configuration Reference](CONFIG_REFERENCE.md).
 
+## Installation
+
+Download the latest release zip from the [Releases](../../releases) page. Extract it to any folder. The zip contains:
+
+- `RhapsodyRuleVerifier.exe`
+- `RhapsodyRuleVerifier.l4j.ini`
+- `jre/` (bundled Java runtime)
+
+Keep all three in the same folder. Run `RhapsodyRuleVerifier.exe` to start the application. No separate Java installation is needed.
+
 ## Before you start
 
 You need:
@@ -173,6 +183,21 @@ To edit a configuration in the wizard:
 4. Click **Edit Config (Wizard)**.
 
 The application may show a warning if the current model does not contain values referenced by the configuration. You can still open the wizard and correct the configuration.
+
+## Configuring the Rhapsody path
+
+The application needs to know where the IBM Rhapsody Java API native libraries are installed. This is controlled by `RhapsodyRuleVerifier.l4j.ini`, a plain-text file that must sit in the same folder as `RhapsodyRuleVerifier.exe`.
+
+The default contents shipped with the release are:
+
+```ini
+# Rhapsody Rule Verifier - runtime JVM options
+# If IBM Rhapsody is installed somewhere other than the path below,
+# change it here and restart the application.
+-Djava.library.path="C:\LegacyApp\Rhapsody_1002_64bit\Share\JavaAPI"
+```
+
+If Rhapsody is installed in a different location, open `RhapsodyRuleVerifier.l4j.ini` in any text editor, change the path to match your Rhapsody installation's `Share\JavaAPI` folder, save the file, and restart the application.
 
 ## Common issues
 

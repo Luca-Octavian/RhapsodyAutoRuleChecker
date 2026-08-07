@@ -29,7 +29,10 @@ import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 
 import javax.swing.*;
+import java.awt.Desktop;
 import java.io.File;
+import java.net.URI;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
@@ -324,6 +327,49 @@ public final class MainFrameController {
     public void onOpenCacheFolder() {
         String msg = NavigationService.openCacheFolder(view.modelPath());
         if (msg != null) view.setStatus(msg);
+    }
+
+    public void onHelp() {
+        // Resolve docs/USER_GUIDE.html relative to the running JAR/exe location.
+        // When shipped, the exe and docs/ folder sit side by side.
+        // When running from Eclipse, the file won't exist — show a friendly message.
+        try {
+            Path appDir = resolveAppDirectory();
+            File helpFile = appDir.resolve("docs").resolve("USER_GUIDE.html").toFile();
+            if (helpFile.isFile()) {
+                Desktop.getDesktop().browse(helpFile.toURI());
+            } else {
+                view.showInfo(
+                        "Help is available in the shipped version.\n\n"
+                        + "Look for docs/USER_GUIDE.html next to the exe.",
+                        "Help Not Found");
+            }
+        } catch (Exception e) {
+            AppLogger.warn("Could not open help: " + e.getMessage());
+            view.showInfo(
+                    "Help is available in the shipped version.\n\n"
+                    + "Look for docs/USER_GUIDE.html next to the exe.",
+                    "Help Not Found");
+        }
+    }
+
+    /**
+     * Best-effort resolution of the directory that contains the running
+     * application (the exe in a shipped build, or the project root in Eclipse).
+     */
+    private static Path resolveAppDirectory() {
+        try {
+            URI jarUri = MainFrameController.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI();
+            Path jarPath = Paths.get(jarUri);
+            // If running from a JAR/exe, jarPath points to the jar file itself;
+            // its parent is the application directory.
+            // If running from Eclipse class output, it points to target/classes.
+            return jarPath.toFile().isFile() ? jarPath.getParent() : jarPath;
+        } catch (Exception e) {
+            // Fallback: current working directory
+            return Paths.get("").toAbsolutePath();
+        }
     }
 
     public void onWizardNew() {

@@ -36,21 +36,20 @@ public final class ModelRecordPostProcessor {
         }
     }
 
-    public static void classifyOwnedParts(
+    /**
+     * Second-pass classification for Object elements (Rhapsody "Parts").
+     * Any Object with a resolved type (IRPInstance.getOtherClass() != null) is
+     * reclassified as PART, regardless of its owner.  Elements already classified
+     * as PART (e.g. via a Part stereotype) are left untouched.
+     */
+    public static void classifyTypedObjects(
             List<ElementRecord> records,
             Map<String, IRPModelElement> handlesByGuid) {
-
-        Set<String> blockGuids = new HashSet<String>();
-        for (ElementRecord record : records) {
-            if (record.kind().isBlockLike()) blockGuids.add(record.guid());
-        }
 
         for (int i = 0; i < records.size(); i++) {
             ElementRecord record = records.get(i);
             if (!"Object".equals(record.metaClass())) continue;
-
-            String ownerGuid = record.ownerGuid().orElse(null);
-            if (ownerGuid == null || !blockGuids.contains(ownerGuid)) continue;
+            if (record.kind() == org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind.PART) continue;
 
             String typeGuid = record.typeGuid().orElse(null);
             String typeName = record.typeName().orElse(null);
@@ -66,6 +65,8 @@ public final class ModelRecordPostProcessor {
                     } catch (Throwable ignored) {}
                 }
             }
+            if (typeGuid == null || typeGuid.isEmpty()) continue;
+
             records.set(i, record.withKindAndType(
                     org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind.PART,
                     typeGuid, typeName));

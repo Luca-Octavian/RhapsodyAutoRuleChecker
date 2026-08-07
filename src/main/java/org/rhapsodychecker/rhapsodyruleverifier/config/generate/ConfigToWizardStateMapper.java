@@ -141,7 +141,11 @@ public final class ConfigToWizardStateMapper {
                 case "INTERFACE":       result.add("Interface");      break;
                 case "PACKAGE":         result.add("Package");        break;
                 case "REQUIREMENT":     result.add("Requirement");    break;
-                case "CONNECTOR":       result.add("connector");      break;
+                // CONNECTOR (assembly connector / IRPLink) and STATE_CONNECTOR
+                // (statechart pseudostate / IRPConnector) are identified by
+                // metaClass, not by a stereotype. Emitting a fake stereotype
+                // here produced spurious "not detected in current model"
+                // warnings, so both are deliberately unmapped.
                 case "FLOW_PROPERTY":   result.add("FlowProperty");   break;
                 default: break;
             }

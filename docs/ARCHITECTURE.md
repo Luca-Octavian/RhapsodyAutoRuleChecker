@@ -96,7 +96,21 @@ This separation means that a different adapter (for example, reading from an exp
 
 `ElementRecord` is an immutable value object holding the normalized data for one model element: GUID, name, meta-class, `ElementKind`, owner path, owner GUID, stereotypes, description, tag values, type name, port direction, port multiplicity, initial value, and any relations and references attached during loading.
 
-`ElementKind` is an enum that classifies Rhapsody elements into application-level categories such as `BLOCK`, `INTERFACE_BLOCK`, `PART`, `PORT_STANDARD`, `PORT_FLOW`, `PORT_PROXY`, `FLOW_PROPERTY`, `REQUIREMENT`, `PACKAGE`, `INTERFACE`, and `CONNECTOR`. The `ElementKind` mapping is handled during loading so that rules and element sets can refer to stable kind names instead of Rhapsody's internal meta-class strings.
+`ElementKind` is an enum that classifies Rhapsody elements into application-level categories such as `BLOCK`, `INTERFACE_BLOCK`, `PART`, `PORT_STANDARD`, `PORT_FLOW`, `PORT_PROXY`, `FLOW_PROPERTY`, `REQUIREMENT`, `PACKAGE`, `INTERFACE`, `CONNECTOR`, and `STATE_CONNECTOR`. The `ElementKind` mapping is handled during loading so that rules and element sets can refer to stable kind names instead of Rhapsody's internal meta-class strings.
+
+### Connector, state connector, and link
+
+Rhapsody uses three distinct concepts that share the word "connector". They map to three distinct kinds:
+
+| Kind | Rhapsody metaClass | API type | Live check | Meaning |
+| --- | --- | --- | --- | --- |
+| `CONNECTOR` | `Connector` | `IRPConnector` | `getConnectorType() == "Junction"` | Junction pseudostate — this is what Rhapsody's Ctrl+F returns when searching for "Connector". |
+| `STATE_CONNECTOR` | `Connector` | `IRPConnector` | any other `getConnectorType()` | Non-junction statechart/activity pseudostate: Condition, Diagram, EnterExit, Fork, History, Join, Termination, InPin, OutPin, InOutPin. |
+| `LINK` | `Link` | `IRPLink` (extends `IRPUnit`) | `instanceof IRPLink` | Instance-level structural link joining Parts and/or Ports in an IBD. Not what Rhapsody calls a "Connector". |
+
+Classification starts with the metaClass string in `RhapsodyModelLoader.classify()` (Link → `LINK`, Connector → `STATE_CONNECTOR`) and is then refined in `RhapsodyElementReader.refineConnectorKind()` using live `instanceof` checks and, for `IRPConnector`, `getConnectorType()`. Only Junction pseudostates are promoted to `CONNECTOR`.
+
+Only `LINK` participates in relation indexing. `CONNECTOR` and `STATE_CONNECTOR` elements are pseudostates, not relations between elements, so they are not registered in `relationsByOwner`. For links, the far endpoint is resolved via `getFromElement()`/`getToElement()` with `getFromPort()`/`getToPort()` and `getFromSysMLPort()`/`getToSysMLPort()` preferred — note that `IRPLink.getOther()` returns the *inverse link*, not the connected element, and must not be used for this.
 
 ## Element index
 
