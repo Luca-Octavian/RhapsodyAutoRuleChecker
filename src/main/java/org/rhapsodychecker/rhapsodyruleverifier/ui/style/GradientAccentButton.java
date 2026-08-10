@@ -73,13 +73,12 @@ public class GradientAccentButton extends JButton {
 
     private final Variant variant;
     private final boolean compact;
-    private final Color   accent;
-    private final Color   accentPressed;
-    private final Color   accentTint;
-    private final Color   accentTintPressed;
-    private final Color   neutral;
-    private final Color   neutralHover;
-    private final Color   neutralHoverPressed;
+    /**
+     * A semantic accent marker or a caller-supplied custom accent. Its concrete
+     * colour is resolved for every paint so an existing button follows a theme
+     * change immediately.
+     */
+    private final String accentHex;
 
     // ── Factories (preferred over the constructors) ─────────────────────────
 
@@ -119,14 +118,7 @@ public class GradientAccentButton extends JButton {
         super(text);
         this.variant = variant;
         this.compact = compact;
-
-        this.accent              = Color.decode(accentHex);
-        this.accentPressed       = Color.decode(AccentColors.darken(accentHex, 0.18f));
-        this.accentTint          = mix(accent, Color.WHITE, SECONDARY_TINT);
-        this.accentTintPressed   = mix(accent, Color.WHITE, SECONDARY_TINT - 0.14f);
-        this.neutral             = defaultNeutral();
-        this.neutralHover        = mix(neutral, Color.WHITE, 0.72f);
-        this.neutralHoverPressed = mix(neutral, Color.WHITE, 0.55f);
+        this.accentHex = accentHex;
 
         setContentAreaFilled(false);
         setBorderPainted(false); // we paint the border ourselves, see paintBorder()
@@ -170,6 +162,12 @@ public class GradientAccentButton extends JButton {
         return c != null ? c : Color.decode(AccentColors.NEUTRAL_HEX);
     }
 
+    private static Color darken(Color color, float amount) {
+        float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
+        hsb[2] = Math.max(0f, hsb[2] * (1f - amount));
+        return Color.getHSBColor(hsb[0], hsb[1], hsb[2]);
+    }
+
     /** Blends {@code base} toward {@code toward}; {@code amount} 0 = base, 1 = toward. */
     private static Color mix(Color base, Color toward, float amount) {
         float a = Math.max(0f, Math.min(1f, amount));
@@ -182,6 +180,18 @@ public class GradientAccentButton extends JButton {
     private static Color uiColor(String key, Color fallback) {
         Color c = UIManager.getColor(key);
         return c != null ? c : fallback;
+    }
+
+    /**
+     * Maps established semantic accents to the active palette. Supplying a
+     * custom accent remains supported without exposing appearance logic to the
+     * caller.
+     */
+    private Color activeAccent() {
+        if (AccentColors.PURPLE_HEX.equals(accentHex)) return AccentColors.primary();
+        if (AccentColors.ORANGE_HEX.equals(accentHex)) return AccentColors.action();
+        if (AccentColors.RED_HEX.equals(accentHex)) return AccentColors.failure();
+        return Color.decode(accentHex);
     }
 
     private boolean isHovered() {
@@ -219,16 +229,21 @@ public class GradientAccentButton extends JButton {
             return uiColor("Button.disabledBackground", new Color(0xE8, 0xE8, 0xE8));
         }
         if (!isActive()) {
-            return Color.WHITE;
+            return uiColor("Button.background", Color.WHITE);
         }
+        Color surface = uiColor("Button.background", Color.WHITE);
+        Color accent = activeAccent();
+        Color neutral = defaultNeutral();
         switch (variant) {
             case PRIMARY:
-                return isPressed() ? accentPressed : accent;
+                return isPressed() ? darken(accent, 0.18f) : accent;
             case SECONDARY:
-                return isPressed() ? accentTintPressed : accentTint;
+                return isPressed()
+                        ? mix(accent, surface, SECONDARY_TINT - 0.14f)
+                        : mix(accent, surface, SECONDARY_TINT);
             case NEUTRAL:
             default:
-                return isPressed() ? neutralHoverPressed : neutralHover;
+                return isPressed() ? mix(neutral, surface, 0.55f) : mix(neutral, surface, 0.72f);
         }
     }
 
@@ -244,15 +259,16 @@ public class GradientAccentButton extends JButton {
             // all that remains is grey text floating in the layout, which
             // reads as a label rather than as a button you currently can't
             // press. The affordance has to survive being unavailable.
-            return mix(neutral, uiColor("Panel.background", Color.WHITE), 0.55f);
+            return mix(defaultNeutral(), uiColor("Panel.background", Color.WHITE), 0.55f);
         }
+        Color neutral = defaultNeutral();
         switch (variant) {
             case PRIMARY:
                 // Solid accent fill already defines the edge on hover/press.
-                return isActive() ? null : new GradientPaint(0, 0, neutral, w, h, accent);
+                return isActive() ? null : new GradientPaint(0, 0, neutral, w, h, activeAccent());
             case SECONDARY:
                 // Flat neutral at rest; warms into the accent gradient on hover.
-                return isActive() ? new GradientPaint(0, 0, neutral, w, h, accent) : neutral;
+                return isActive() ? new GradientPaint(0, 0, neutral, w, h, activeAccent()) : neutral;
             case NEUTRAL:
             default:
                 return neutral;

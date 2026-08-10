@@ -86,6 +86,9 @@ public final class WizardDialog extends JDialog {
 
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
+        headerPanel.setBorder(BorderFactory.createCompoundBorder(
+                AppTheme.edgeBorder(0, 0, 2, 0),
+                BorderFactory.createEmptyBorder(4, 0, 2, 0)));
         headerPanel.add(stepIndicator);
         headerPanel.add(stepLabel);
         add(headerPanel, BorderLayout.NORTH);
@@ -98,6 +101,9 @@ public final class WizardDialog extends JDialog {
         saveAsBtn.setVisible(false);
 
         JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        navPanel.setBorder(BorderFactory.createCompoundBorder(
+                AppTheme.edgeBorder(1, 0, 0, 0),
+                BorderFactory.createEmptyBorder(2, 8, 2, 8)));
         navPanel.add(cancelBtn);
         navPanel.add(backBtn);
         navPanel.add(saveAsBtn);

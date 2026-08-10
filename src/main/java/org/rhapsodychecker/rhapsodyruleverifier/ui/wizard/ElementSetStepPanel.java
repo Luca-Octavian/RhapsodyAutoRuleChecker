@@ -45,7 +45,7 @@ public final class ElementSetStepPanel extends JPanel {
                 "<html><div style='text-align:center;'>No element sets yet.<br>" +
                 "Click \"Add Set...\" to define your first one.</div></html>",
                 SwingConstants.CENTER);
-        emptyLabel.setForeground(Color.GRAY);
+        emptyLabel.setForeground(AccentColors.mutedText());
         emptyLabel.setFont(emptyLabel.getFont().deriveFont(Font.ITALIC, 12f));
 
         JScrollPane setListScroll = new JScrollPane(setList);

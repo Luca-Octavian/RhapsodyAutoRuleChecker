@@ -4,6 +4,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.EmptyStatePanel;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.IndentGuideTree;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.ThemeAware;
 
 import java.awt.*;
 
@@ -16,7 +17,7 @@ import javax.swing.tree.*;
  * <p>Uses a CardLayout to flip between an empty-state placeholder
  * (when no model is loaded) and the actual tree scroll pane.
  */
-public class PackageTreePanel extends JPanel {
+public class PackageTreePanel extends JPanel implements ThemeAware {
 
     private static final String CARD_TREE        = "tree";
     private static final String CARD_PLACEHOLDER = "placeholder";
@@ -34,7 +35,7 @@ public class PackageTreePanel extends JPanel {
         // The pane frames itself. Relying on the split-pane divider alone left
         // this panel and the results panel bleeding into one another, since
         // they share a background and the divider is only a few pixels wide.
-        setBorder(AppTheme.panelBorder());
+        refreshTheme();
 
         add(new SectionHeader("Package Hierarchy"), BorderLayout.NORTH);
 
@@ -72,6 +73,17 @@ public class PackageTreePanel extends JPanel {
         centerLayout.show(centerPanel, CARD_PLACEHOLDER);
 
         add(centerPanel, BorderLayout.CENTER);
+    }
+
+    @Override
+    public void refreshTheme() {
+        setBorder(AppTheme.panelBorder());
+        Color background = UIManager.getColor("Panel.background");
+        if (background != null) {
+            setBackground(background);
+            centerPanel.setBackground(background);
+        }
+        repaint();
     }
 
     /**

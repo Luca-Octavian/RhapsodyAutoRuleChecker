@@ -4,6 +4,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState;
 import org.rhapsodychecker.rhapsodyruleverifier.config.generate.WizardState.RuleRequest;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
 
 import javax.swing.*;
@@ -108,6 +110,9 @@ public class ReviewStepPanel extends JPanel {
 
     private static JPanel sectionPanel(String title) {
         JPanel p = new JPanel(new BorderLayout());
+        p.setBorder(BorderFactory.createCompoundBorder(
+                AppTheme.panelBorder(),
+                BorderFactory.createEmptyBorder(2, 4, 4, 4)));
         p.add(new SectionHeader(title), BorderLayout.NORTH);
         p.setAlignmentX(Component.LEFT_ALIGNMENT);
         return p;
@@ -131,6 +136,7 @@ public class ReviewStepPanel extends JPanel {
         tf.setBorder(null);
         tf.setBackground(null);
         tf.setOpaque(false);
+        tf.setForeground(AccentColors.palette().text());
         tf.setAlignmentX(Component.LEFT_ALIGNMENT);
         return tf;
     }

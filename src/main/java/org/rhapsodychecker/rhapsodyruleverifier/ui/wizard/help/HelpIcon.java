@@ -19,7 +19,8 @@ public final class HelpIcon extends JLabel {
         super("\u24D8"); // simbol circular "i" din Unicode; poti inlocui cu un .png daca vrei stil custom
         HoverInfoProvider.FieldHelp help = HoverInfoProvider.get(internalKey);
 
-        setForeground(new Color(120, 120, 120));
+        Color muted = UIManager.getColor("Label.disabledForeground");
+        setForeground(muted != null ? muted : Color.GRAY);
         setFont(getFont().deriveFont(Font.PLAIN, 13f));
         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));

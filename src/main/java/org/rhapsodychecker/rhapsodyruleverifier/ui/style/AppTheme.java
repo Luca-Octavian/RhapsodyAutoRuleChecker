@@ -1,5 +1,6 @@
 package org.rhapsodychecker.rhapsodyruleverifier.ui.style;
 
+import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.intellijthemes.FlatGrayIJTheme;
 
 import javax.swing.*;
@@ -18,6 +19,8 @@ import java.awt.event.ComponentEvent;
  */
 public final class AppTheme {
 
+    private static boolean darkMode;
+
     private AppTheme() {}
 
     /**
@@ -35,7 +38,8 @@ public final class AppTheme {
     }
 
     public static void apply() {
-        FlatGrayIJTheme.setup();
+        installBaseTheme();
+        applyActivePalette();
 
         // Bump the global default font to 14pt for a more spacious / "zoomed in" feel.
         Font base = UIManager.getFont("defaultFont");
@@ -44,22 +48,6 @@ public final class AppTheme {
 
         UIManager.put("Component.focusWidth", 0);
         UIManager.put("Button.focusedBorderColor", UIManager.getColor("Button.borderColor"));
-
-        // FlatLaf/JOptionPane render whichever button is the root pane's
-        // default button (e.g. the OK/Yes button in showMessageDialog,
-        // showConfirmDialog) with a filled accent that defaults to blue.
-        // Purple is the app-wide confirmation colour; terracotta stays
-        // reserved for explicit model lifecycle actions.
-        Color purpleBase = Color.decode(AccentColors.PURPLE_HEX);
-        UIManager.put("Button.default.background", purpleBase);
-        UIManager.put("Button.default.startBackground", purpleBase);
-        UIManager.put("Button.default.endBackground", purpleBase);
-        UIManager.put("Button.default.foreground", Color.WHITE);
-        UIManager.put("Button.default.borderColor", purpleBase);
-        UIManager.put("Button.default.focusedBorderColor", Color.decode(AccentColors.PURPLE_FAINT_HEX));
-        UIManager.put("Button.default.hoverBackground", Color.decode(AccentColors.darken(AccentColors.PURPLE_HEX, 0.12f)));
-        UIManager.put("Button.default.pressedBackground", Color.decode(AccentColors.darken(AccentColors.PURPLE_HEX, 0.22f)));
-        UIManager.put("Button.default.boldText", Boolean.FALSE);
 
         applyTreeStyle();
         applyTableStyle();
@@ -82,6 +70,241 @@ public final class AppTheme {
 
         JFrame.setDefaultLookAndFeelDecorated(true);
         JDialog.setDefaultLookAndFeelDecorated(true);
+    }
+
+    /** Returns whether the currently active application appearance is dark. */
+    public static boolean isDarkMode() {
+        return darkMode;
+    }
+
+    /**
+     * Changes the active palette and refreshes every currently open Swing
+     * window. Calling this on the event dispatch thread provides an immediate,
+     * restart-free appearance change for frames and dialogs alike.
+     */
+    public static void setDarkMode(boolean enabled) {
+        if (darkMode == enabled) return;
+
+        darkMode = enabled;
+        installBaseTheme();
+        applyActivePalette();
+        applyTreeStyle();
+        applyTableStyle();
+        applyScrollStyle();
+        applyShapeStyle();
+
+        // Refresh only displayable application windows. Updating every Window
+        // (including hidden/disposed dialogs) was needlessly expensive and made
+        // a simple appearance toggle visibly stall the main frame.
+        for (Window window : Window.getWindows()) {
+            if (!window.isDisplayable()) continue;
+            SwingUtilities.updateComponentTreeUI(window);
+            refreshThemeAwareComponents(window);
+            window.revalidate();
+            window.repaint();
+        }
+    }
+
+    private static void refreshThemeAwareComponents(Component component) {
+        if (component instanceof ThemeAware) {
+            ((ThemeAware) component).refreshTheme();
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                refreshThemeAwareComponents(child);
+            }
+        }
+    }
+
+    /**
+     * Installs the appropriate FlatLaf base theme for the current mode.
+     * A dark base theme ensures that the hundreds of UIManager keys we
+     * do not explicitly override still render with dark colors.
+     */
+    private static void installBaseTheme() {
+        if (darkMode) {
+            FlatDarkLaf.setup();
+        } else {
+            FlatGrayIJTheme.setup();
+        }
+    }
+
+    private static void applyActivePalette() {
+        UiPalette palette = darkMode ? UiPalettes.dark() : UiPalettes.light();
+        AccentColors.setPalette(palette);
+        applyPalette(palette);
+    }
+
+    /**
+     * Maps an appearance-independent palette to FlatLaf defaults. This is the
+     * only class that knows both Swing UIManager keys and palette roles.
+     */
+    private static void applyPalette(UiPalette palette) {
+        applyGeneralDefaults(palette);
+        applyTextFieldDefaults(palette);
+        applyComboBoxDefaults(palette);
+        applyListAndTreeDefaults(palette);
+        applyTableDefaults(palette);
+        applyTabbedPaneDefaults(palette);
+        applyScrollAndProgressDefaults(palette);
+        applyButtonDefaults(palette);
+        applyDialogAndMenuDefaults(palette);
+        applyMiscComponentDefaults(palette);
+    }
+
+    /** Background, foreground, border and separator defaults shared by most components. */
+    private static void applyGeneralDefaults(UiPalette palette) {
+        UIManager.put("Panel.background", palette.applicationBackground());
+        UIManager.put("Viewport.background", palette.surface());
+        UIManager.put("ScrollPane.background", palette.surface());
+        UIManager.put("Component.background", palette.surface());
+        UIManager.put("Component.foreground", palette.text());
+        UIManager.put("Component.borderColor", palette.border());
+        UIManager.put("Separator.foreground", palette.border());
+        UIManager.put("Label.foreground", palette.text());
+        UIManager.put("Label.disabledForeground", palette.mutedText());
+    }
+
+    private static void applyTextFieldDefaults(UiPalette palette) {
+        UIManager.put("TextField.background", palette.surface());
+        UIManager.put("TextField.foreground", palette.text());
+        UIManager.put("TextField.borderColor", palette.border());
+        UIManager.put("TextField.focusedBorderColor", palette.primary());
+        UIManager.put("TextField.inactiveBackground", palette.interactiveSurface());
+        UIManager.put("FormattedTextField.background", palette.surface());
+        UIManager.put("FormattedTextField.foreground", palette.text());
+        UIManager.put("PasswordField.background", palette.surface());
+        UIManager.put("PasswordField.foreground", palette.text());
+        UIManager.put("TextArea.background", palette.surface());
+        UIManager.put("TextArea.foreground", palette.text());
+        UIManager.put("TextPane.background", palette.surface());
+        UIManager.put("TextPane.foreground", palette.text());
+        UIManager.put("EditorPane.background", palette.surface());
+        UIManager.put("EditorPane.foreground", palette.text());
+    }
+
+    private static void applyComboBoxDefaults(UiPalette palette) {
+        UIManager.put("ComboBox.background", palette.surface());
+        UIManager.put("ComboBox.foreground", palette.text());
+        UIManager.put("ComboBox.buttonBackground", palette.interactiveSurface());
+        UIManager.put("ComboBox.borderColor", palette.border());
+        UIManager.put("ComboBox.focusedBorderColor", palette.primary());
+    }
+
+    private static void applyListAndTreeDefaults(UiPalette palette) {
+        UIManager.put("List.background", palette.surface());
+        UIManager.put("List.foreground", palette.text());
+        UIManager.put("List.selectionBackground", palette.selection());
+        UIManager.put("List.selectionForeground", palette.selectionForeground());
+
+        UIManager.put("Tree.background", palette.surface());
+        UIManager.put("Tree.foreground", palette.text());
+        UIManager.put("Tree.selectionBackground", palette.selection());
+        UIManager.put("Tree.selectionForeground", palette.selectionForeground());
+    }
+
+    private static void applyTableDefaults(UiPalette palette) {
+        UIManager.put("Table.background", palette.surface());
+        UIManager.put("Table.foreground", palette.text());
+        UIManager.put("Table.alternateRowColor", palette.alternateRow());
+        UIManager.put("Table.selectionBackground", palette.selection());
+        UIManager.put("Table.selectionForeground", palette.selectionForeground());
+        UIManager.put("TableHeader.background", palette.interactiveSurface());
+        UIManager.put("TableHeader.foreground", palette.mutedText());
+    }
+
+    private static void applyTabbedPaneDefaults(UiPalette palette) {
+        UIManager.put("TabbedPane.background", palette.applicationBackground());
+        UIManager.put("TabbedPane.foreground", palette.text());
+        UIManager.put("TabbedPane.selectedBackground", palette.surface());
+        UIManager.put("TabbedPane.underlineColor", palette.primary());
+        UIManager.put("TabbedPane.inactiveUnderlineColor", palette.border());
+        UIManager.put("TabbedPane.contentAreaColor", palette.surface());
+    }
+
+    private static void applyScrollAndProgressDefaults(UiPalette palette) {
+        UIManager.put("ScrollBar.track", palette.applicationBackground());
+        UIManager.put("ScrollBar.thumb", palette.primaryFaint());
+        UIManager.put("ScrollBar.hoverTrackColor", palette.applicationBackground());
+        UIManager.put("ScrollBar.hoverThumbColor", palette.primary());
+        UIManager.put("ProgressBar.background", palette.actionFaint());
+        UIManager.put("ProgressBar.foreground", palette.action());
+    }
+
+    private static void applyButtonDefaults(UiPalette palette) {
+        UIManager.put("Button.background", palette.surface());
+        UIManager.put("Button.foreground", palette.text());
+        UIManager.put("Button.borderColor", palette.border());
+        UIManager.put("ToggleButton.background", palette.surface());
+        UIManager.put("ToggleButton.foreground", palette.text());
+
+        UIManager.put("Button.default.background", palette.primary());
+        UIManager.put("Button.default.startBackground", palette.primary());
+        UIManager.put("Button.default.endBackground", palette.primary());
+        UIManager.put("Button.default.foreground", Color.WHITE);
+        UIManager.put("Button.default.borderColor", palette.primary());
+        UIManager.put("Button.default.focusedBorderColor", palette.primaryFaint());
+        UIManager.put("Button.default.hoverBackground",
+                Color.decode(AccentColors.darken(toHex(palette.primary()), 0.12f)));
+        UIManager.put("Button.default.pressedBackground",
+                Color.decode(AccentColors.darken(toHex(palette.primary()), 0.22f)));
+        UIManager.put("Button.default.boldText", Boolean.FALSE);
+    }
+
+    /**
+     * Covers dialog chrome, option panes, menus, popups, tool tips and
+     * check/radio boxes — components that sit inside containers and were
+     * previously missed, leaving white patches in dark mode.
+     */
+    private static void applyDialogAndMenuDefaults(UiPalette palette) {
+        UIManager.put("OptionPane.background", palette.applicationBackground());
+        UIManager.put("OptionPane.messageForeground", palette.text());
+        UIManager.put("OptionPane.foreground", palette.text());
+
+        UIManager.put("FileChooser.background", palette.applicationBackground());
+        UIManager.put("FileChooser.foreground", palette.text());
+
+        UIManager.put("MenuBar.background", palette.applicationBackground());
+        UIManager.put("MenuBar.foreground", palette.text());
+        UIManager.put("Menu.background", palette.surface());
+        UIManager.put("Menu.foreground", palette.text());
+        UIManager.put("MenuItem.background", palette.surface());
+        UIManager.put("MenuItem.foreground", palette.text());
+        UIManager.put("MenuItem.selectionBackground", palette.selection());
+        UIManager.put("MenuItem.selectionForeground", palette.selectionForeground());
+        UIManager.put("PopupMenu.background", palette.surface());
+        UIManager.put("PopupMenu.foreground", palette.text());
+
+        UIManager.put("ToolTip.background", palette.surface());
+        UIManager.put("ToolTip.foreground", palette.text());
+
+        UIManager.put("CheckBox.background", palette.applicationBackground());
+        UIManager.put("CheckBox.foreground", palette.text());
+        UIManager.put("RadioButton.background", palette.applicationBackground());
+        UIManager.put("RadioButton.foreground", palette.text());
+
+        UIManager.put("Spinner.background", palette.surface());
+        UIManager.put("Spinner.foreground", palette.text());
+        UIManager.put("Slider.background", palette.applicationBackground());
+        UIManager.put("Slider.foreground", palette.text());
+    }
+
+    /** Miscellaneous components that contribute to the seamless appearance. */
+    private static void applyMiscComponentDefaults(UiPalette palette) {
+        UIManager.put("SplitPane.background", palette.applicationBackground());
+        UIManager.put("SplitPaneDivider.draggingColor", palette.border());
+
+        UIManager.put("ToolBar.background", palette.applicationBackground());
+        UIManager.put("ToolBar.foreground", palette.text());
+
+        UIManager.put("TitledBorder.titleColor", palette.text());
+
+        UIManager.put("CheckBoxMenuItem.background", palette.surface());
+        UIManager.put("CheckBoxMenuItem.foreground", palette.text());
+        UIManager.put("CheckBoxMenuItem.selectionBackground", palette.selection());
+        UIManager.put("CheckBoxMenuItem.selectionForeground", palette.selectionForeground());
+        UIManager.put("RadioButtonMenuItem.background", palette.surface());
+        UIManager.put("RadioButtonMenuItem.foreground", palette.text());
     }
 
     /**
@@ -168,6 +391,11 @@ public final class AppTheme {
      * here — instead of each renderer hardcoding one — is what keeps those
      * labels legible if the look and feel is ever switched to a dark theme.
      */
+    private static String toHex(Color color) {
+        return String.format("#%02X%02X%02X",
+                color.getRed(), color.getGreen(), color.getBlue());
+    }
+
     public static String mutedTextHex() {
         Color c = UIManager.getColor("Label.disabledForeground");
         if (c == null) c = UIManager.getColor("Component.disabledBorderColor");

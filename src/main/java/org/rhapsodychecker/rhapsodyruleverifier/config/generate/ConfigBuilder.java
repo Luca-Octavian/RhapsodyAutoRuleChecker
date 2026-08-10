@@ -46,7 +46,7 @@ public final class ConfigBuilder {
     private static List<RuleSpec> buildRuleSpecs(List<WizardState.RuleRequest> requests) {
         List<RuleSpec> specs = new ArrayList<>();
         for (WizardState.RuleRequest req : requests) {
-            RuleType type = parseRuleType(req.ruleType());
+            RuleType type = RuleType.fromString(req.ruleType());
 
             specs.add(
                     RuleSpec.builder()
@@ -65,25 +65,4 @@ public final class ConfigBuilder {
         return specs;
     }
 
-    private static RuleType parseRuleType(String raw) {
-        if (raw == null) throw new IllegalArgumentException("ruleType must not be null");
-        switch (raw.toUpperCase(Locale.ROOT).replace("-", "_").replace(" ", "_")) {
-            case "REQUIRED_VALUE":
-            case "REQUIREDVALUE":             return RuleType.REQUIRED_VALUE;
-            case "REQUIRED_STEREOTYPE":
-            case "REQUIREDSTEREOTYPE":        return RuleType.REQUIRED_STEREOTYPE;
-            case "REQUIRED_STEREOTYPE_ONE_OF":
-            case "REQUIREDSTEREOTYPEONEOF":   return RuleType.REQUIRED_STEREOTYPE_ONE_OF;
-            case "RELATION_EXISTS":
-            case "RELATIONEXISTS":            return RuleType.RELATION_EXISTS;
-            case "NAMING_PATTERN":
-            case "NAMINGPATTERN":             return RuleType.NAMING_PATTERN;
-            case "OWNER_STEREOTYPE_CONSTRAINT":
-            case "OWNERSTEREOTYPECONSTRAINT":  return RuleType.OWNER_STEREOTYPE_CONSTRAINT;
-            case "FLOW_PROPERTY_CONSTRAINT":
-            case "FLOWPROPERTYCONSTRAINT":     return RuleType.FLOW_PROPERTY_CONSTRAINT;
-            default:
-                throw new IllegalArgumentException("Unknown rule type from wizard: " + raw);
-        }
-    }
 }

@@ -6,10 +6,12 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.EmptyStatePanel;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.IndentGuideTree;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.ThemeAware;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -34,7 +36,7 @@ import java.util.function.Consumer;
  * <p>Double-click navigates to the element in Rhapsody — only on
  * individual rule nodes (leaf), not on group summary nodes.
  */
-public final class ResultsTablePanel extends JPanel {
+public final class ResultsTablePanel extends JPanel implements ThemeAware {
 
     // ── Node types stored as JTree user objects ────────────────────────────
 
@@ -80,10 +82,7 @@ public final class ResultsTablePanel extends JPanel {
 
     /** A tiny filled-circle icon for tree rows. */
     private static final class DotIcon implements Icon {
-        private final Color color;
         private static final int SIZE = 8;
-
-        DotIcon(Color color) { this.color = color; }
 
         @Override public int getIconWidth()  { return SIZE; }
         @Override public int getIconHeight() { return SIZE; }
@@ -93,7 +92,7 @@ public final class ResultsTablePanel extends JPanel {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                                 RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color);
+            g2.setColor(AccentColors.failure());
             g2.fillOval(x, y, SIZE, SIZE);
             g2.dispose();
         }
@@ -105,7 +104,7 @@ public final class ResultsTablePanel extends JPanel {
      * one fact that the row has children, which is the duplication that made
      * the package tree read as cluttered.
      */
-    private static final Icon RULE_DOT  = new DotIcon(Color.GRAY);
+    private static final Icon RULE_DOT = new DotIcon();
 
     // ── UI components ─────────────────────────────────────────────────────
 
@@ -113,7 +112,7 @@ public final class ResultsTablePanel extends JPanel {
     private final DefaultMutableTreeNode rootNode;
     private final DefaultTreeModel treeModel;
     private final JTextField filterField;
-    private final JLabel statusLabel;
+    private JLabel statusLabel;
 
     /* ── Detail pane: grid (top) + text area (bottom) ──────────────────── */
     private final JLabel detailLabel1Key   = new JLabel();
@@ -126,6 +125,7 @@ public final class ResultsTablePanel extends JPanel {
     private final JTextArea detailArea;
 
     private final JSplitPane splitPane;
+    private JPanel detailPane;
 
     private final CardLayout centerLayout = new CardLayout();
     private final JPanel     centerPanel  = new JPanel(centerLayout);
@@ -144,7 +144,7 @@ public final class ResultsTablePanel extends JPanel {
 
         // Frames the pane against its neighbour across the split divider; see
         // the same call in PackageTreePanel.
-        setBorder(AppTheme.panelBorder());
+        refreshTheme();
 
         /* ── Header + filter bar (NORTH) ──────────────────────────────── */
         JPanel filterPanel = new JPanel(new GridBagLayout());
@@ -231,7 +231,7 @@ public final class ResultsTablePanel extends JPanel {
         detailContent.add(detailGrid, BorderLayout.NORTH);
         detailContent.add(detailScroll, BorderLayout.CENTER);
 
-        JPanel detailPane = new JPanel(new BorderLayout());
+        detailPane = new JPanel(new BorderLayout());
         // A rule along the top edge, so the seam between results and details
         // is visible even when the divider isn't being hovered.
         detailPane.setBorder(AppTheme.edgeBorder(1, 0, 0, 0));
@@ -262,6 +262,27 @@ public final class ResultsTablePanel extends JPanel {
         add(northPanel, BorderLayout.NORTH);
         add(centerPanel, BorderLayout.CENTER);
         add(statusLabel, BorderLayout.SOUTH);
+    }
+
+    @Override
+    public void refreshTheme() {
+        setBorder(AppTheme.panelBorder());
+
+        Color muted = AccentColors.mutedText();
+        for (JLabel key : new JLabel[]{detailLabel1Key, detailLabel2Key, detailLabel3Key}) {
+            key.setForeground(muted);
+        }
+
+        if (detailPane != null) {
+            detailPane.setBorder(AppTheme.edgeBorder(1, 0, 0, 0));
+        }
+
+        if (statusLabel != null) {
+            statusLabel.setBorder(BorderFactory.createCompoundBorder(
+                    AppTheme.edgeBorder(1, 0, 0, 0),
+                    BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+        }
+        repaint();
     }
 
     private static final String DETAIL_HINT =
@@ -313,7 +334,7 @@ public final class ResultsTablePanel extends JPanel {
 
         // Style key labels as muted
         Font keyFont = detailLabel1Key.getFont().deriveFont(Font.PLAIN, 12f);
-        Color keyColor = Color.GRAY;
+        Color keyColor = AccentColors.palette().mutedText();
         for (JLabel key : new JLabel[]{detailLabel1Key, detailLabel2Key, detailLabel3Key}) {
             key.setFont(keyFont);
             key.setForeground(keyColor);
@@ -597,17 +618,6 @@ public final class ResultsTablePanel extends JPanel {
 
         private static final int MAX_REASON_LENGTH = 140;
 
-        /**
-         * Separator between the fields on a row. Both colours come from the
-         * theme rather than being hardcoded, so the row stays legible if the
-         * look and feel is switched to a dark variant.
-         */
-        private static final String SEP =
-                " <span style='color:" + AppTheme.faintTextHex()
-                + ";'>&nbsp;&mdash;&nbsp;</span> ";
-
-        private static final String MUTED = AppTheme.mutedTextHex();
-
         @Override
         public Component getTreeCellRendererComponent(JTree tree, Object value,
                 boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
@@ -617,13 +627,16 @@ public final class ResultsTablePanel extends JPanel {
             setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 6));
             setIconTextGap(8);
 
+            String separator = separatorHtml();
+            String muted = AppTheme.mutedTextHex();
+
             if (!(value instanceof DefaultMutableTreeNode)) return this;
             Object userObj = ((DefaultMutableTreeNode) value).getUserObject();
 
             if (userObj instanceof GroupNode) {
-                renderGroup((GroupNode) userObj);
+                renderGroup((GroupNode) userObj, separator, muted);
             } else if (userObj instanceof RuleNode) {
-                renderRule((DefaultMutableTreeNode) value, (RuleNode) userObj);
+                renderRule((DefaultMutableTreeNode) value, (RuleNode) userObj, separator, muted);
             } else {
                 setIcon(null);
                 setToolTipText(null);
@@ -632,7 +645,12 @@ public final class ResultsTablePanel extends JPanel {
             return this;
         }
 
-        private void renderGroup(GroupNode gn) {
+        private static String separatorHtml() {
+            return " <span style='color:" + AppTheme.faintTextHex()
+                    + ";'>&nbsp;&mdash;&nbsp;</span> ";
+        }
+
+        private void renderGroup(GroupNode gn, String separator, String muted) {
             // No icon: the chevron on this row is already the "has children"
             // marker, and it's the one the user clicks.
             setIcon(null);
@@ -641,8 +659,8 @@ public final class ResultsTablePanel extends JPanel {
             // The failure count is the actionable number on a group row, so it
             // is the only emphasised part.
             setText("<html><b>" + html(gn.group) + "</b>"
-                    + SEP + html(gn.elementName)
-                    + SEP + "<span style='color:" + MUTED + ";'>"
+                    + separator + html(gn.elementName)
+                    + separator + "<span style='color:" + muted + ";'>"
                     + gn.failedCount + " of " + gn.totalCount + " failed</span>"
                     + "</html>");
 
@@ -651,7 +669,8 @@ public final class ResultsTablePanel extends JPanel {
                     + " rules failed");
         }
 
-        private void renderRule(DefaultMutableTreeNode treeNode, RuleNode rn) {
+        private void renderRule(DefaultMutableTreeNode treeNode, RuleNode rn,
+                                String separator, String muted) {
             setIcon(RULE_DOT);
             setFont(getFont().deriveFont(Font.PLAIN));
 
@@ -665,10 +684,10 @@ public final class ResultsTablePanel extends JPanel {
             // A nested row's parent already names the element; repeating it
             // would push the reason off the right edge for no information gain.
             if (!nestedInGroup) {
-                sb.append(SEP).append(html(rn.elementName));
+                sb.append(separator).append(html(rn.elementName));
             }
 
-            sb.append(SEP).append("<span style='color:").append(MUTED).append(";'>")
+            sb.append(separator).append("<span style='color:").append(muted).append(";'>")
               .append(html(abbreviate(rn.reason))).append("</span></html>");
 
             setText(sb.toString());

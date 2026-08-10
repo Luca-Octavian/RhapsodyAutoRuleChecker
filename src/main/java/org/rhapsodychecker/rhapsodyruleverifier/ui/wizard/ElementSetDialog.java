@@ -259,14 +259,14 @@ public final class ElementSetDialog extends JDialog {
     private static JLabel createCountLabel() {
         JLabel label = new JLabel("");
         label.setFont(label.getFont().deriveFont(Font.ITALIC, 11f));
-        label.setForeground(new Color(100, 140, 180));
+        label.setForeground(AccentColors.palette().information());
         return label;
     }
 
     private static JLabel createTotalLabel() {
         JLabel label = new JLabel("");
         label.setFont(label.getFont().deriveFont(Font.BOLD, 12f));
-        label.setForeground(new Color(60, 120, 60));
+        label.setForeground(AccentColors.action());
         return label;
     }
 

@@ -1,6 +1,8 @@
 // ui/wizard/CheckboxListField.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui.wizard;
 
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
+
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -24,8 +26,6 @@ public final class CheckboxListField extends JPanel {
     private final JLabel          noSuggestionsLabel;
     private final JLabel          noMatchesLabel;
     private JScrollPane           scroll;
-    private static final Color    NORMAL_BORDER_COLOR  = borderColor();
-    private static final Color    INVALID_BORDER_COLOR = new Color(200, 60, 60);
     private final List<Runnable> changeListeners = new ArrayList<>();
 
     /**
@@ -38,11 +38,11 @@ public final class CheckboxListField extends JPanel {
         checkPanel.setLayout(new BoxLayout(checkPanel, BoxLayout.Y_AXIS));
 
         noSuggestionsLabel = new JLabel("  No values detected in model.");
-        noSuggestionsLabel.setForeground(Color.GRAY);
+        noSuggestionsLabel.setForeground(mutedTextColor());
         noSuggestionsLabel.setFont(noSuggestionsLabel.getFont().deriveFont(Font.ITALIC, 11f));
 
         noMatchesLabel = new JLabel("  No matches for this search.");
-        noMatchesLabel.setForeground(Color.GRAY);
+        noMatchesLabel.setForeground(mutedTextColor());
         noMatchesLabel.setFont(noMatchesLabel.getFont().deriveFont(Font.ITALIC, 11f));
         noMatchesLabel.setVisible(false);
 
@@ -78,7 +78,7 @@ public final class CheckboxListField extends JPanel {
         scroll = new JScrollPane(checkPanel);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setPreferredSize(new Dimension(300, 120));
-        scroll.setBorder(BorderFactory.createLineBorder(NORMAL_BORDER_COLOR));
+        scroll.setBorder(BorderFactory.createLineBorder(borderColor()));
         listWrapper.add(scroll, BorderLayout.CENTER);
 
         add(listWrapper, BorderLayout.CENTER);
@@ -87,7 +87,7 @@ public final class CheckboxListField extends JPanel {
         JPanel customPanel = new JPanel(new BorderLayout(4, 0));
         JLabel customLabel = new JLabel("Custom:");
         customLabel.setFont(customLabel.getFont().deriveFont(11f));
-        customLabel.setForeground(Color.GRAY);
+        customLabel.setForeground(mutedTextColor());
         customField.setToolTipText(
                 "Add values not detected in the model (comma separated)");
         customField.getDocument().addDocumentListener(new DocumentListener() {
@@ -103,6 +103,11 @@ public final class CheckboxListField extends JPanel {
     private static Color borderColor() {
         Color color = UIManager.getColor("Component.borderColor");
         return color != null ? color : Color.LIGHT_GRAY;
+    }
+
+    private static Color mutedTextColor() {
+        Color color = UIManager.getColor("Label.disabledForeground");
+        return color != null ? color : Color.GRAY;
     }
 
     /**
@@ -197,7 +202,7 @@ public final class CheckboxListField extends JPanel {
      */
     public void setValid(boolean valid) {
         scroll.setBorder(BorderFactory.createLineBorder(
-                valid ? NORMAL_BORDER_COLOR : INVALID_BORDER_COLOR, 1));
+                valid ? borderColor() : AccentColors.failure(), 1));
     }
 
     /**

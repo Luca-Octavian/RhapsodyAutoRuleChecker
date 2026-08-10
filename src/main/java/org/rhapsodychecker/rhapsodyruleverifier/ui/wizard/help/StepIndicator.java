@@ -71,11 +71,10 @@ public final class StepIndicator extends JPanel {
         // Center the cluster horizontally
         int startX = (w - totalSpan) / 2;
 
-        Color purpleColor = Color.decode(AccentColors.PURPLE_HEX);
-        Color neutralBorder = UIManager.getColor("Component.borderColor");
-        if (neutralBorder == null) neutralBorder = new Color(192, 192, 192);
-        Color mutedText = UIManager.getColor("Label.disabledForeground");
-        if (mutedText == null) mutedText = new Color(160, 160, 160);
+        Color purpleColor = AccentColors.primary();
+        Color neutralBorder = AccentColors.palette().border();
+        Color mutedText = AccentColors.mutedText();
+        Color surfaceText = AccentColors.palette().surface();
 
         Font numberFont = getFont().deriveFont(Font.BOLD, NUMBER_FONT_SIZE);
 
@@ -115,7 +114,7 @@ public final class StepIndicator extends JPanel {
                 drawCheckmark(g2, cx, circleY);
             } else if (i == currentStep) {
                 // Current: white number
-                g2.setColor(Color.WHITE);
+                g2.setColor(surfaceText);
                 g2.setFont(numberFont);
                 String num = String.valueOf(i + 1);
                 FontMetrics fm = g2.getFontMetrics();
@@ -138,7 +137,7 @@ public final class StepIndicator extends JPanel {
     }
 
     private void drawCheckmark(Graphics2D g2, int cx, int cy) {
-        g2.setColor(Color.WHITE);
+        g2.setColor(AccentColors.palette().surface());
         g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 
         Path2D check = new Path2D.Float();

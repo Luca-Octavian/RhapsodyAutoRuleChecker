@@ -45,7 +45,7 @@ public final class RuleStepPanel extends JPanel {
                 "<html><div style='text-align:center;'>No rules yet.<br>" +
                 "Click \"Add Rule...\" to define your first one.</div></html>",
                 SwingConstants.CENTER);
-        emptyLabel.setForeground(Color.GRAY);
+        emptyLabel.setForeground(AccentColors.mutedText());
         emptyLabel.setFont(emptyLabel.getFont().deriveFont(Font.ITALIC, 12f));
 
         centerPanel.add(new JScrollPane(ruleList), CARD_LIST);

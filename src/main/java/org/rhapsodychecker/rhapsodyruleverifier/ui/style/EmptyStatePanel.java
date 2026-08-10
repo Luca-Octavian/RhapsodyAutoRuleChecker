@@ -39,7 +39,8 @@ public class EmptyStatePanel extends JPanel {
         /* ── subtitle ─────────────────────────────────────────── */
         JLabel subtitleLabel = new JLabel(subtitle, SwingConstants.CENTER);
         subtitleLabel.setFont(subtitleLabel.getFont().deriveFont(Font.PLAIN, 12f));
-        subtitleLabel.setForeground(Color.GRAY);
+        Color muted = UIManager.getColor("Label.disabledForeground");
+        subtitleLabel.setForeground(muted != null ? muted : Color.GRAY);
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         column.add(subtitleLabel);
 

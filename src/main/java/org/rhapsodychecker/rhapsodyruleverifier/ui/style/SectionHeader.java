@@ -25,7 +25,7 @@ import javax.swing.*;
  * field. The rule is the cheapest possible boundary — one pixel in the theme's
  * own border colour — and it costs the layout nothing.
  */
-public class SectionHeader extends JPanel {
+public class SectionHeader extends JPanel implements ThemeAware {
 
     private static final long serialVersionUID = 1L;
 
@@ -39,22 +39,31 @@ public class SectionHeader extends JPanel {
 
     private static final float FONT_SIZE = 11f;
 
+    private final JLabel label;
+
     public SectionHeader(String title) {
         setLayout(new BorderLayout());
         setOpaque(false);
 
-        JLabel label = new JLabel(title.toUpperCase());
+        label = new JLabel(title.toUpperCase());
         label.setFont(trackedFont(label.getFont()));
-        label.setForeground(mutedForeground());
-
-        // Hairline underneath, then padding inside it. Compound order matters:
-        // the matte is the outer border so the padding sits between the rule
-        // and the text rather than outside the rule.
-        setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, dividerColor()),
-                BorderFactory.createEmptyBorder(10, 10, 6, 10)));
+        refreshTheme();
 
         add(label, BorderLayout.WEST);
+    }
+
+    @Override
+    public void refreshTheme() {
+        label.setForeground(mutedForeground());
+
+        // A restrained primary-colour rail provides consistent wayfinding while
+        // the quiet bottom rule preserves the existing panel boundary.
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, dividerColor()),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 3, 0, 0, AccentColors.primary()),
+                        BorderFactory.createEmptyBorder(10, 7, 6, 10))));
+        repaint();
     }
 
     /** Derives a small, bold, letter-spaced variant of the supplied font. */

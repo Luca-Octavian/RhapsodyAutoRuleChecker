@@ -10,8 +10,10 @@ import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientProgressBar;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.ThemeAware;
 
 import javax.swing.*;
+import javax.swing.border.Border;
 import java.awt.*;
 import java.util.List;
 import java.util.Vector;
@@ -21,7 +23,7 @@ import java.util.Vector;
  * All logic delegated to {@link MainFrameController}.
  */
 @SuppressWarnings("serial")
-public class MainFrame extends JFrame implements MainFrameController.View {
+public class MainFrame extends JFrame implements MainFrameController.View, ThemeAware {
 
     // ── Components ──────────────────────────────────────────────────────────
     private final JComboBox<String> modelPathField  = new JComboBox<>();
@@ -45,12 +47,15 @@ public class MainFrame extends JFrame implements MainFrameController.View {
     private final GradientAccentButton openCacheBtn        = GradientAccentButton.neutral("\uD83D\uDCC1 Cache");
     // Neutral: help opens local HTML docs in the default browser.
     private final GradientAccentButton helpBtn             = GradientAccentButton.neutral("Help");
+    private final JCheckBox darkModeToggle = new JCheckBox("Dark mode");
 
     private final PackageTreePanel  treePanel    = new PackageTreePanel();
     private final ResultsTablePanel resultsPanel = new ResultsTablePanel();
 
     private final JLabel       statusBar   = new JLabel("  Ready");
     private final JProgressBar progressBar = new GradientProgressBar();
+    private JPanel topPanel;
+    private JPanel pathGroup;
 
     // ── Controller ──────────────────────────────────────────────────────────
     private final MainFrameController controller;
@@ -84,13 +89,11 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         setLayout(new BorderLayout(5, 5));
 
         // Top panel
-        JPanel topPanel = new JPanel(new GridBagLayout());
+        topPanel = new JPanel(new GridBagLayout());
         // A rule along the bottom, separating the control strip from the
         // content below it. Without it the buttons appeared to float on the
         // same surface as the trees, since everything shares one background.
-        topPanel.setBorder(BorderFactory.createCompoundBorder(
-                AppTheme.edgeBorder(0, 0, 1, 0),
-                BorderFactory.createEmptyBorder(10, 10, 10, 10)));
+        topPanel.setBorder(topPanelBorder());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(2, 5, 2, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -100,10 +103,8 @@ public class MainFrame extends JFrame implements MainFrameController.View {
 
         // Wrap Model + Config rows in a visually grouped sub-panel.
         // The stock Swing border is intentionally square; it cannot honor FlatLaf's arc property.
-        JPanel pathGroup = new JPanel(new GridBagLayout());
-        pathGroup.setBorder(BorderFactory.createCompoundBorder(
-                AppTheme.panelBorder(),
-                BorderFactory.createEmptyBorder(12, 16, 12, 16)));
+        pathGroup = new JPanel(new GridBagLayout());
+        pathGroup.setBorder(pathGroupBorder());
 
         GridBagConstraints pgbc = new GridBagConstraints();
         pgbc.insets = new Insets(2, 5, 2, 5);
@@ -140,6 +141,9 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         leftButtons.add(editConfigWizardBtn);
         leftButtons.add(updateModelBtn);
         JPanel rightButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        darkModeToggle.setSelected(AppTheme.isDarkMode());
+        darkModeToggle.setToolTipText("Switch between the light and dark application appearances");
+        rightButtons.add(darkModeToggle);
         rightButtons.add(helpBtn);
         rightButtons.add(openCacheBtn);
         buttonPanel.add(leftButtons, BorderLayout.WEST);
@@ -185,8 +189,36 @@ public class MainFrame extends JFrame implements MainFrameController.View {
         editConfigWizardBtn.addActionListener(e -> controller.onWizardEdit());
         openCacheBtn.addActionListener(e -> controller.onOpenCacheFolder());
         helpBtn.addActionListener(e -> controller.onHelp());
+        darkModeToggle.addActionListener(e -> {
+            boolean enabled = darkModeToggle.isSelected();
+            // Let the checkbox commit its state before the Look-and-Feel swap
+            // performs its unavoidable EDT work.
+            SwingUtilities.invokeLater(() -> AppTheme.setDarkMode(enabled));
+        });
 
         resultsPanel.setOnElementDoubleClick(controller::onNavigateToElement);
+    }
+
+    @Override
+    public void refreshTheme() {
+        if (topPanel != null) topPanel.setBorder(topPanelBorder());
+        if (pathGroup != null) pathGroup.setBorder(pathGroupBorder());
+        statusBar.setBorder(BorderFactory.createCompoundBorder(
+                AppTheme.edgeBorder(1, 0, 0, 0),
+                BorderFactory.createEmptyBorder(3, 5, 3, 5)));
+        repaint();
+    }
+
+    private static Border topPanelBorder() {
+        return BorderFactory.createCompoundBorder(
+                AppTheme.edgeBorder(0, 0, 1, 0),
+                BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    }
+
+    private static Border pathGroupBorder() {
+        return BorderFactory.createCompoundBorder(
+                AppTheme.panelBorder(),
+                BorderFactory.createEmptyBorder(12, 16, 12, 16));
     }
 
     private void browseFile(JComboBox<String> target, String description,

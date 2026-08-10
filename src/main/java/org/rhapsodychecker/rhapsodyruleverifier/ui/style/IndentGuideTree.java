@@ -99,7 +99,7 @@ public class IndentGuideTree extends JTree {
     }
 
     private static Color activeGuideColor() {
-        Color base = Color.decode(AccentColors.PURPLE_HEX);
+        Color base = AccentColors.primary();
         return new Color(base.getRed(), base.getGreen(), base.getBlue(), ACTIVE_ALPHA);
     }
 

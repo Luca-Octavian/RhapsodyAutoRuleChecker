@@ -202,18 +202,18 @@ public final class RuleDialog extends JDialog {
 
         FieldValidation.onChange(idField, this::revalidateLive);
         FieldValidation.onChange(targetKind, this::revalidateLive);
-        FieldValidation.onChange(
-                parameterEditor.namingValueField(), this::revalidateLive);
     }
 
     private void showSelectedRuleType() {
         parameterEditor.showRuleType(selectedRuleType());
+        JTextField liveField = parameterEditor.liveValidationField();
+        if (liveField != null) FieldValidation.onChange(liveField, this::revalidateLive);
         updateTargetVisibility();
         revalidateLive();
     }
 
     private void updateTargetVisibility() {
-        boolean targetRequired = selectedRuleType() == RuleType.REQUIRED_VALUE;
+        boolean targetRequired = parameterEditor.usesTargetSpec();
         boolean taggedValue = targetRequired
                 && targetKind.getSelectedItem() == AliasKind.TAGGED_VALUE;
 
@@ -267,7 +267,7 @@ public final class RuleDialog extends JDialog {
     }
 
     private String targetValidationMessage() {
-        if (selectedRuleType() != RuleType.REQUIRED_VALUE
+        if (!parameterEditor.usesTargetSpec()
                 || targetKind.getSelectedItem() != AliasKind.TAGGED_VALUE) {
             return null;
         }
@@ -302,7 +302,7 @@ public final class RuleDialog extends JDialog {
     }
 
     private TargetSpec buildTargetSpec() {
-        if (selectedRuleType() != RuleType.REQUIRED_VALUE) return null;
+        if (!parameterEditor.usesTargetSpec()) return null;
 
         AliasKind kind = (AliasKind) targetKind.getSelectedItem();
         if (kind == null) return null;

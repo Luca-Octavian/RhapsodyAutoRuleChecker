@@ -77,21 +77,27 @@ public final class WizardParamsCollector {
         }
     }
 
+    private interface CrossFieldValidator {
+        void validate(Map<String, Object> params, List<String> errors);
+    }
+
+    private static final Map<RuleType, CrossFieldValidator> CROSS_FIELD_VALIDATORS
+            = new EnumMap<>(RuleType.class);
+
+    static {
+        CROSS_FIELD_VALIDATORS.put(RuleType.REQUIRED_VALUE,
+                WizardParamsCollector::validateRequiredValueCrossFields);
+        CROSS_FIELD_VALIDATORS.put(RuleType.RELATION_EXISTS,
+                WizardParamsCollector::validateRelationExistsCrossFields);
+    }
+
     private static void validateCrossFields(
             RuleType ruleType,
             Map<String, Object> params,
             List<String> errors
     ) {
-        switch (ruleType) {
-            case REQUIRED_VALUE:
-                validateRequiredValueCrossFields(params, errors);
-                break;
-            case RELATION_EXISTS:
-                validateRelationExistsCrossFields(params, errors);
-                break;
-            default:
-                break;
-        }
+        CrossFieldValidator v = CROSS_FIELD_VALIDATORS.get(ruleType);
+        if (v != null) v.validate(params, errors);
     }
 
     private static void validateRequiredValueCrossFields(

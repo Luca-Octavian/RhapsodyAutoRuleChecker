@@ -21,9 +21,6 @@ import java.awt.geom.RoundRectangle2D;
  */
 public final class GradientProgressBar extends JProgressBar {
 
-    private static final Color ORANGE = Color.decode(AccentColors.ORANGE_HEX);
-    private static final Color PURPLE = Color.decode(AccentColors.PURPLE_HEX);
-
     private static final int ARC = 6;
 
     /* ── Indeterminate animation state ─────────────────────────────────── */
@@ -125,7 +122,9 @@ public final class GradientProgressBar extends JProgressBar {
         if (fillW <= 0) return;
 
         // Gradient from Orange 200 (left) to purple (right edge of filled area)
-        GradientPaint gp = new GradientPaint(barX, 0, ORANGE, barX + fillW, 0, PURPLE);
+        GradientPaint gp = new GradientPaint(
+                barX, 0, AccentColors.action(),
+                barX + fillW, 0, AccentColors.primary());
         g2.setPaint(gp);
 
         // Clip to rounded rect for the fill
@@ -140,7 +139,7 @@ public final class GradientProgressBar extends JProgressBar {
         int range = barW - blockW;
         int blockX = barX + (int) (range * bouncePos);
 
-        g2.setColor(ORANGE);
+        g2.setColor(AccentColors.action());
         Shape clip = g2.getClip();
         g2.clip(new RoundRectangle2D.Float(barX, barY, barW, barH, ARC, ARC));
         g2.fillRoundRect(blockX, barY, blockW, barH, ARC, ARC);
