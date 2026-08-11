@@ -28,6 +28,7 @@ public class PackageTreePanel extends JPanel implements ThemeAware {
     private DefaultMutableTreeNode rootNode;
     private DefaultTreeModel       treeModel;
     private JTree                  tree;
+    private JScrollPane            treeScroll;
 
     public PackageTreePanel() {
         setLayout(new BorderLayout());
@@ -50,7 +51,7 @@ public class PackageTreePanel extends JPanel implements ThemeAware {
         tree.setCellRenderer(new PackageTreeCellRenderer());
         ToolTipManager.sharedInstance().registerComponent(tree);
 
-        JScrollPane treeScroll = new JScrollPane(tree);
+        treeScroll = new JScrollPane(tree);
         // The panel's own border above already frames this region, so the
         // scroll pane's would sit a pixel inside it and read as a double rule.
         treeScroll.setBorder(BorderFactory.createEmptyBorder());
@@ -79,9 +80,18 @@ public class PackageTreePanel extends JPanel implements ThemeAware {
     public void refreshTheme() {
         setBorder(AppTheme.panelBorder());
         Color background = UIManager.getColor("Panel.background");
+        Color foreground = UIManager.getColor("Tree.foreground");
         if (background != null) {
             setBackground(background);
             centerPanel.setBackground(background);
+            if (tree != null) {
+                tree.setBackground(background);
+                treeScroll.getViewport().setBackground(background);
+            }
+        }
+        if (tree != null) {
+            if (foreground != null) tree.setForeground(foreground);
+            tree.setCellRenderer(new PackageTreeCellRenderer());
         }
         repaint();
     }

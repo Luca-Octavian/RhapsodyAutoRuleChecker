@@ -300,12 +300,16 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
 
     @Override
     public void updateButtonStates() {
+        String fieldPath = comboText(modelPathField);
         runBtn.setEnabled(controller.isModelLoaded());
         exportBtn.setEnabled(controller.hasResults());
-        updateModelBtn.setEnabled(controller.isModelLoaded());
+        // "Update Model" is only meaningful for the model that is currently in
+        // memory. If the user browsed to a different file the button is greyed
+        // out so they get a visual hint rather than a surprising runtime error.
+        updateModelBtn.setEnabled(controller.isUpdateModelEnabled(fieldPath));
         newConfigWizardBtn.setEnabled(controller.isModelLoaded());
         editConfigWizardBtn.setEnabled(controller.isModelLoaded() && controller.hasConfig());
-        openCacheBtn.setEnabled(controller.isCacheAvailable(comboText(modelPathField)));
+        openCacheBtn.setEnabled(controller.isCacheAvailable(fieldPath));
     }
 
     // ── Combo helpers ───────────────────────────────────────────────────────

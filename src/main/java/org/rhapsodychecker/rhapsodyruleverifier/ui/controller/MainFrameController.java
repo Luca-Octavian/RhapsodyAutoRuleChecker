@@ -79,6 +79,8 @@ public final class MainFrameController {
     private List<RuleResult>      lastResults;
     private FastDetectionResult   fastDetectionResult;
     private boolean               loadedFromCache = false;
+    /** Canonical path of the model that is currently loaded in memory. */
+    private String                loadedModelPath = null;
 
     public MainFrameController(View view, ProgressReporter progressReporter) {
         this.view = view;
@@ -214,6 +216,25 @@ public final class MainFrameController {
             return;
         }
 
+        // Guard: "Update Model" means update the currently-loaded model.
+        // If the user browsed to a different file without loading it first,
+        // the path in the field no longer matches what is held in memory.
+        // Proceeding silently would switch models entirely — warn instead.
+        if (snapshot != null && loadedModelPath != null) {
+            String canonicalField = ModelCacheManager.canonicalPath(modelPath);
+            String canonicalLoaded = ModelCacheManager.canonicalPath(loadedModelPath);
+            if (!canonicalField.equals(canonicalLoaded)) {
+                view.showWarning(
+                        "The selected path differs from the currently loaded model.\n\n"
+                        + "  Loaded:   " + loadedModelPath + "\n"
+                        + "  Selected: " + modelPath + "\n\n"
+                        + "Use 'Load Model' to load a new model, or restore the original\n"
+                        + "path before using 'Update Model'.",
+                        "Model Path Mismatch");
+                return;
+            }
+        }
+
         // Use incremental update whenever a cache exists — works for both warm start
         // (Rhapsody already connected) and cold start (loaded from cache only).
         // loadIncrementalUpdate() handles Rhapsody connection + package scan warm-up
@@ -222,6 +243,16 @@ public final class MainFrameController {
         File cacheFile = ModelCacheManager.resolveCacheFile(modelPath);
 
         if (ModelCacheManager.cacheExists(cacheFile)) {
+            // Validate the cache before handing it to the incremental updater.
+            // An outdated-version or corrupt cache would cause undefined behaviour
+            // deep inside loadIncrementalUpdate(); catch it here with a clear message
+            // and fall through to a full Rhapsody load instead.
+            CacheMetadata metadata = inspectCache(modelPath, cacheFile);
+            if (metadata == null) {
+                // inspectCache() already told the user why; go straight to Rhapsody.
+                doLoadFromRhapsody(modelPath);
+                return;
+            }
             doIncrementalUpdate(modelPath, cacheFile);
         } else {
             doLoadFromRhapsody(modelPath);
@@ -418,6 +449,19 @@ public final class MainFrameController {
                 && ModelCacheManager.cacheExists(ModelCacheManager.resolveCacheFile(modelPath));
     }
 
+    /**
+     * True when a model is loaded AND the field path matches what was loaded.
+     * Used to enable "Update Model" — updating is only meaningful for the model
+     * currently in memory; a path mismatch means the user browsed elsewhere.
+     */
+    public boolean isUpdateModelEnabled(String fieldPath) {
+        if (!isModelLoaded()) return false;
+        if (fieldPath == null || fieldPath.isEmpty()) return false;
+        if (loadedModelPath == null) return false;
+        return ModelCacheManager.canonicalPath(fieldPath)
+                .equals(ModelCacheManager.canonicalPath(loadedModelPath));
+    }
+
     // ── Private helpers ─────────────────────────────────────────────────────
 
     private void doLoadFromCache(String modelPath, File cacheFile) {
@@ -539,6 +583,7 @@ public final class MainFrameController {
         index = result.index();
         fastDetectionResult = result.detectionResult();
         loadedFromCache = result.isFromCache();
+        loadedModelPath = modelPath;
         view.loadTree(result.packageTree());
         view.setStatus("  " + result.statusMessage());
         recentFiles.addRecentModel(modelPath);

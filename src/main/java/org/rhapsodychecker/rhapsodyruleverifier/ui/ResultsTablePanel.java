@@ -124,6 +124,7 @@ public final class ResultsTablePanel extends JPanel implements ThemeAware {
     private final JPanel detailGrid;
     private final JTextArea detailArea;
 
+    private JScrollPane treeScroll;
     private final JSplitPane splitPane;
     private JPanel detailPane;
 
@@ -212,7 +213,7 @@ public final class ResultsTablePanel extends JPanel implements ThemeAware {
         // Selection updates detail pane
         tree.addTreeSelectionListener(e -> updateDetailPane());
 
-        JScrollPane treeScroll = new JScrollPane(tree);
+        treeScroll = new JScrollPane(tree);
         treeScroll.setBorder(BorderFactory.createEmptyBorder());
 
         // Detail pane — structured grid + free-form text
@@ -282,6 +283,25 @@ public final class ResultsTablePanel extends JPanel implements ThemeAware {
                     AppTheme.edgeBorder(1, 0, 0, 0),
                     BorderFactory.createEmptyBorder(6, 10, 6, 10)));
         }
+
+        Color bg = UIManager.getColor("Tree.background");
+        Color fg = UIManager.getColor("Tree.foreground");
+        if (tree != null) {
+            if (bg != null) {
+                tree.setBackground(bg);
+                treeScroll.getViewport().setBackground(bg);
+            }
+            if (fg != null) tree.setForeground(fg);
+            tree.setCellRenderer(new ResultTreeCellRenderer());
+        }
+
+        Color textBg = UIManager.getColor("TextArea.background");
+        Color textFg = UIManager.getColor("TextArea.foreground");
+        if (detailArea != null) {
+            if (textBg != null) detailArea.setBackground(textBg);
+            if (textFg != null) detailArea.setForeground(textFg);
+        }
+
         repaint();
     }
 

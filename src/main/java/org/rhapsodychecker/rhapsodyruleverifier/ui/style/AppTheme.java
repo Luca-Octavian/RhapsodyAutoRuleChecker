@@ -5,6 +5,7 @@ import com.formdev.flatlaf.intellijthemes.FlatGrayIJTheme;
 
 import javax.swing.*;
 import javax.swing.border.Border;
+import javax.swing.plaf.ColorUIResource;
 import javax.swing.plaf.FontUIResource;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
@@ -241,13 +242,13 @@ public final class AppTheme {
         UIManager.put("Button.default.background", palette.primary());
         UIManager.put("Button.default.startBackground", palette.primary());
         UIManager.put("Button.default.endBackground", palette.primary());
-        UIManager.put("Button.default.foreground", Color.WHITE);
+        UIManager.put("Button.default.foreground", new ColorUIResource(Color.WHITE));
         UIManager.put("Button.default.borderColor", palette.primary());
         UIManager.put("Button.default.focusedBorderColor", palette.primaryFaint());
         UIManager.put("Button.default.hoverBackground",
-                Color.decode(AccentColors.darken(toHex(palette.primary()), 0.12f)));
+                new ColorUIResource(Color.decode(AccentColors.darken(toHex(palette.primary()), 0.12f))));
         UIManager.put("Button.default.pressedBackground",
-                Color.decode(AccentColors.darken(toHex(palette.primary()), 0.22f)));
+                new ColorUIResource(Color.decode(AccentColors.darken(toHex(palette.primary()), 0.22f))));
         UIManager.put("Button.default.boldText", Boolean.FALSE);
     }
 

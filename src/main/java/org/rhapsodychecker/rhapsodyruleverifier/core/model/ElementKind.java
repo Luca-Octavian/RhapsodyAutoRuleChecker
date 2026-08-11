@@ -17,19 +17,15 @@ public enum ElementKind {
     REQUIREMENT,    // optional: requirement elements
 
     /**
-     * Rhapsody "Connector" — the element returned by Rhapsody's Ctrl+F search
-     * for "Connector". Per API tracing this maps exclusively to
-     * {@code IRPConnector} instances whose {@code getConnectorType()} returns
-     * {@code "Junction"}. These appear in statecharts and activity diagrams as
-     * merge/decision nodes and in IBDs as connector junctions.
-     */
-    CONNECTOR,
-
-    /**
-     * Non-junction statechart / activity pseudostate (Rhapsody metaClass
-     * "Connector", API type {@code IRPConnector}). Covers Condition, Diagram,
-     * EnterExit, Fork, History, Join, Termination, InPin, OutPin and
-     * InOutPin — all connector types except Junction.
+     * Statechart / activity pseudostate (Rhapsody metaClass "Connector",
+     * API type {@code IRPConnector} / {@code IRPStateVertex}).
+     * Covers all pseudostate connector types: Junction, Condition, Diagram,
+     * EnterExit, Fork, History, Join, Termination, InPin, OutPin, InOutPin,
+     * and merge nodes.  Nothing in this bucket is a structural connector.
+     *
+     * <p>Previously the codebase split Junction connectors into a separate
+     * {@code CONNECTOR} kind; that distinction has been removed — junctions
+     * are simply one member of this catch-all bucket.
      */
     STATE_CONNECTOR,
 
@@ -60,10 +56,10 @@ public enum ElementKind {
     }
 
     /**
-     * True for the Rhapsody-visible "Connector" category (Junction pseudostates).
+     * True for statechart/activity pseudostates (all IRPConnector types).
      */
-    public boolean isConnectorKind() {
-        return this == CONNECTOR;
+    public boolean isStateConnectorKind() {
+        return this == STATE_CONNECTOR;
     }
 
     /**

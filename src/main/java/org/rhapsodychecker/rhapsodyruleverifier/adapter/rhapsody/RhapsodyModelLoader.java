@@ -216,10 +216,10 @@ public final class RhapsodyModelLoader {
 
         // "Link" (IRPLink) is a structural link between Parts/Ports in an IBD.
         // "Connector" (IRPConnector) is a statechart/activity pseudostate.
-        // Only Junction connectors correspond to Rhapsody's user-visible
-        // "Connector" category (Ctrl+F search). The live refinement in
-        // RhapsodyElementReader.refineConnectorKind() promotes Junctions
-        // from STATE_CONNECTOR to CONNECTOR using getConnectorType().
+        // All IRPConnector types (Junction, Fork, Join, History, Condition,
+        // merge nodes, etc.) are classified as STATE_CONNECTOR.
+        // The live refinement in RhapsodyElementReader.refineConnectorKind()
+        // confirms the API type but no longer special-cases any connector type.
         if ("Link".equals(mc))        return ElementKind.LINK;
         if ("Connector".equals(mc))   return ElementKind.STATE_CONNECTOR;
         return ElementKind.OTHER;

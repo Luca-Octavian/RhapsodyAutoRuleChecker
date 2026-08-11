@@ -29,8 +29,13 @@ public final class CacheMetadata {
      *       category — only IRPConnector with getConnectorType()=="Junction".
      *       IRPLink moved to new LINK kind. A v5 cache assigns links to
      *       CONNECTOR, so a rebuild is required.
+     *
+     * <p>v7: CONNECTOR enum value removed. All IRPConnector pseudostates
+     *       (including Junction) are now classified as STATE_CONNECTOR.
+     *       A v6 cache stores Junction connectors under CONNECTOR, so a
+     *       rebuild is required.
      */
-    public static final int CURRENT_VERSION = 6;
+    public static final int CURRENT_VERSION = 7;
 
     private String projectName;
     private String projectGuid;

@@ -1,6 +1,7 @@
 package org.rhapsodychecker.rhapsodyruleverifier.ui.style;
 
 import java.awt.Color;
+import javax.swing.plaf.ColorUIResource;
 
 /**
  * Catalog of supported application appearances.
@@ -38,6 +39,6 @@ public final class UiPalettes {
     }
 
     private static Color color(String hex) {
-        return Color.decode(hex);
+        return new ColorUIResource(Color.decode(hex));
     }
 }

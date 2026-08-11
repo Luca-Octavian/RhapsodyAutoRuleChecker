@@ -114,11 +114,10 @@ public final class RhapsodyElementReader {
      * Parts/Ports → {@code LINK}.
      *
      * <p>{@code IRPConnector} (metaClass "Connector") is a statechart/activity
-     * pseudostate. Only the {@code Junction} connector type corresponds to
-     * Rhapsody's user-visible "Connector" category (the elements returned by
-     * Ctrl+F search for "Connector"). Every other connector type (Condition,
-     * Diagram, EnterExit, Fork, History, Join, Termination, InPin, OutPin,
-     * InOutPin) remains {@code STATE_CONNECTOR}.
+     * pseudostate → {@code STATE_CONNECTOR}.  All connector types (Junction,
+     * Condition, Diagram, EnterExit, Fork, History, Join, Termination, InPin,
+     * OutPin, InOutPin, merge nodes) land in this single bucket.  Junctions
+     * are not special-cased — they are one pseudostate among many.
      *
      * <p>Elements that are neither keep the metaClass-based classification.
      */
@@ -128,14 +127,8 @@ public final class RhapsodyElementReader {
         if (element instanceof IRPLink) {
             return ElementKind.LINK;
         }
+        // All IRPConnector pseudostates → STATE_CONNECTOR (no junction special-case)
         if (element instanceof IRPConnector) {
-            try {
-                String connectorType = ((IRPConnector) element).getConnectorType();
-                if (connectorType != null
-                        && "junction".equalsIgnoreCase(connectorType.trim())) {
-                    return ElementKind.CONNECTOR;
-                }
-            } catch (Throwable ignored) { /* fall through to STATE_CONNECTOR */ }
             return ElementKind.STATE_CONNECTOR;
         }
         return kind;

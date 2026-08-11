@@ -60,29 +60,22 @@ public final class CollectionStrategySmokeTest {
     }
 
     /**
-     * Breaks connector/link kinds down so the split can be verified against
-     * the model directly.
+     * Breaks connector/link kinds down so the classification can be verified
+     * against the model directly.
      *
-     * <p>CONNECTOR should contain only Junction pseudostates — the elements
-     * that Rhapsody's Ctrl+F returns when searching for "Connector".
-     * STATE_CONNECTOR should contain every other IRPConnector type.
+     * <p>STATE_CONNECTOR should contain all IRPConnector pseudostates
+     * (Junction, Fork, Join, History, Condition, merge nodes, etc.).
      * LINK should contain only IRPLink elements (structural links between
      * Parts/Ports).
      */
     private static void printConnectorDetail(RhapsodyModelSnapshot snapshot) {
-        Map<String, Integer> connectorTypes = new TreeMap<>();
         Map<String, Integer> stateConnectorTypes = new TreeMap<>();
-        int connectors = 0;
         int stateConnectors = 0;
         int links = 0;
         int linksWithResolvedEndpoint = 0;
 
         for (ElementRecord record : snapshot.records()) {
-            if (record.kind() == ElementKind.CONNECTOR) {
-                connectors++;
-                connectorTypes.merge(
-                        readConnectorType(snapshot, record), 1, Integer::sum);
-            } else if (record.kind() == ElementKind.STATE_CONNECTOR) {
+            if (record.kind() == ElementKind.STATE_CONNECTOR) {
                 stateConnectors++;
                 stateConnectorTypes.merge(
                         readConnectorType(snapshot, record), 1, Integer::sum);
@@ -95,14 +88,7 @@ public final class CollectionStrategySmokeTest {
         }
 
         System.out.println();
-        System.out.println("=== CONNECTOR (Junction pseudostate — Rhapsody 'Connector') ===");
-        System.out.println("  total: " + connectors);
-        for (Map.Entry<String, Integer> entry : connectorTypes.entrySet()) {
-            System.out.printf("  connectorType %-14s %d%n", entry.getKey(), entry.getValue());
-        }
-
-        System.out.println();
-        System.out.println("=== STATE_CONNECTOR (non-Junction pseudostates) ===");
+        System.out.println("=== STATE_CONNECTOR (all pseudostates — IRPConnector) ===");
         System.out.println("  total: " + stateConnectors);
         for (Map.Entry<String, Integer> entry : stateConnectorTypes.entrySet()) {
             System.out.printf("  connectorType %-14s %d%n", entry.getKey(), entry.getValue());
