@@ -23,6 +23,20 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.service.ExportService;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.ModelLoadService;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.NavigationService;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixActionType;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixCollector;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixEntry;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixPlan;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixPlanJournal;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixService;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixStatus;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixAction;
+import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyFixExecutor;
+import org.rhapsodychecker.rhapsodyruleverifier.core.rule.EvaluationContext;
+import org.rhapsodychecker.rhapsodyruleverifier.core.rule.Rule;
+import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleFactory;
+import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.fix.FixPreviewDialog;
 import org.rhapsodychecker.rhapsodyruleverifier.prefs.RecentFilesStore;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.WizardDialog;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
@@ -34,7 +48,12 @@ import java.io.File;
 import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Coordinates UI events → business logic → UI updates.
@@ -78,6 +97,8 @@ public final class MainFrameController {
     private RuleCheckerConfig     config;
     private List<RuleResult>      lastResults;
     private FastDetectionResult   fastDetectionResult;
+    private FixPlan               fixPlan;
+    private EvaluationContext      lastContext;
     private boolean               loadedFromCache = false;
     /** Canonical path of the model that is currently loaded in memory. */
     private String                loadedModelPath = null;
@@ -277,6 +298,7 @@ public final class MainFrameController {
         new SwingWorker<EvaluationService.EvalResult, Void>() {
             private String error;
             private EvaluationService.EvalResult evalResult;
+            private EvaluationContext capturedContext;
 
             @Override
             protected EvaluationService.EvalResult doInBackground() {
@@ -287,6 +309,7 @@ public final class MainFrameController {
                         ElementSelector selector = new ElementSelector(idx, cfg);
                         RhapsodyEvaluationContext context = new RhapsodyEvaluationContext(
                                 aliasResolver, snapshot, idx, selector);
+                        capturedContext = context;
                         return new EvaluationService.ContextPair(context, selector);
                     };
                     evalResult = EvaluationService.evaluate(
@@ -306,7 +329,7 @@ public final class MainFrameController {
                     AppLogger.error("Evaluation failed: " + error);
                     view.setStatus("  Evaluation error");
                     view.showError("Error: " + error, "Run Failed");
-                } else if (evalResult == null) {
+                } else if (evalResult == null) {  
                     AppLogger.error("Evaluation returned no result");
                     view.setStatus("  Evaluation returned no result");
                     view.showError("Evaluation completed but returned no result.", "Run Failed");
@@ -314,11 +337,13 @@ public final class MainFrameController {
                 	System.out.println("SCOPE: '" + scopePath + "'");
                     System.out.println("RESULTS: " + evalResult.results().size());
                     config = evalResult.config();
+                    lastContext = capturedContext;
                     lastResults = evalResult.results();
                     view.loadResults(lastResults, index, config.rules());
                     view.setStatus("  " + evalResult.statusMessage());
                     recentFiles.addRecentConfig(configPath);
                     view.refreshRecentConfigs(recentFiles.recentConfigs());
+                    buildFixPlan(configPath);
                 }
                 updateButtonStates();
             }
@@ -358,6 +383,22 @@ public final class MainFrameController {
     public void onOpenCacheFolder() {
         String msg = NavigationService.openCacheFolder(view.modelPath());
         if (msg != null) view.setStatus(msg);
+    }
+
+    public void onOpenFixHistory() {
+        try {
+            File journalDir = new File(new File(System.getProperty("java.io.tmpdir"),
+                    ".rhapsody-logs"), "fix-journals");
+            if (!journalDir.exists()) {
+                journalDir.mkdirs();
+            }
+            Desktop.getDesktop().open(journalDir);
+            view.setStatus("  Opened fix history folder");
+        } catch (Exception e) {
+            AppLogger.warn("Could not open fix history folder: " + e.getMessage());
+            view.showWarning("Could not open fix history folder:\n" + e.getMessage(),
+                    "Fix History");
+        }
     }
 
     public void onHelp() {
@@ -444,6 +485,15 @@ public final class MainFrameController {
     public boolean isModelLoaded() { return snapshot != null && index != null; }
     public boolean hasResults() { return lastResults != null && !lastResults.isEmpty(); }
     public boolean hasConfig() { return config != null; }
+    public boolean hasFixPlan() { return fixPlan != null && !fixPlan.entries().isEmpty(); }
+    public boolean isLoadedFromCache() { return loadedFromCache; }
+    public boolean hasFixHistory() {
+        File journalDir = new File(new File(System.getProperty("java.io.tmpdir"),
+                ".rhapsody-logs"), "fix-journals");
+        if (!journalDir.isDirectory()) return false;
+        String[] files = journalDir.list();
+        return files != null && files.length > 0;
+    }
     public boolean isCacheAvailable(String modelPath) {
         return !modelPath.isEmpty()
                 && ModelCacheManager.cacheExists(ModelCacheManager.resolveCacheFile(modelPath));
@@ -462,7 +512,134 @@ public final class MainFrameController {
                 .equals(ModelCacheManager.canonicalPath(loadedModelPath));
     }
 
+    public void onApplySuggestedFixes() {
+        if (fixPlan == null || fixPlan.entries().isEmpty()) {
+            view.showWarning("No fix suggestions available. Run evaluation first.", "No Fixes");
+            return;
+        }
+        if (loadedFromCache) {
+            view.showWarning(
+                    "Fixes cannot be applied when the model was loaded from cache.\n"
+                    + "Load the model from Rhapsody first.",
+                    "Offline Mode");
+            return;
+        }
+
+        // Build FixService with Rhapsody executor
+        RhapsodyFixExecutor executor = new RhapsodyFixExecutor(
+                RhapsodyConnectionManager.getInstance().getProject());
+        FixService fixService = new FixService(executor, new FixPlanJournal(), index);
+
+        FixPreviewDialog dialog = new FixPreviewDialog(view.frame(), fixPlan, fixService);
+        dialog.setVisible(true);
+
+        if (dialog.wasApplied()) {
+            patchIndexAfterFixes(fixPlan);
+            view.setStatus("  Fixes applied \u2014 remember to save in Rhapsody if satisfied");
+        }
+    }
+
+    /**
+     * After fixes are applied to Rhapsody via COM, patch the in-memory ElementIndex
+     * so re-running evaluation reflects the changes without reloading the model.
+     */
+    private void patchIndexAfterFixes(FixPlan plan) {
+        if (index == null || plan == null) return;
+        for (FixEntry entry : plan.entries()) {
+            if (entry.status() != FixStatus.APPLIED) continue;
+            FixAction action = entry.action();
+            Optional<org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord> opt =
+                    index.repository().get(action.elementGuid());
+            if (!opt.isPresent()) continue;
+
+            org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord record = opt.get();
+            org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord.Builder b = record.toBuilder();
+
+            switch (action.actionType()) {
+                case SET_NAME:
+                    b.name(action.newValue());
+                    break;
+                case SET_DESCRIPTION:
+                    b.description(action.newValue());
+                    break;
+                case SET_TAG_VALUE:
+                    Map<String, String> tags = new LinkedHashMap<>(record.tagValues());
+                    tags.put(action.field(), action.newValue());
+                    b.tagValues(tags);
+                    break;
+                case ADD_STEREOTYPE:
+                    Set<String> added = new LinkedHashSet<>(record.stereotypes());
+                    added.add(action.newValue());
+                    b.stereotypes(added);
+                    break;
+                case REMOVE_STEREOTYPE:
+                    String stereo = action.oldValue() != null ? action.oldValue() : action.newValue();
+                    Set<String> removed = new LinkedHashSet<>(record.stereotypes());
+                    removed.remove(stereo);
+                    b.stereotypes(removed);
+                    break;
+                case SET_INITIAL_VALUE:
+                    b.initialValue(action.newValue());
+                    break;
+                default:
+                    continue;
+            }
+
+            index.repository().replace(b.build());
+        }
+        AppLogger.info("In-memory index patched with " + plan.countByStatus(FixStatus.APPLIED) + " applied fixes");
+    }
+
     // ── Private helpers ─────────────────────────────────────────────────────
+
+    /**
+     * After evaluation, collect fix suggestions from rules that support auto-fix.
+     */
+    private void buildFixPlan(String configPath) {
+        if (lastResults == null || config == null || index == null) {
+            fixPlan = null;
+            return;
+        }
+
+        try {
+            // Build rule map by re-creating rules from specs
+            Map<String, Rule> ruleMap = new LinkedHashMap<String, Rule>();
+            for (RuleSpec spec : config.enabledRules()) {
+                try {
+                    Rule rule = RuleFactory.createRule(spec);
+                    ruleMap.put(rule.id(), rule);
+                } catch (Throwable ignored) {
+                    // skip rules that fail to create
+                }
+            }
+
+            // Filter to FAIL results only
+            java.util.List<org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult> failedResults =
+                    new java.util.ArrayList<org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult>();
+            for (org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult r : lastResults) {
+                if (r.status() == RuleStatus.FAIL) {
+                    failedResults.add(r);
+                }
+            }
+
+            // Use a stub context for suggestFix calls (the context from evaluation
+            // is adapter-specific and not stored; the rules that support suggestFix
+            // for RequiredValue only need the alias resolver from the context,
+            // and for RequiredStereotype don't use context at all)
+            EvaluationContext stubContext = lastContext;
+
+            String modelGuid = snapshot != null ? "model" : "unknown";
+            fixPlan = new FixCollector().collect(
+                    failedResults, ruleMap, index, stubContext, modelGuid, configPath);
+
+            AppLogger.info("Fix plan: " + fixPlan.entries().size() + " suggestions collected");
+        } catch (Throwable t) {
+            AppLogger.warn("Failed to build fix plan: " + t.getMessage());
+            fixPlan = null;
+        }
+
+        updateButtonStates();
+    }
 
     private void doLoadFromCache(String modelPath, File cacheFile) {
         view.setBusy(true);
@@ -582,8 +759,17 @@ public final class MainFrameController {
         snapshot = result.snapshot();
         index = result.index();
         fastDetectionResult = result.detectionResult();
-        loadedFromCache = result.isFromCache();
+        // Fixes require a live Rhapsody connection.  isFromCache() returns true
+        // even for LIVE_UNITS_UNCHANGED / LIVE_CACHE_CONFIRMED_CLEAN where
+        // Rhapsody *was* consulted and confirmed the data is current.
+        // Use freshness verification instead: if Rhapsody verified the snapshot,
+        // we have a live connection and can apply fixes.
+        loadedFromCache = !result.cacheStatus().isFreshnessVerified();
         loadedModelPath = modelPath;
+        // Clear stale fix plan and results — they belong to the previous model state
+        fixPlan = null;
+        lastResults = null;
+        lastContext = null;
         view.loadTree(result.packageTree());
         view.setStatus("  " + result.statusMessage());
         recentFiles.addRecentModel(modelPath);

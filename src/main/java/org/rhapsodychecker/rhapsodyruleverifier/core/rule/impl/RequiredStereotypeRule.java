@@ -3,6 +3,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.*;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixAction;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixActionType;
 
 import java.util.*;
 
@@ -64,6 +66,23 @@ public final class RequiredStereotypeRule implements Rule {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }
+    }
+
+    @Override
+    public Optional<FixAction> suggestFix(ElementRecord element, EvaluationContext context) {
+        // Only suggest adding the first missing stereotype (one fix action per call)
+        for (String required : requiredStereotypes) {
+            if (!element.hasStereotypeIgnoreCase(required)) {
+                return Optional.of(FixAction.builder()
+                        .elementGuid(element.guid())
+                        .elementName(element.name())
+                        .actionType(FixActionType.ADD_STEREOTYPE)
+                        .newValue(required)
+                        .ruleId(id)
+                        .build());
+            }
+        }
+        return Optional.empty();
     }
 
     private String formatMessage(ElementRecord element, List<String> missing) {

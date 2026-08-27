@@ -43,8 +43,10 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
     private final GradientAccentButton newConfigWizardBtn  = GradientAccentButton.primary("New Config (Wizard)", AccentColors.PURPLE_HEX);
     private final GradientAccentButton editConfigWizardBtn = GradientAccentButton.primary("Edit Config (Wizard)", AccentColors.PURPLE_HEX);
     private final GradientAccentButton updateModelBtn      = GradientAccentButton.primary("Update Model", AccentColors.ORANGE_HEX);
+    private final GradientAccentButton fixBtn              = GradientAccentButton.primary("Apply Suggested Fixes", AccentColors.RED_HEX);
     // Neutral: opening a folder in Explorer carries no semantic colour.
     private final GradientAccentButton openCacheBtn        = GradientAccentButton.neutral("\uD83D\uDCC1 Cache");
+    private final GradientAccentButton fixHistoryBtn       = GradientAccentButton.neutral("\uD83D\uDCCB Fix History");
     // Neutral: help opens local HTML docs in the default browser.
     private final GradientAccentButton helpBtn             = GradientAccentButton.neutral("Help");
     private final JCheckBox darkModeToggle = new JCheckBox("Dark mode");
@@ -140,11 +142,13 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
         leftButtons.add(newConfigWizardBtn);
         leftButtons.add(editConfigWizardBtn);
         leftButtons.add(updateModelBtn);
+        leftButtons.add(fixBtn);
         JPanel rightButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         darkModeToggle.setSelected(AppTheme.isDarkMode());
         darkModeToggle.setToolTipText("Switch between the light and dark application appearances");
         rightButtons.add(darkModeToggle);
         rightButtons.add(helpBtn);
+        rightButtons.add(fixHistoryBtn);
         rightButtons.add(openCacheBtn);
         buttonPanel.add(leftButtons, BorderLayout.WEST);
         buttonPanel.add(rightButtons, BorderLayout.EAST);
@@ -187,7 +191,9 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
         exportBtn.addActionListener(e -> controller.onExportExcel());
         newConfigWizardBtn.addActionListener(e -> controller.onWizardNew());
         editConfigWizardBtn.addActionListener(e -> controller.onWizardEdit());
+        fixBtn.addActionListener(e -> controller.onApplySuggestedFixes());
         openCacheBtn.addActionListener(e -> controller.onOpenCacheFolder());
+        fixHistoryBtn.addActionListener(e -> controller.onOpenFixHistory());
         helpBtn.addActionListener(e -> controller.onHelp());
         darkModeToggle.addActionListener(e -> {
             boolean enabled = darkModeToggle.isSelected();
@@ -263,6 +269,8 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
         newConfigWizardBtn.setEnabled(enabled);
         editConfigWizardBtn.setEnabled(enabled);
         updateModelBtn.setEnabled(enabled);
+        fixBtn.setEnabled(enabled);
+        fixHistoryBtn.setEnabled(enabled);
         openCacheBtn.setEnabled(enabled);
         helpBtn.setEnabled(enabled);
     }
@@ -309,6 +317,8 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
         updateModelBtn.setEnabled(controller.isUpdateModelEnabled(fieldPath));
         newConfigWizardBtn.setEnabled(controller.isModelLoaded());
         editConfigWizardBtn.setEnabled(controller.isModelLoaded() && controller.hasConfig());
+        fixBtn.setEnabled(controller.hasFixPlan() && !controller.isLoadedFromCache());
+        fixHistoryBtn.setEnabled(controller.hasFixHistory());
         openCacheBtn.setEnabled(controller.isCacheAvailable(fieldPath));
     }
 

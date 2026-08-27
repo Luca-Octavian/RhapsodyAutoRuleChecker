@@ -205,6 +205,25 @@ public final class ElementRecord {
 
     public static Builder builder() { return new Builder(); }
 
+    /** Create a Builder pre-populated with this record's values (for patching). */
+    public Builder toBuilder() {
+        return new Builder()
+                .guid(this.guid)
+                .name(this.name)
+                .metaClass(this.metaClass)
+                .kind(this.kind)
+                .ownerGuid(this.ownerGuid)
+                .ownerPath(this.ownerPath)
+                .typeGuid(this.typeGuid)
+                .typeName(this.typeName)
+                .description(this.description)
+                .portDirection(this.portDirection)
+                .portMultiplicity(this.portMultiplicity)
+                .initialValue(this.initialValue)
+                .stereotypes(this.stereotypes)
+                .tagValues(this.tagValues);
+    }
+
     public static final class Builder {
         private String guid;
         private String name;

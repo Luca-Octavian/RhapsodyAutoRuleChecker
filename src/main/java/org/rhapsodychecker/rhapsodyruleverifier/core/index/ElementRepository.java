@@ -7,7 +7,7 @@ import java.util.*;
 
 public final class ElementRepository {
     private final Map<String, ElementRecord> byGuid;
-    private final List<ElementRecord> all;
+    private List<ElementRecord> all;
 
     public ElementRepository(Collection<ElementRecord> records) {
         Objects.requireNonNull(records, "records");
@@ -16,7 +16,7 @@ public final class ElementRepository {
             if (r == null || r.guid() == null) continue;
             map.put(r.guid(), r);
         }
-        this.byGuid = Collections.unmodifiableMap(map);
+        this.byGuid = map; // mutable internally for patching after fix-apply
         this.all = Collections.unmodifiableList(new ArrayList<>(map.values()));
     }
 
@@ -29,6 +29,18 @@ public final class ElementRepository {
     }
 
     public Map<String, ElementRecord> asMap() {
-        return byGuid;
+        return Collections.unmodifiableMap(byGuid);
+    }
+
+    /**
+     * Replace a record in-place (by GUID). Used to patch the in-memory model
+     * after fixes are applied to Rhapsody, so re-evaluation reflects the changes.
+     */
+    public void replace(ElementRecord updated) {
+        Objects.requireNonNull(updated, "updated");
+        if (byGuid.containsKey(updated.guid())) {
+            byGuid.put(updated.guid(), updated);
+            this.all = Collections.unmodifiableList(new ArrayList<>(byGuid.values()));
+        }
     }
 }

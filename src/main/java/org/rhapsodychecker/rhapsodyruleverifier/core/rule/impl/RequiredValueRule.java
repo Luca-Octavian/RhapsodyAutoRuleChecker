@@ -2,11 +2,14 @@
 package org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl;
 
 import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
+import org.rhapsodychecker.rhapsodyruleverifier.core.config.AliasKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.ComparisonOperator;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.ResolvedValue;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.*;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixAction;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixActionType;
 
 import java.util.*;
 
@@ -218,6 +221,65 @@ public final class RequiredValueRule implements Rule {
                     .replace("{reason}", reason);
         }
         return id + ": " + reason + " [element=" + element.name() + ", value=" + value + "]";
+    }
+
+    @Override
+    public Optional<FixAction> suggestFix(ElementRecord element, EvaluationContext context) {
+        if (target == null) return Optional.empty();
+
+        AliasKind kind = target.kind();
+        FixActionType actionType;
+        String field = null;
+
+        switch (kind) {
+            case NAME:
+                actionType = FixActionType.SET_NAME;
+                break;
+            case DESCRIPTION:
+                actionType = FixActionType.SET_DESCRIPTION;
+                break;
+            case TAGGED_VALUE:
+                actionType = FixActionType.SET_TAG_VALUE;
+                field = target.tagName().orElse(null);
+                if (field == null) return Optional.empty();
+                break;
+            default:
+                // PORT_TYPE, PORT_DIRECTION, PORT_MULTIPLICITY — not safely auto-fixable
+                return Optional.empty();
+        }
+
+        // Determine the suggested new value:
+        // - EQ operator with a concrete value → pre-fill with expected value
+        // - nonEmpty / minLength / other checks → leave empty for user to fill in
+        String suggested = null;
+        if (operator == ComparisonOperator.EQ && compareValue != null) {
+            suggested = compareValue.toString();
+        }
+        // For non-EQ operators (GT, LT, IN, etc.) we can't auto-suggest a value,
+        // but we CAN still offer the row for the user to type a value manually
+        // if the target is editable (name, description, tag).
+
+        // Resolve current value for the oldValue field
+        String oldValue = null;
+        try {
+            AliasResolver resolver = context.aliases();
+            ResolvedValue resolved = resolver.resolveValue(element, target);
+            if (resolved.isPresent()) {
+                oldValue = resolved.asString().orElse(null);
+            }
+        } catch (Throwable ignored) {
+            // best-effort: oldValue stays null
+        }
+
+        return Optional.of(FixAction.builder()
+                .elementGuid(element.guid())
+                .elementName(element.name())
+                .actionType(actionType)
+                .field(field)
+                .oldValue(oldValue)
+                .newValue(suggested)  // may be null — user fills in via dialog
+                .ruleId(id)
+                .build());
     }
 
     // ---- Param helpers ----

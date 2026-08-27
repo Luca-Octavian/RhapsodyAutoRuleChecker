@@ -3,6 +3,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.*;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixAction;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixActionType;
 
 import java.util.*;
 
@@ -63,6 +65,32 @@ public final class RequiredStereotypeOneOfRule implements Rule {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }
+    }
+
+    @Override
+    public Optional<FixAction> suggestFix(ElementRecord element, EvaluationContext context) {
+        // If the element already has one of the required stereotypes, no fix needed
+        for (String candidate : anyOf) {
+            if (element.hasStereotypeIgnoreCase(candidate)) {
+                return Optional.empty();
+            }
+        }
+
+        // If only one option, pre-fill it; otherwise leave newValue null for user to pick
+        String suggested = (anyOf.size() == 1) ? anyOf.get(0) : null;
+
+        FixAction action = FixAction.builder()
+                .elementGuid(element.guid())
+                .elementName(element.name())
+                .actionType(FixActionType.ADD_STEREOTYPE)
+                .field(null)
+                .oldValue(null)
+                .newValue(suggested)
+                .ruleId(id)
+                .description("Add stereotype from " + anyOf + " to '" + element.name() + "'")
+                .options(new ArrayList<>(anyOf))
+                .build();
+        return Optional.of(action);
     }
 
     private String formatMessage(ElementRecord element, String value, String reason) {
