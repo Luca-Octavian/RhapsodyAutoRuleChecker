@@ -15,6 +15,8 @@ import java.awt.event.MouseEvent;
  */
 public final class CollapsibleSection extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     private static final String COLLAPSED_GLYPH = "\u25B8 ";   // ▸
     private static final String EXPANDED_GLYPH  = "\u25BE ";   // ▾
 

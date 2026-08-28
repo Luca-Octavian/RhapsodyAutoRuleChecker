@@ -38,6 +38,8 @@ import java.util.function.Consumer;
  */
 public final class ResultsTablePanel extends JPanel implements ThemeAware {
 
+    private static final long serialVersionUID = 1L;
+
     // ── Node types stored as JTree user objects ────────────────────────────
 
     /** Parent node for a (group, element) that has at least one failure. */

@@ -91,7 +91,68 @@ The Results pane shows failed checks only.
 
 Navigation requires a running Rhapsody instance. Group summary rows cannot be used for navigation. Double-click an individual rule below the group instead.
 
-### 6. Export the report
+### 6. Auto-fix failures
+
+After running a configuration, some failures may offer automatic fix suggestions. The application can apply property-level fixes directly to the Rhapsody model.
+
+Click **Auto-Fix** in the toolbar after a run completes. The Auto-Fix Preview dialog opens with all suggested fixes.
+
+#### Supported fix types
+
+Not all rules support auto-fix. The following rules can suggest fixes:
+
+| Rule | Fix action | What it does |
+|---|---|---|
+| RequiredValueRule | SET_NAME, SET_DESCRIPTION, SET_TAG_VALUE, SET_INITIAL_VALUE | Sets the target field to the expected or allowed value |
+| RequiredStereotypeRule | ADD_STEREOTYPE | Adds the first missing required stereotype |
+| RequiredStereotypeOneOfRule | ADD_STEREOTYPE | Presents the allowed stereotypes as options for you to choose from |
+| NamingPatternRule | SET_NAME | Prepends the expected prefix (startsWith) or appends the expected suffix (endsWith) |
+| FlowPropertyConstraintRule | SET_INITIAL_VALUE | Clears the initial value when the mustBeEmpty constraint is violated |
+
+Rules that involve structural changes (OwnerStereotypeConstraintRule, RelationExistsRule) do not support auto-fix. These require manual correction in Rhapsody because they involve creating or deleting elements, changing metaclasses, or modifying relations — operations that cannot be safely automated without affecting diagram layouts and model integrity.
+
+#### The preview dialog
+
+The preview dialog shows a table with one row per proposed fix:
+
+- **☑**: check or uncheck a row to include or exclude it.
+- **Element**: the name of the element to modify.
+- **Action**: the type of change and the target field.
+- **Current Value**: the current value in the model.
+- **New Value**: the proposed new value. Editable — click to change it. Some rows offer a dropdown when multiple values are valid. Rows with an empty new value are skipped.
+- **Status**: the current state of the fix (PENDING, OK, CONFLICT, APPLIED, FAILED, SKIPPED).
+
+#### Filtering fixes
+
+Use the filter bar at the top of the preview dialog to narrow down the list:
+
+- **Search**: type text to filter by element name (case-insensitive, live search).
+- **Action**: select an action type from the dropdown to show only fixes of that type.
+- **Status**: select a status to show only fixes in that state.
+
+All filters combine — for example, you can search for a specific element name while filtering to only ADD_STEREOTYPE actions.
+
+#### Simulate before applying
+
+Click **Simulate** to run a dry check. The application verifies each fix for conflicts without changing anything. Check the Status column for results. Rows marked OK are safe to apply. Rows marked CONFLICT need attention.
+
+#### Apply fixes
+
+Click **Apply Fixes** to write the changes to the Rhapsody model.
+
+A confirmation dialog warns that auto-fix can modify the model. Changes are not auto-saved — you can close Rhapsody without saving to revert all changes.
+
+After applying, a result dialog shows which fixes succeeded and which failed.
+
+#### Important safety notes
+
+- Auto-fix requires a running Rhapsody instance with the model open.
+- Changes are applied directly to the live Rhapsody model but are **not saved automatically**. Close Rhapsody without saving to undo all changes.
+- Only property-level changes are supported (names, descriptions, tag values, stereotypes, initial values). The application does not create or delete model elements, relations, ports, or diagram content.
+- Input is sanitized: values are trimmed and control characters are stripped.
+- Review each proposed fix before applying. The pre-filled values are suggestions, not guaranteed correct values.
+
+### 7. Export the report
 
 Click **Export Excel** after running a configuration.
 

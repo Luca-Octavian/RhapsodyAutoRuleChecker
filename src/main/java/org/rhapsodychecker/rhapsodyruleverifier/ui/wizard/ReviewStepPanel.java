@@ -20,6 +20,8 @@ import java.util.List;
  */
 public class ReviewStepPanel extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     private final WizardState state;
 
     // checkbox-urile corespund 1:1 cu state.rules()
@@ -124,10 +126,6 @@ public class ReviewStepPanel extends JPanel {
         content.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         content.setAlignmentX(Component.LEFT_ALIGNMENT);
         return content;
-    }
-
-    private static JLabel label(String text) {
-        return new JLabel(text);
     }
 
     private static JTextField readOnly(String text) {

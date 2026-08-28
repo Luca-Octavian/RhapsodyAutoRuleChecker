@@ -6,6 +6,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelLo
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.RhapsodyModelSnapshot;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.load.ModelRecordPostProcessor;
 import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.load.RhapsodyElementReader;
+import org.rhapsodychecker.rhapsodyruleverifier.adapter.rhapsody.load.RhapsodyTagReader;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedRelation;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedElement;
 import org.rhapsodychecker.rhapsodyruleverifier.cache.ModelCache;
@@ -75,12 +76,10 @@ public final class IncrementalCacheUpdater {
             String metaClass = RhapsodyModelLoader.safeStr(elt.getMetaClass());
             Set<String> stereotypes = RhapsodyModelLoader.readStereotypeNames(elt);
             String description = RhapsodyModelLoader.safeGetDescription(elt);
-            // NOTE: readAllTags() deliberately SKIPPED here to reduce COM calls.
-            // Tags are preserved from cache for unchanged elements, and read fresh
-            // during Phase 3 full-read for changed/new elements.
+            Map<String, String> tags = RhapsodyTagReader.readAllTags(elt);
 
             fingerprints.put(guid, new ElementFingerprint(
-                    guid, name, metaClass, stereotypes, description));
+                    guid, name, metaClass, stereotypes, description, tags));
             scannedHandles.put(guid, elt);
 
             // Collect relation info (Dependency, Generalization, Association)
@@ -145,10 +144,10 @@ public final class IncrementalCacheUpdater {
 
                     Set<String> partStereos = RhapsodyModelLoader.readStereotypeNames(partElt);
                     String partDesc = RhapsodyModelLoader.safeGetDescription(partElt);
-                    // Tags skipped — same as main scan
+                    Map<String, String> partTags = RhapsodyTagReader.readAllTags(partElt);
 
                     fingerprints.put(partGuid, new ElementFingerprint(
-                            partGuid, partName, partMeta, partStereos, partDesc));
+                            partGuid, partName, partMeta, partStereos, partDesc, partTags));
                     scannedHandles.put(partGuid, partElt);
                 }
             } catch (Throwable t) { /* ignore */ }

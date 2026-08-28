@@ -23,7 +23,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.service.ExportService;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.ModelLoadService;
 import org.rhapsodychecker.rhapsodyruleverifier.core.service.NavigationService;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.FastDetectionResult;
-import org.rhapsodychecker.rhapsodyruleverifier.fix.FixActionType;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixCollector;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixEntry;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixPlan;
@@ -36,6 +35,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.rule.EvaluationContext;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.Rule;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleFactory;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.fix.FixHistoryDialog;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.fix.FixPreviewDialog;
 import org.rhapsodychecker.rhapsodyruleverifier.prefs.RecentFilesStore;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.WizardDialog;
@@ -98,6 +98,7 @@ public final class MainFrameController {
     private List<RuleResult>      lastResults;
     private FastDetectionResult   fastDetectionResult;
     private FixPlan               fixPlan;
+    private FixService            fixService;
     private EvaluationContext      lastContext;
     private boolean               loadedFromCache = false;
     /** Canonical path of the model that is currently loaded in memory. */
@@ -386,19 +387,20 @@ public final class MainFrameController {
     }
 
     public void onOpenFixHistory() {
-        try {
-            File journalDir = new File(new File(System.getProperty("java.io.tmpdir"),
-                    ".rhapsody-logs"), "fix-journals");
-            if (!journalDir.exists()) {
-                journalDir.mkdirs();
+        // Build a FixService for rollback if not already present
+        FixService svc = fixService;
+        if (svc == null) {
+            try {
+                RhapsodyFixExecutor executor = new RhapsodyFixExecutor(
+                        RhapsodyConnectionManager.getInstance().getProject());
+                svc = new FixService(executor, new FixPlanJournal(), index);
+            } catch (Exception e) {
+                // No Rhapsody connection — still show history read-only
+                svc = new FixService(null, new FixPlanJournal(), index);
             }
-            Desktop.getDesktop().open(journalDir);
-            view.setStatus("  Opened fix history folder");
-        } catch (Exception e) {
-            AppLogger.warn("Could not open fix history folder: " + e.getMessage());
-            view.showWarning("Could not open fix history folder:\n" + e.getMessage(),
-                    "Fix History");
         }
+        FixHistoryDialog dialog = new FixHistoryDialog(view.frame(), svc);
+        dialog.setVisible(true);
     }
 
     public void onHelp() {
@@ -525,10 +527,12 @@ public final class MainFrameController {
             return;
         }
 
-        // Build FixService with Rhapsody executor
-        RhapsodyFixExecutor executor = new RhapsodyFixExecutor(
-                RhapsodyConnectionManager.getInstance().getProject());
-        FixService fixService = new FixService(executor, new FixPlanJournal(), index);
+        // Build or reuse FixService with Rhapsody executor
+        if (fixService == null) {
+            RhapsodyFixExecutor executor = new RhapsodyFixExecutor(
+                    RhapsodyConnectionManager.getInstance().getProject());
+            fixService = new FixService(executor, new FixPlanJournal(), index);
+        }
 
         FixPreviewDialog dialog = new FixPreviewDialog(view.frame(), fixPlan, fixService);
         dialog.setVisible(true);
@@ -766,8 +770,9 @@ public final class MainFrameController {
         // we have a live connection and can apply fixes.
         loadedFromCache = !result.cacheStatus().isFreshnessVerified();
         loadedModelPath = modelPath;
-        // Clear stale fix plan and results — they belong to the previous model state
+        // Clear stale fix plan, fix service, and results — they belong to the previous model state
         fixPlan = null;
+        fixService = null;
         lastResults = null;
         lastContext = null;
         view.loadTree(result.packageTree());

@@ -18,7 +18,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;

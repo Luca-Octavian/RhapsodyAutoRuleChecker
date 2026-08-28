@@ -15,6 +15,8 @@ import java.awt.*;
  */
 public final class HelpIcon extends JLabel {
 
+    private static final long serialVersionUID = 1L;
+
     public HelpIcon(String internalKey) {
         super("\u24D8"); // simbol circular "i" din Unicode; poti inlocui cu un .png daca vrei stil custom
         HoverInfoProvider.FieldHelp help = HoverInfoProvider.get(internalKey);

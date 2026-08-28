@@ -3,6 +3,7 @@ package org.rhapsodychecker.rhapsodyruleverifier.cache.update;
 
 import org.rhapsodychecker.rhapsodyruleverifier.cache.CachedElement;
 
+import java.util.Map;
 import java.util.*;
 
 /**
@@ -11,12 +12,12 @@ import java.util.*;
  *
  * <p>Does NOT include:
  * <ul>
- *   <li>tagValues — expensive to read (getTags() + getName()/getValue() per tag), skipped to reduce COM calls</li>
  *   <li>ownerPath, portInfo, typeInfo, references — read only during Phase 3 full-read</li>
  * </ul>
  *
- * <p>Tags are preserved from cache for unchanged elements. If name, metaClass, stereotypes,
- * or description changed, a full read (including tags) is triggered in Phase 3.
+ * <p>Tag values are included in the fingerprint so that tag-only changes (e.g. after
+ * an auto-fix SET_TAG_VALUE) are detected during incremental updates. If name, metaClass,
+ * stereotypes, description, or tagValues changed, a full read is triggered in Phase 3.
  */
 public final class ElementFingerprint {
 
@@ -25,14 +26,17 @@ public final class ElementFingerprint {
     private final String metaClass;
     private final Set<String> stereotypes;
     private final String description;
+    private final Map<String, String> tagValues;
 
     public ElementFingerprint(String guid, String name, String metaClass,
-                              Set<String> stereotypes, String description) {
+                              Set<String> stereotypes, String description,
+                              Map<String, String> tagValues) {
         this.guid = guid;
         this.name = name;
         this.metaClass = metaClass;
         this.stereotypes = stereotypes != null ? stereotypes : Collections.<String>emptySet();
         this.description = description;
+        this.tagValues = tagValues != null ? tagValues : Collections.<String, String>emptyMap();
     }
 
     public String guid() { return guid; }
@@ -40,14 +44,11 @@ public final class ElementFingerprint {
     public String metaClass() { return metaClass; }
     public Set<String> stereotypes() { return stereotypes; }
     public String description() { return description; }
+    public Map<String, String> tagValues() { return tagValues; }
 
     /**
      * Compare this live fingerprint against a cached element.
      * Returns true if the element is unchanged (all checked fields match).
-     *
-     * <p>Note: tagValues are NOT compared — they are only read during full-read
-     * for elements where other fields changed. This saves the expensive getTags()
-     * COM call chain during the scan phase.
      */
     public boolean matches(CachedElement cached) {
         if (cached == null) return false;
@@ -64,6 +65,11 @@ public final class ElementFingerprint {
         // Compare description
         String cachedDesc = cached.getDescription();
         if (!safeEquals(normalizeEmpty(description), normalizeEmpty(cachedDesc))) return false;
+
+        // Compare tag values
+        Map<String, String> cachedTags = cached.getTagValues();
+        if (cachedTags == null) cachedTags = Collections.emptyMap();
+        if (!mapsEqual(tagValues, cachedTags)) return false;
 
         return true;
     }
@@ -94,6 +100,12 @@ public final class ElementFingerprint {
             diffs.add("description changed");
         }
 
+        Map<String, String> cachedTags = cached.getTagValues();
+        if (cachedTags == null) cachedTags = Collections.emptyMap();
+        if (!mapsEqual(tagValues, cachedTags)) {
+            diffs.add("tagValues changed");
+        }
+
         return diffs.isEmpty() ? "UNCHANGED" : String.join(", ", diffs);
     }
 
@@ -109,6 +121,15 @@ public final class ElementFingerprint {
         if (s == null) return null;
         String trimmed = s.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean mapsEqual(Map<String, String> a, Map<String, String> b) {
+        if (a.size() != b.size()) return false;
+        for (Map.Entry<String, String> entry : a.entrySet()) {
+            String bVal = b.get(entry.getKey());
+            if (!safeEquals(entry.getValue(), bVal)) return false;
+        }
+        return true;
     }
 
     private static boolean setsEqualIgnoreCase(Set<String> a, Set<String> b) {

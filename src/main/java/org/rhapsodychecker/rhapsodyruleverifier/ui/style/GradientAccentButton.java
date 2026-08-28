@@ -49,6 +49,8 @@ import java.awt.geom.RoundRectangle2D;
  */
 public class GradientAccentButton extends JButton {
 
+    private static final long serialVersionUID = 1L;
+
     /** Visual weight of a button relative to its neighbours. */
     public enum Variant { PRIMARY, SECONDARY, NEUTRAL }
 

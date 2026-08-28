@@ -3,6 +3,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.*;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixAction;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixActionType;
 
 import java.util.*;
 
@@ -32,7 +34,6 @@ public final class FlowPropertyConstraintRule implements Rule {
 
     private String id;
     private String title;
-    private String message;
 
     // Constraint blocks (null = not configured)
     private FieldConstraint typeConstraint;
@@ -48,7 +49,6 @@ public final class FlowPropertyConstraintRule implements Rule {
     public void configure(Map<String, Object> params) {
         this.id = requireString(params, "ruleId");
         this.title = optString(params, "ruleTitle");
-        this.message = optString(params, "ruleMessage");
 
         Map<String, Object> p = optMap(params, "params");
         if (p == null) p = Collections.emptyMap();
@@ -141,6 +141,28 @@ public final class FlowPropertyConstraintRule implements Rule {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }
+    }
+
+    @Override
+    public Optional<FixAction> suggestFix(ElementRecord element, EvaluationContext context) {
+        // Only handle the simple case: initialValue must be empty but isn't
+        if (initialValueConstraint != null && initialValueConstraint.mustBeEmpty) {
+            String actualInitialValue = element.initialValue().orElse("");
+            if (!actualInitialValue.isEmpty()) {
+                return Optional.of(FixAction.builder()
+                        .elementGuid(element.guid())
+                        .elementName(element.name())
+                        .actionType(FixActionType.SET_INITIAL_VALUE)
+                        .field("initialValue")
+                        .oldValue(actualInitialValue)
+                        .newValue("")
+                        .ruleId(id)
+                        .description("Clear initialValue of FlowProperty '" + element.name()
+                                + "' (was '" + actualInitialValue + "')")
+                        .build());
+            }
+        }
+        return Optional.empty();
     }
 
     // ---- Internal data structures ----

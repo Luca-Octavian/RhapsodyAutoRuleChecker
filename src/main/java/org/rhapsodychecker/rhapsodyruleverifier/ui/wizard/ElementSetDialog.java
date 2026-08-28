@@ -18,6 +18,8 @@ import java.util.stream.Collectors;
 
 public final class ElementSetDialog extends JDialog {
 
+    private static final long serialVersionUID = 1L;
+
     // STATE_CONNECTOR = all statechart/activity pseudostates (IRPConnector).
     // LINK = structural link between Parts/Ports (IRPLink).
     private static final List<String> KNOWN_KINDS = Arrays.asList(
@@ -204,9 +206,9 @@ public final class ElementSetDialog extends JDialog {
         List<String> types    = typesField.getSelectedValues();
         List<String> stereos  = stereoField.getSelectedValues();
 
-        int kc = ElementSetCountEstimator.estimateKinds(fast, kinds);
-        int tc = ElementSetCountEstimator.estimateTypes(fast, types);
-        int sc = ElementSetCountEstimator.estimateStereotypes(fast, stereos);
+        int kc = ElementSetCountEstimator.countKinds(fast, kinds);
+        int tc = ElementSetCountEstimator.countTypes(fast, types);
+        int sc = ElementSetCountEstimator.countStereotypes(fast, stereos);
         int total = ElementSetCountEstimator.estimateTotal(fast, kinds, types, stereos);
 
         kindsCountLabel.setText(kc >= 0 ? kc + " elements" : "");

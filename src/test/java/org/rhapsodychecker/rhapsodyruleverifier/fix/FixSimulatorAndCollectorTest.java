@@ -5,7 +5,6 @@ import org.junit.Test;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
-import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.*;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl.RequiredStereotypeRule;
 

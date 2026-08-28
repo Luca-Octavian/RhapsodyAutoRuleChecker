@@ -173,7 +173,6 @@ public final class RhapsodyFixExecutor implements FixExecutor {
 
     // ---- Rhapsody helper methods ----
 
-    @SuppressWarnings("unchecked")
     private String getTagValueFromElement(IRPModelElement element, String tagName) {
         try {
             IRPTag tag = element.getTag(tagName);

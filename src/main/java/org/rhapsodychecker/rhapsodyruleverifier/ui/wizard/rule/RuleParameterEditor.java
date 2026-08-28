@@ -15,6 +15,8 @@ import java.util.Map;
  */
 public final class RuleParameterEditor extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     private final List<String> detectedStereotypes;
     private final Runnable onChange;
     private RuleParamPanel active;

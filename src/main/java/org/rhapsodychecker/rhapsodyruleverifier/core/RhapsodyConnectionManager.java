@@ -20,7 +20,6 @@ public final class RhapsodyConnectionManager {
 
     // Track lifecycle to avoid quitting a user-started instance
     private volatile boolean applicationCreatedByManager = false;
-    private volatile boolean projectOpenedByManager = false;
 
     // Which project path (if any) the current application/project handles belong to.
     // Lets connect() tell "same model requested again" (safe no-op) apart from
@@ -68,9 +67,6 @@ public final class RhapsodyConnectionManager {
             // 1) Try to open the provided project file (if any)
             if (normalizedPath != null) {
                 project = tryOpenProject(application, normalizedPath);
-                if (project != null) {
-                    projectOpenedByManager = true;
-                }
             }
 
             // 2) Fallback: use active project (if open)
@@ -110,7 +106,6 @@ public final class RhapsodyConnectionManager {
         application = null;
         project = null;
         applicationCreatedByManager = false;
-        projectOpenedByManager = false;
         currentProjectPath = null;
     }
 
@@ -130,7 +125,6 @@ public final class RhapsodyConnectionManager {
             application = null;
             project = null;
             applicationCreatedByManager = false;
-            projectOpenedByManager = false;
             currentProjectPath = null;
             return false;
         }
@@ -166,7 +160,6 @@ public final class RhapsodyConnectionManager {
                 application = null;
                 project = null;
                 applicationCreatedByManager = false;
-                projectOpenedByManager = false;
                 currentProjectPath = null;
             }
         }
@@ -206,12 +199,13 @@ public final class RhapsodyConnectionManager {
         application = null;
         project = null;
         applicationCreatedByManager = false;
-        projectOpenedByManager = false;
         currentProjectPath = null;
     }
 
     // Keep exception local to avoid extra files at this stage
     public static class RhapsodyConnectionException extends Exception {
+        private static final long serialVersionUID = 1L;
+
         public RhapsodyConnectionException(String message) {
             super(message);
         }

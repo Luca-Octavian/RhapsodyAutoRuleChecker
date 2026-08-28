@@ -209,15 +209,13 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
     private static final class ResolvedRelation {
         final String metaClass;
         final Set<String> stereotypes;
-        final String sourceGuid;
         final String otherEndGuid;
         final String direction;
 
         ResolvedRelation(String metaClass, Set<String> stereotypes,
-                         String sourceGuid, String otherEndGuid, String direction) {
+                         @SuppressWarnings("unused") String sourceGuid, String otherEndGuid, String direction) {
             this.metaClass = metaClass;
             this.stereotypes = stereotypes != null ? stereotypes : Collections.<String>emptySet();
-            this.sourceGuid = sourceGuid;
             this.otherEndGuid = otherEndGuid;
             this.direction = direction;
         }

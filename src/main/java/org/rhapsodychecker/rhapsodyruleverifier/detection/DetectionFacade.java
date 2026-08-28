@@ -28,20 +28,18 @@ public final class DetectionFacade {
     private final ProfileDetector     profileDetector;
     private final TagDiscoveryService tagDiscoveryService;
     private final PortProbeService    portProbeService;
-    private final SuggestionsService  suggestionsService;
 
     public DetectionFacade(
             FastModelScan       fastModelScan,
             ProfileDetector     profileDetector,
             TagDiscoveryService tagDiscoveryService,
             PortProbeService    portProbeService,
-            SuggestionsService  suggestionsService
+            @SuppressWarnings("unused") SuggestionsService suggestionsService
     ) {
         this.fastModelScan       = fastModelScan;
         this.profileDetector     = profileDetector;
         this.tagDiscoveryService = tagDiscoveryService;
         this.portProbeService    = portProbeService;
-        this.suggestionsService  = suggestionsService;
     }
 
     // ------------------------------------------------------------------

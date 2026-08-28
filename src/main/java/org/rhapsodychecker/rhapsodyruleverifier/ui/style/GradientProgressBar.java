@@ -21,6 +21,8 @@ import java.awt.geom.RoundRectangle2D;
  */
 public final class GradientProgressBar extends JProgressBar {
 
+    private static final long serialVersionUID = 1L;
+
     private static final int ARC = 6;
 
     /* ── Indeterminate animation state ─────────────────────────────────── */

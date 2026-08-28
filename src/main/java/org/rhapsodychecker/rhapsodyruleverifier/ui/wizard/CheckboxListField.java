@@ -19,6 +19,8 @@ import java.util.List;
  */
 public final class CheckboxListField extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     private final List<JCheckBox> checkBoxes  = new ArrayList<>();
     private final JTextField      customField = new JTextField();
     private final JTextField      searchField = new JTextField();

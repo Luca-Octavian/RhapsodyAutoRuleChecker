@@ -17,6 +17,8 @@ import java.awt.geom.Path2D;
  */
 public final class StepIndicator extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     private static final int CIRCLE_DIAMETER = 24;
     private static final int CIRCLE_RADIUS = CIRCLE_DIAMETER / 2;
     private static final int MAX_SPAN = 300;

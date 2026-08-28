@@ -34,6 +34,8 @@ import java.util.Set;
  */
 public final class RuleDialog extends JDialog {
 
+    private static final long serialVersionUID = 1L;
+
     private static final AliasKind[] TARGET_KINDS = {
             AliasKind.DESCRIPTION, AliasKind.NAME, AliasKind.TAGGED_VALUE,
             AliasKind.PORT_TYPE, AliasKind.PORT_DIRECTION,

@@ -19,6 +19,8 @@ import javax.swing.tree.*;
  */
 public class PackageTreePanel extends JPanel implements ThemeAware {
 
+    private static final long serialVersionUID = 1L;
+
     private static final String CARD_TREE        = "tree";
     private static final String CARD_PLACEHOLDER = "placeholder";
 

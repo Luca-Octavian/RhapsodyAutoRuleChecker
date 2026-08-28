@@ -12,6 +12,8 @@ import java.awt.*;
 
 public final class ElementSetStepPanel extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     private final WizardState         state;
     private final FastDetectionResult fast;
 

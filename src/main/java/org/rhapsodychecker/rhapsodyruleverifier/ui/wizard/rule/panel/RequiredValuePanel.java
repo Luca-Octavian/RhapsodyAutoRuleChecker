@@ -147,7 +147,6 @@ public final class RequiredValuePanel implements RuleParamPanel {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void prefill(Map<String, Object> params) {
         if (params == null) return;
         Object operator = params.get("operator");

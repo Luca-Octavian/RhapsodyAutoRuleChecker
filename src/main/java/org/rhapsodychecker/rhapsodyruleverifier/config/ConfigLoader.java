@@ -284,14 +284,6 @@ public final class ConfigLoader {
         throw new IllegalArgumentException("'" + key + "' must be a list, got: " + v.getClass().getSimpleName());
     }
 
-    private static String requireString(Map<String, Object> map, String key, String context) {
-        Object v = map.get(key);
-        if (v == null || v.toString().trim().isEmpty()) {
-            throw new IllegalArgumentException("Missing required field '" + key + "' in " + context);
-        }
-        return v.toString().trim();
-    }
-
     private static int requireInt(Map<String, Object> map, String key) {
         Object v = map.get(key);
         if (v == null) throw new IllegalArgumentException("Missing required field '" + key + "'");
@@ -341,6 +333,8 @@ public final class ConfigLoader {
     // ---- Exception ----
 
     public static class ConfigLoadException extends Exception {
+        private static final long serialVersionUID = 1L;
+
         public ConfigLoadException(String message) { super(message); }
         public ConfigLoadException(String message, Throwable cause) { super(message, cause); }
     }

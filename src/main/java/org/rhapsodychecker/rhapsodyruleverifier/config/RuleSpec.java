@@ -1,7 +1,6 @@
 package org.rhapsodychecker.rhapsodyruleverifier.config;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
-import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
 
 import java.util.*;
 

@@ -13,7 +13,6 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.PipelineProfiler;
 import org.rhapsodychecker.rhapsodyruleverifier.core.profiler.SnapshotEquivalence;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleEngine;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleResult;
-import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 
 import java.nio.file.Paths;

@@ -11,12 +11,17 @@ import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Modal dialog that previews the proposed auto-fix actions before applying them.
@@ -32,10 +37,16 @@ public final class FixPreviewDialog extends JDialog {
     private final FixService fixService;
     private final FixTableModel tableModel;
     private final JTable table;
+    private final TableRowSorter<FixTableModel> rowSorter;
     private final GradientAccentButton simulateBtn;
     private final GradientAccentButton applyBtn;
     private final GradientAccentButton closeBtn;
     private final JLabel statusLabel;
+
+    // Filter controls
+    private JTextField searchField;
+    private JComboBox<String> actionTypeFilter;
+    private JComboBox<String> statusFilter;
 
     private boolean applied = false;
 
@@ -61,9 +72,15 @@ public final class FixPreviewDialog extends JDialog {
         headerPanel.add(hint, BorderLayout.CENTER);
         add(headerPanel, BorderLayout.NORTH);
 
+        // Filter bar
+        JPanel filterPanel = buildFilterPanel(plan.entries());
+        headerPanel.add(filterPanel, BorderLayout.SOUTH);
+
         // Table
         tableModel = new FixTableModel(plan.entries());
         table = new JTable(tableModel);
+        rowSorter = new TableRowSorter<>(tableModel);
+        table.setRowSorter(rowSorter);
         table.setRowHeight(28);
         table.setFillsViewportHeight(true);
         table.getColumnModel().getColumn(0).setMaxWidth(40);   // checkbox
@@ -224,18 +241,19 @@ public final class FixPreviewDialog extends JDialog {
 
             @Override
             protected void done() {
+                try {
+                    get(); // surface any exception from doInBackground
+                } catch (Exception ex) {
+                    statusLabel.setText("Apply failed: " + ex.getMessage());
+                    simulateBtn.setEnabled(true);
+                    applyBtn.setEnabled(true);
+                    return;
+                }
                 tableModel.fireTableDataChanged();
                 applied = true;
 
-                int failed = plan.countByStatus(FixStatus.FAILED);
-                int conflict = plan.countByStatus(FixStatus.CONFLICT);
-
-                StringBuilder sb = new StringBuilder();
-                sb.append(appliedCount).append(" applied");
-                if (failed > 0) sb.append(", ").append(failed).append(" failed");
-                if (conflict > 0) sb.append(", ").append(conflict).append(" conflicts");
-                statusLabel.setText(sb.toString());
-
+                // Dispose preview and show result dialog
+                dispose();
                 showResultDialog();
             }
         }.execute();
@@ -311,6 +329,78 @@ public final class FixPreviewDialog extends JDialog {
         }
     }
 
+    // ── Filter panel ───────────────────────────────────────────────────────
+
+    private JPanel buildFilterPanel(List<FixEntry> entries) {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                AppTheme.edgeBorder(0, 0, 1, 0),
+                BorderFactory.createEmptyBorder(4, 12, 4, 12)));
+
+        // Search by element name
+        panel.add(new JLabel("Search:"));
+        searchField = new JTextField(16);
+        searchField.setToolTipText("Filter by element name (case-insensitive)");
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { applyFilters(); }
+            @Override public void removeUpdate(DocumentEvent e) { applyFilters(); }
+            @Override public void changedUpdate(DocumentEvent e) { applyFilters(); }
+        });
+        panel.add(searchField);
+
+        // Action type filter
+        panel.add(Box.createHorizontalStrut(8));
+        panel.add(new JLabel("Action:"));
+        Set<String> actionTypes = new LinkedHashSet<>();
+        actionTypes.add("All");
+        for (FixEntry entry : entries) {
+            actionTypes.add(entry.action().actionType().name());
+        }
+        actionTypeFilter = new JComboBox<>(actionTypes.toArray(new String[0]));
+        actionTypeFilter.setToolTipText("Filter by fix action type");
+        actionTypeFilter.addActionListener(e -> applyFilters());
+        panel.add(actionTypeFilter);
+
+        // Status filter
+        panel.add(Box.createHorizontalStrut(8));
+        panel.add(new JLabel("Status:"));
+        statusFilter = new JComboBox<>(new String[]{"All", "PENDING", "SIMULATED", "CONFLICT", "APPLIED", "FAILED", "SKIPPED"});
+        statusFilter.setToolTipText("Filter by fix status");
+        statusFilter.addActionListener(e -> applyFilters());
+        panel.add(statusFilter);
+
+        return panel;
+    }
+
+    private void applyFilters() {
+        List<RowFilter<FixTableModel, Integer>> filters = new ArrayList<>();
+
+        // Text search on element name (column 1)
+        String searchText = searchField.getText().trim();
+        if (!searchText.isEmpty()) {
+            filters.add(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(searchText), 1));
+        }
+
+        // Action type filter (column 2)
+        String selectedAction = (String) actionTypeFilter.getSelectedItem();
+        if (selectedAction != null && !"All".equals(selectedAction)) {
+            filters.add(RowFilter.regexFilter("^" + java.util.regex.Pattern.quote(selectedAction), 2));
+        }
+
+        // Status filter (column 5)
+        String selectedStatus = (String) statusFilter.getSelectedItem();
+        if (selectedStatus != null && !"All".equals(selectedStatus)) {
+            String match = "SIMULATED".equals(selectedStatus) ? "OK" : selectedStatus;
+            filters.add(RowFilter.regexFilter("^" + java.util.regex.Pattern.quote(match) + "$", 5));
+        }
+
+        if (filters.isEmpty()) {
+            rowSorter.setRowFilter(null);
+        } else {
+            rowSorter.setRowFilter(RowFilter.andFilter(filters));
+        }
+    }
+
     private void showResultDialog() {
         FixResultDialog resultDialog = new FixResultDialog(
                 (JFrame) getOwner(), plan, fixService);
@@ -374,7 +464,7 @@ public final class FixPreviewDialog extends JDialog {
                         + (entry.action().field() != null ? " [" + entry.action().field() + "]" : "");
                 case 3: return entry.action().oldValue() != null ? entry.action().oldValue() : "";
                 case 4: return userNewValues.get(row);
-                case 5: return entry.status().name();
+                case 5: return entry.status() == FixStatus.SIMULATED ? "OK" : entry.status().name();
                 default: return "";
             }
         }
@@ -486,8 +576,8 @@ public final class FixPreviewDialog extends JDialog {
                     setForeground(new Color(255, 165, 0));
                 } else if ("SKIPPED".equals(status)) {
                     setForeground(Color.GRAY);
-                } else if ("SIMULATED".equals(status)) {
-                    setForeground(AccentColors.primary());
+                } else if ("OK".equals(status)) {
+                    setForeground(new Color(0x21, 0x73, 0x46));
                 } else {
                     setForeground(table.getForeground());
                 }

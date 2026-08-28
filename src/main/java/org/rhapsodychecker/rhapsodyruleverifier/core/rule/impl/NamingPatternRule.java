@@ -2,6 +2,8 @@ package org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl;
 
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.*;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixAction;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixActionType;
 
 import java.util.*;
 
@@ -146,6 +148,49 @@ public final class NamingPatternRule implements Rule {
                 + " '" + expected + "'"
                 + (caseSensitive ? "" : " (case-insensitive)")
                 + ".";
+    }
+
+    @Override
+    public Optional<FixAction> suggestFix(ElementRecord element, EvaluationContext context) {
+        String actualName = element.name();
+        String newName;
+
+        switch (mode) {
+            case "startsWith":
+                // Prepend the expected prefix if missing
+                String checkName = caseSensitive ? actualName : actualName.toLowerCase(Locale.ROOT);
+                String checkExpected = caseSensitive ? expected : expected.toLowerCase(Locale.ROOT);
+                if (!checkName.startsWith(checkExpected)) {
+                    newName = expected + actualName;
+                } else {
+                    return Optional.empty();
+                }
+                break;
+            case "endsWith":
+                // Append the expected suffix if missing
+                checkName = caseSensitive ? actualName : actualName.toLowerCase(Locale.ROOT);
+                checkExpected = caseSensitive ? expected : expected.toLowerCase(Locale.ROOT);
+                if (!checkName.endsWith(checkExpected)) {
+                    newName = actualName + expected;
+                } else {
+                    return Optional.empty();
+                }
+                break;
+            default:
+                // "contains" mode — ambiguous where to insert, skip
+                return Optional.empty();
+        }
+
+        return Optional.of(FixAction.builder()
+                .elementGuid(element.guid())
+                .elementName(actualName)
+                .actionType(FixActionType.SET_NAME)
+                .field("name")
+                .oldValue(actualName)
+                .newValue(newName)
+                .ruleId(id)
+                .description("Rename '" + actualName + "' to '" + newName + "' to satisfy " + mode + " '" + expected + "'")
+                .build());
     }
 
     // ---- Param helpers ----

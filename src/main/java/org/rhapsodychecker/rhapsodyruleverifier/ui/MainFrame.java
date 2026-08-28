@@ -43,10 +43,10 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
     private final GradientAccentButton newConfigWizardBtn  = GradientAccentButton.primary("New Config (Wizard)", AccentColors.PURPLE_HEX);
     private final GradientAccentButton editConfigWizardBtn = GradientAccentButton.primary("Edit Config (Wizard)", AccentColors.PURPLE_HEX);
     private final GradientAccentButton updateModelBtn      = GradientAccentButton.primary("Update Model", AccentColors.ORANGE_HEX);
-    private final GradientAccentButton fixBtn              = GradientAccentButton.primary("Apply Suggested Fixes", AccentColors.RED_HEX);
+    private final GradientAccentButton fixBtn              = GradientAccentButton.primary("Review & Fix\u2026", AccentColors.RED_HEX);
     // Neutral: opening a folder in Explorer carries no semantic colour.
     private final GradientAccentButton openCacheBtn        = GradientAccentButton.neutral("\uD83D\uDCC1 Cache");
-    private final GradientAccentButton fixHistoryBtn       = GradientAccentButton.neutral("\uD83D\uDCCB Fix History");
+    private final GradientAccentButton fixHistoryBtn       = GradientAccentButton.neutral("\uD83D\uDCCB Fix Log");
     // Neutral: help opens local HTML docs in the default browser.
     private final GradientAccentButton helpBtn             = GradientAccentButton.neutral("Help");
     private final JCheckBox darkModeToggle = new JCheckBox("Dark mode");

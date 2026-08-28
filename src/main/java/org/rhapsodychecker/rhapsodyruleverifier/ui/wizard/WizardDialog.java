@@ -23,6 +23,8 @@ import java.util.Optional;
  */
 public final class WizardDialog extends JDialog {
 
+    private static final long serialVersionUID = 1L;
+
     private static final String STEP_SETS    = "SETS";
     private static final String STEP_RULES   = "RULES";
     private static final String STEP_REVIEW  = "REVIEW";

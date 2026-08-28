@@ -8,7 +8,6 @@ import com.telelogic.rhapsody.core.IRPProfile;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.SuggestionsService;
 import org.rhapsodychecker.rhapsodyruleverifier.detection.api.ProfileSummary;
 
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.logging.Level;

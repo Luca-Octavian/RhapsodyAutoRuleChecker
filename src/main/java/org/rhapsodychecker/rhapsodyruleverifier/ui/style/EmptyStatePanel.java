@@ -11,6 +11,8 @@ import javax.swing.*;
  */
 public class EmptyStatePanel extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     public EmptyStatePanel(String glyph, String title, String subtitle) {
         setLayout(new GridBagLayout());
         setOpaque(false);

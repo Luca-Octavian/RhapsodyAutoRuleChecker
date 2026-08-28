@@ -14,6 +14,8 @@ import java.awt.*;
  */
 public final class RuleStepPanel extends JPanel {
 
+    private static final long serialVersionUID = 1L;
+
     private final WizardState         state;
     private final FastDetectionResult fast;
 
