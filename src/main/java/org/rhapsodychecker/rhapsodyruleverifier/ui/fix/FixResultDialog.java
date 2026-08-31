@@ -56,10 +56,12 @@ public final class FixResultDialog extends JDialog {
         int applied = plan.countByStatus(FixStatus.APPLIED);
         int failed = plan.countByStatus(FixStatus.FAILED);
         int conflict = plan.countByStatus(FixStatus.CONFLICT);
+        int skipped = plan.countByStatus(FixStatus.SKIPPED);
         StringBuilder sb = new StringBuilder();
         sb.append(applied).append(" applied");
         if (failed > 0) sb.append(", ").append(failed).append(" failed");
         if (conflict > 0) sb.append(", ").append(conflict).append(" conflicts");
+        if (skipped > 0) sb.append(", ").append(skipped).append(" skipped");
         JLabel statusLabel = new JLabel(sb.toString());
         bottomPanel.add(statusLabel, BorderLayout.WEST);
 
@@ -120,7 +122,7 @@ public final class FixResultDialog extends JDialog {
                 case 0: return entry.action().elementName();
                 case 1: return entry.action().actionType().name();
                 case 2: return entry.action().description();
-                case 3: return entry.status().name();
+                case 3: return FixUiSupport.statusLabel(entry.status());
                 case 4: return entry.errorMessage() != null ? entry.errorMessage() : "";
                 default: return "";
             }
@@ -140,13 +142,13 @@ public final class FixResultDialog extends JDialog {
 
             if (value instanceof String && !isSelected) {
                 String status = (String) value;
-                if ("APPLIED".equals(status)) {
+                if ("Applied".equals(status)) {
                     setForeground(new Color(0x21, 0x73, 0x46));
-                } else if ("FAILED".equals(status)) {
+                } else if ("Failed".equals(status)) {
                     setForeground(AccentColors.failure());
-                } else if ("CONFLICT".equals(status)) {
+                } else if ("Conflict".equals(status)) {
                     setForeground(new Color(255, 165, 0));
-                } else if ("ROLLED_BACK".equals(status)) {
+                } else if ("Rolled Back".equals(status) || "Skipped".equals(status)) {
                     setForeground(AccentColors.mutedText());
                 } else {
                     setForeground(table.getForeground());

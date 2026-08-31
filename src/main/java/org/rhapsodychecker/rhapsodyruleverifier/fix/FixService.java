@@ -46,17 +46,51 @@ public final class FixService {
      * @return number of successfully applied entries
      */
     public int apply(FixPlan plan, boolean stopOnFailure) {
+        return apply(plan, stopOnFailure, null);
+    }
+
+    /**
+     * Apply all SIMULATED (or PENDING) entries in the plan with progress reporting.
+     * Stops on first failure if stopOnFailure is true.
+     * The listener can return {@code false} to cancel remaining entries.
+     * Writes the journal after all entries are processed.
+     *
+     * @return number of successfully applied entries
+     */
+    public int apply(FixPlan plan, boolean stopOnFailure, FixProgressListener listener) {
+        List<FixEntry> entries = plan.entries();
+
+        // Count only actionable entries so the progress bar excludes skipped ones
+        int actionableTotal = 0;
+        for (FixEntry e : entries) {
+            FixStatus s = e.status();
+            if (s == FixStatus.SIMULATED || s == FixStatus.PENDING) {
+                actionableTotal++;
+            }
+        }
+
         int applied = 0;
-        for (FixEntry entry : plan.entries()) {
+        int processed = 0;
+        for (int i = 0; i < entries.size(); i++) {
+            FixEntry entry = entries.get(i);
             FixStatus s = entry.status();
-            if (s != FixStatus.SIMULATED && s != FixStatus.PENDING) continue;
+            if (s != FixStatus.SIMULATED && s != FixStatus.PENDING) {
+                continue;
+            }
 
             executor.apply(entry);
+            processed++;
 
             if (entry.status() == FixStatus.APPLIED) {
                 applied++;
             } else if (entry.status() == FixStatus.FAILED && stopOnFailure) {
                 LOG.warning("Stopping on first failure: " + entry.errorMessage());
+                if (listener != null) listener.onProgress(processed, actionableTotal, entry.action().elementName());
+                break;
+            }
+
+            if (listener != null && !listener.onProgress(processed, actionableTotal, entry.action().elementName())) {
+                LOG.info("Fix application cancelled by user at entry " + (i + 1));
                 break;
             }
         }

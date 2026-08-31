@@ -90,22 +90,14 @@ public final class RhapsodyConnectionManager {
     }
 
     /**
-     * Drops the current application/project handles before reconnecting to a
-     * different project. Quits the Rhapsody instance only if this manager
-     * created it; an externally attached instance is left running (its
-     * currently open project just stops being tracked here).
+     * Drops the current project handle before reconnecting to a different
+     * project. The application instance is kept alive so that
+     * {@code openProject()} can load the new project without restarting
+     * Rhapsody — avoiding the COM timing issues that occur when the process
+     * is killed and immediately re-created.
      */
     private void disconnectInternal() {
-        if (applicationCreatedByManager && application != null) {
-            try {
-                application.quit();
-            } catch (Throwable ignored) {
-                // Best-effort; ignore
-            }
-        }
-        application = null;
         project = null;
-        applicationCreatedByManager = false;
         currentProjectPath = null;
     }
 

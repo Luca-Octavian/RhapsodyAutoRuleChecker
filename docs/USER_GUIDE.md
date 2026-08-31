@@ -104,7 +104,7 @@ Not all rules support auto-fix. The following rules can suggest fixes:
 | Rule | Fix action | What it does |
 |---|---|---|
 | RequiredValueRule | SET_NAME, SET_DESCRIPTION, SET_TAG_VALUE, SET_INITIAL_VALUE | Sets the target field to the expected or allowed value |
-| RequiredStereotypeRule | ADD_STEREOTYPE | Adds the first missing required stereotype |
+| RequiredStereotypeRule | ADD_STEREOTYPE, REMOVE_STEREOTYPE | Adds a missing required stereotype or removes an unwanted one |
 | RequiredStereotypeOneOfRule | ADD_STEREOTYPE | Presents the allowed stereotypes as options for you to choose from |
 | NamingPatternRule | SET_NAME | Prepends the expected prefix (startsWith) or appends the expected suffix (endsWith) |
 | FlowPropertyConstraintRule | SET_INITIAL_VALUE | Clears the initial value when the mustBeEmpty constraint is violated |
@@ -120,7 +120,7 @@ The preview dialog shows a table with one row per proposed fix:
 - **Action**: the type of change and the target field.
 - **Current Value**: the current value in the model.
 - **New Value**: the proposed new value. Editable — click to change it. Some rows offer a dropdown when multiple values are valid. Rows with an empty new value are skipped.
-- **Status**: the current state of the fix (PENDING, OK, CONFLICT, APPLIED, FAILED, SKIPPED).
+- **Status**: the current state of the fix (Pending, OK, Conflict, Applied, Failed, Rolled Back, Skipped). Unchecking a row immediately marks it as Skipped.
 
 #### Filtering fixes
 
@@ -134,7 +134,7 @@ All filters combine — for example, you can search for a specific element name 
 
 #### Simulate before applying
 
-Click **Simulate** to run a dry check. The application verifies each fix for conflicts without changing anything. Check the Status column for results. Rows marked OK are safe to apply. Rows marked CONFLICT need attention.
+Click **Simulate** to run a dry check. The application verifies each fix for conflicts without changing anything. Check the Status column for results. Rows marked OK are safe to apply. Rows marked Conflict need attention. Unchecked rows and rows without a required value are marked Skipped.
 
 #### Apply fixes
 
@@ -142,7 +142,11 @@ Click **Apply Fixes** to write the changes to the Rhapsody model.
 
 A confirmation dialog warns that auto-fix can modify the model. Changes are not auto-saved — you can close Rhapsody without saving to revert all changes.
 
-After applying, a result dialog shows which fixes succeeded and which failed.
+After applying, a result dialog shows which fixes succeeded, which failed, and how many were skipped.
+
+#### Closing and reopening the preview
+
+You can close the preview dialog and reopen it without losing your work. Checkbox selections, edited values, and simulation statuses are preserved for the duration of the current evaluation session. Starting a new evaluation or loading a different model resets the preview state.
 
 #### Important safety notes
 

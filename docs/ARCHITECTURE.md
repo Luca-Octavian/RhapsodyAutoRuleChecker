@@ -39,11 +39,11 @@ org.rhapsodychecker.rhapsodyruleverifier
     util/                   ReflectiveMethodCache
   detection/                Model detection facade, port probing, suggestions
   export/                   ExcelReportExporter
-  fix/                      Auto-fix engine: FixAction, FixPlan, FixService, FixSimulator, FixCollector
+  fix/                      Auto-fix engine: FixAction, FixActionType, FixEntry, FixStatus, FixPlan, FixPlanJournal, FixService, FixSimulator, FixCollector, FixExecutor
   prefs/                    RecentFilesStore (Java Preferences API)
   ui/                       Swing UI: MainFrame, PackageTreePanel, ResultsTablePanel
     controller/             MainFrameController (all UI logic)
-    fix/                    FixPreviewDialog, FixResultDialog, FixHistoryDialog
+    fix/                    FixPreviewDialog, FixPreviewState, FixResultDialog, FixHistoryDialog, FixUiSupport
     style/                  AppTheme, AccentColors, GradientAccentButton, etc.
     wizard/                 WizardDialog, ElementSetDialog, RuleDialog, ReviewStepPanel
       help/                 HoverInfoProvider, StepIndicator, CollapsibleSection

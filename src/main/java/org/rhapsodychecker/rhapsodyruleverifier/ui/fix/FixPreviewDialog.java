@@ -3,11 +3,13 @@ package org.rhapsodychecker.rhapsodyruleverifier.ui.fix;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixAction;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixEntry;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixPlan;
+import org.rhapsodychecker.rhapsodyruleverifier.fix.FixProgressListener;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixService;
 import org.rhapsodychecker.rhapsodyruleverifier.fix.FixStatus;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AppTheme;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientAccentButton;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.style.GradientProgressBar;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.SectionHeader;
 
 import javax.swing.*;
@@ -18,6 +20,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,8 +30,8 @@ import java.util.Set;
 /**
  * Modal dialog that previews the proposed auto-fix actions before applying them.
  * The "New Value" column is editable — pre-filled when the rule can suggest a
- * value, empty when the user needs to type one in. Rows with empty new values
- * are skipped on apply. Input is sanitized (trimmed, control chars stripped).
+ * value, empty when the user needs to type one in. Unchecked rows and rows
+ * missing required input are skipped. Input is sanitized (trimmed, control chars stripped).
  */
 public final class FixPreviewDialog extends JDialog {
 
@@ -35,6 +39,7 @@ public final class FixPreviewDialog extends JDialog {
 
     private final FixPlan plan;
     private final FixService fixService;
+    private final FixPreviewState previewState;
     private final FixTableModel tableModel;
     private final JTable table;
     private final TableRowSorter<FixTableModel> rowSorter;
@@ -50,10 +55,20 @@ public final class FixPreviewDialog extends JDialog {
 
     private boolean applied = false;
 
-    public FixPreviewDialog(JFrame owner, FixPlan plan, FixService fixService) {
+    public FixPreviewDialog(JFrame owner, FixPlan plan, FixService fixService,
+            FixPreviewState previewState) {
         super(owner, "Auto-Fix Preview", true);
         this.plan = plan;
         this.fixService = fixService;
+        this.previewState = previewState;
+
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                closeAndSave();
+            }
+        });
 
         setSize(950, 520);
         setMinimumSize(new Dimension(750, 380));
@@ -66,7 +81,7 @@ public final class FixPreviewDialog extends JDialog {
         JLabel hint = new JLabel(
                 "<html><span style='color:" + AppTheme.mutedTextHex() + ";'>"
                 + "Review each row. Edit the \u201cNew Value\u201d column to set what you want. "
-                + "Rows with empty new values will be skipped."
+                + "Unchecked rows and rows missing a required value will be skipped."
                 + "</span></html>");
         hint.setBorder(BorderFactory.createEmptyBorder(4, 12, 8, 12));
         headerPanel.add(hint, BorderLayout.CENTER);
@@ -77,7 +92,7 @@ public final class FixPreviewDialog extends JDialog {
         headerPanel.add(filterPanel, BorderLayout.SOUTH);
 
         // Table
-        tableModel = new FixTableModel(plan.entries());
+        tableModel = new FixTableModel(plan.entries(), previewState);
         table = new JTable(tableModel);
         rowSorter = new TableRowSorter<>(tableModel);
         table.setRowSorter(rowSorter);
@@ -107,7 +122,10 @@ public final class FixPreviewDialog extends JDialog {
         int prefilled = 0;
         int needsInput = 0;
         for (FixEntry entry : plan.entries()) {
-            if (entry.action().newValue() != null && !entry.action().newValue().isEmpty()) {
+            if (!FixUiSupport.requiresNewValue(entry.action())) {
+                continue;
+            }
+            if (FixUiSupport.hasRequiredInput(entry.action())) {
                 prefilled++;
             } else {
                 needsInput++;
@@ -126,11 +144,11 @@ public final class FixPreviewDialog extends JDialog {
         closeBtn = GradientAccentButton.neutral("Close");
 
         simulateBtn.setToolTipText("Dry-run: checks for conflicts without changing anything");
-        applyBtn.setToolTipText("Apply checked fixes with non-empty values to the Rhapsody model");
+        applyBtn.setToolTipText("Apply checked fixes that have all required values");
 
         simulateBtn.addActionListener(e -> onSimulate());
         applyBtn.addActionListener(e -> onApply());
-        closeBtn.addActionListener(e -> dispose());
+        closeBtn.addActionListener(e -> closeAndSave());
 
         buttonPanel.add(simulateBtn);
         buttonPanel.add(applyBtn);
@@ -145,71 +163,53 @@ public final class FixPreviewDialog extends JDialog {
     }
 
     private void onSimulate() {
-        // Commit any pending cell edits before simulate
-        if (table.isEditing()) {
-            table.getCellEditor().stopCellEditing();
-        }
+        commitPendingEdit();
+        syncUserValuesToActions();
 
-        // Reset all non-terminal entries back to PENDING so they can be re-simulated
+        // Recalculate every editable row from its current value and selection.
         for (FixEntry entry : plan.entries()) {
             FixStatus s = entry.status();
-            if (s == FixStatus.SIMULATED || s == FixStatus.CONFLICT || s == FixStatus.PENDING) {
+            if (s == FixStatus.SIMULATED || s == FixStatus.CONFLICT
+                    || s == FixStatus.PENDING || s == FixStatus.SKIPPED) {
                 entry.resetToPending();
             }
         }
-
-        // Sync user values into actions (no CONFLICT marking for empty values)
-        syncUserValuesToActions();
+        markUnavailableAsSkipped();
 
         int conflicts = fixService.simulate(plan);
         tableModel.fireTableDataChanged();
 
-        // Count rows that were skipped (still PENDING = empty value or unchecked)
-        int skipped = 0;
-        for (FixEntry entry : plan.entries()) {
-            if (entry.status() == FixStatus.PENDING) skipped++;
-        }
-
-        StringBuilder msg = new StringBuilder();
-        if (conflicts == 0) {
-            msg.append("Simulation passed \u2014 no conflicts found");
-        } else {
-            msg.append("Simulation found ").append(conflicts)
-               .append(conflicts == 1 ? " conflict" : " conflicts")
-               .append(" \u2014 check the Status column");
-        }
-        if (skipped > 0) {
-            msg.append(" (").append(skipped).append(" skipped \u2014 needs input)");
-        }
+        int ok = plan.countByStatus(FixStatus.SIMULATED);
+        int skipped = plan.countByStatus(FixStatus.SKIPPED);
+        StringBuilder msg = new StringBuilder("Simulation complete: ")
+                .append(ok).append(" OK");
+        if (skipped > 0) msg.append(", ").append(skipped).append(" skipped");
+        if (conflicts > 0) msg.append(", ").append(conflicts).append(" conflicts");
         statusLabel.setText(msg.toString());
     }
 
     private void onApply() {
-        // Commit any pending cell edits
-        if (table.isEditing()) {
-            table.getCellEditor().stopCellEditing();
-        }
+        commitPendingEdit();
 
-        // Sync user values, then mark empty/unchecked rows as SKIPPED (apply-time only)
+        // Sync values and classify anything the user deliberately excluded.
         syncUserValuesToActions();
-        markEmptyAsSkipped();
+        markUnavailableAsSkipped();
 
-        // Validate: check that at least one row has a non-empty new value and is checked
+        // Validate that at least one selected row has its action-specific input.
         int actionableCount = 0;
         for (int i = 0; i < plan.entries().size(); i++) {
-            if (tableModel.isChecked(i)) {
-                FixEntry entry = plan.entries().get(i);
-                String nv = entry.action().newValue();
-                if (nv != null && !nv.trim().isEmpty()) {
-                    actionableCount++;
-                }
+            FixEntry entry = plan.entries().get(i);
+            FixStatus status = entry.status();
+            if (FixUiSupport.isActionable(entry.action(), tableModel.isChecked(i))
+                    && (status == FixStatus.PENDING || status == FixStatus.SIMULATED)) {
+                actionableCount++;
             }
         }
 
         if (actionableCount == 0) {
             JOptionPane.showMessageDialog(this,
-                    "No actionable fixes. Fill in the \"New Value\" column for rows\n"
-                    + "you want to fix, then try again.",
+                    "No actionable fixes. Select at least one row and provide any\n"
+                    + "required value, then try again.",
                     "Nothing to Apply", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
@@ -230,17 +230,101 @@ public final class FixPreviewDialog extends JDialog {
         applyBtn.setEnabled(false);
         statusLabel.setText("Applying fixes...");
 
-        new SwingWorker<Integer, Void>() {
+        // ── Build modal progress dialog ────────────────────────────────
+        final JDialog progressDialog = new JDialog(this, "Applying Fixes", true);
+        progressDialog.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        progressDialog.setResizable(false);
+
+        JPanel progressContent = new JPanel();
+        progressContent.setLayout(new BoxLayout(progressContent, BoxLayout.Y_AXIS));
+        progressContent.setBorder(BorderFactory.createEmptyBorder(20, 24, 16, 24));
+
+        JLabel titleLabel = new JLabel("Applying fixes\u2026");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        progressContent.add(titleLabel);
+        progressContent.add(Box.createVerticalStrut(12));
+
+        final GradientProgressBar progressBar = new GradientProgressBar();
+        progressBar.setMinimum(0);
+        progressBar.setMaximum(actionableCount);
+        progressBar.setValue(0);
+        progressBar.setStringPainted(true);
+        progressBar.setString("0 / " + actionableCount);
+        progressBar.setPreferredSize(new Dimension(380, 24));
+        progressBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+        progressBar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        progressContent.add(progressBar);
+        progressContent.add(Box.createVerticalStrut(8));
+
+        final JLabel elementLabel = new JLabel(" ");
+        elementLabel.setForeground(AccentColors.mutedText());
+        elementLabel.setFont(elementLabel.getFont().deriveFont(Font.PLAIN, 12f));
+        elementLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        progressContent.add(elementLabel);
+        progressContent.add(Box.createVerticalStrut(14));
+
+        final GradientAccentButton cancelBtn = GradientAccentButton.neutral("Cancel");
+        cancelBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel cancelPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        cancelPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        cancelPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        cancelPanel.add(cancelBtn);
+        progressContent.add(cancelPanel);
+
+        progressDialog.setContentPane(progressContent);
+        progressDialog.pack();
+        progressDialog.setLocationRelativeTo(this);
+
+        // Cancel flag
+        final boolean[] cancelled = {false};
+        cancelBtn.addActionListener(e -> {
+            cancelled[0] = true;
+            cancelBtn.setEnabled(false);
+            cancelBtn.setText("Cancelling\u2026");
+        });
+
+        // ── SwingWorker with progress ──────────────────────────────────
+        final int total = plan.entries().size();
+
+        new SwingWorker<Integer, int[]>() {
             private int appliedCount;
 
             @Override
             protected Integer doInBackground() {
-                appliedCount = fixService.apply(plan, true);
+                appliedCount = fixService.apply(plan, true, new FixProgressListener() {
+                    @Override
+                    public boolean onProgress(int current, int totalEntries, String elementName) {
+                        publish(new int[]{current, totalEntries});
+                        // Use element name for label update via invokeLater
+                        final String name = elementName != null ? elementName : "";
+                        SwingUtilities.invokeLater(new Runnable() {
+                            @Override
+                            public void run() {
+                                elementLabel.setText(name.length() > 55
+                                        ? name.substring(0, 52) + "\u2026" : name);
+                            }
+                        });
+                        return !cancelled[0];
+                    }
+                });
                 return appliedCount;
             }
 
             @Override
+            protected void process(java.util.List<int[]> chunks) {
+                int[] last = chunks.get(chunks.size() - 1);
+                int current = last[0];
+                int t = last[1];
+                progressBar.setMaximum(t);
+                progressBar.setValue(current);
+                int pct = t > 0 ? (int) ((current * 100L) / t) : 0;
+                progressBar.setString(current + " / " + t + "  (" + pct + "%)");
+            }
+
+            @Override
             protected void done() {
+                progressDialog.dispose();
                 try {
                     get(); // surface any exception from doInBackground
                 } catch (Exception ex) {
@@ -257,6 +341,21 @@ public final class FixPreviewDialog extends JDialog {
                 showResultDialog();
             }
         }.execute();
+
+        // Show the modal dialog — blocks until done() calls dispose()
+        progressDialog.setVisible(true);
+    }
+
+    private void commitPendingEdit() {
+        if (table.isEditing()) {
+            table.getCellEditor().stopCellEditing();
+        }
+    }
+
+    private void closeAndSave() {
+        commitPendingEdit();
+        syncUserValuesToActions();
+        dispose();
     }
 
     /**
@@ -277,42 +376,48 @@ public final class FixPreviewDialog extends JDialog {
 
     /**
      * Sync user-edited values from the table model back into the FixEntry actions.
-     * Does NOT mark empty/unchecked rows as CONFLICT — those stay PENDING so the
-     * simulator skips them naturally. Called before both simulate and apply.
+     * Status classification is handled separately. Called before simulation,
+     * application, and closing so edits survive reopening within the session.
      */
     private void syncUserValuesToActions() {
         for (int i = 0; i < plan.entries().size(); i++) {
             FixEntry entry = plan.entries().get(i);
             String userValue = sanitize(tableModel.getUserNewValue(i));
 
-            // Skip unchecked or empty-value rows — leave them as-is (PENDING)
-            if (!tableModel.isChecked(i) || userValue == null || userValue.isEmpty()) {
-                continue;
-            }
-
-            // Rebuild the action with the user's value if it differs
+            // Rebuild whenever the edited value differs, including when a value
+            // is cleared or its row is unchecked.
             FixAction current = entry.action();
-            String currentNew = current.newValue();
-            if (currentNew == null || !currentNew.equals(userValue)) {
+            String currentNew = current.newValue() != null ? current.newValue() : "";
+            String editedNew = userValue != null ? userValue : "";
+            if (!currentNew.equals(editedNew)) {
                 FixAction updated = FixAction.builder()
                         .elementGuid(current.elementGuid())
                         .elementName(current.elementName())
                         .actionType(current.actionType())
                         .field(current.field())
                         .oldValue(current.oldValue())
-                        .newValue(userValue)
+                        .newValue(editedNew)
                         .ruleId(current.ruleId())
                         .description(current.description())
+                        .options(current.options())
                         .build();
-                plan.entries().set(i, new FixEntry(updated, entry.status()));
+                FixEntry replacement = new FixEntry(updated, entry.status());
+                if (entry.status() == FixStatus.CONFLICT && entry.errorMessage() != null) {
+                    replacement.markConflict(entry.errorMessage());
+                } else if (entry.status() == FixStatus.FAILED && entry.errorMessage() != null) {
+                    replacement.markFailed(entry.errorMessage());
+                } else if (entry.status() == FixStatus.SKIPPED) {
+                    replacement.markSkipped(entry.errorMessage());
+                }
+                plan.entries().set(i, replacement);
             }
         }
     }
 
     /**
-     * Mark unchecked and empty-value rows as SKIPPED. Called only at apply time.
+     * Mark unchecked rows and rows missing action-specific required input as SKIPPED.
      */
-    private void markEmptyAsSkipped() {
+    private void markUnavailableAsSkipped() {
         for (int i = 0; i < plan.entries().size(); i++) {
             FixEntry entry = plan.entries().get(i);
             if (entry.status() != FixStatus.PENDING && entry.status() != FixStatus.SIMULATED) {
@@ -320,11 +425,8 @@ public final class FixPreviewDialog extends JDialog {
             }
             if (!tableModel.isChecked(i)) {
                 entry.markSkipped("Excluded by user");
-            } else {
-                String nv = entry.action().newValue();
-                if (nv == null || nv.trim().isEmpty()) {
-                    entry.markSkipped("No value provided");
-                }
+            } else if (!FixUiSupport.hasRequiredInput(entry.action())) {
+                entry.markSkipped("No value provided");
             }
         }
     }
@@ -364,7 +466,9 @@ public final class FixPreviewDialog extends JDialog {
         // Status filter
         panel.add(Box.createHorizontalStrut(8));
         panel.add(new JLabel("Status:"));
-        statusFilter = new JComboBox<>(new String[]{"All", "PENDING", "SIMULATED", "CONFLICT", "APPLIED", "FAILED", "SKIPPED"});
+        statusFilter = new JComboBox<>(new String[]{
+                "All", "Pending", "OK", "Applied", "Failed", "Rolled Back", "Conflict", "Skipped"
+        });
         statusFilter.setToolTipText("Filter by fix status");
         statusFilter.addActionListener(e -> applyFilters());
         panel.add(statusFilter);
@@ -390,8 +494,8 @@ public final class FixPreviewDialog extends JDialog {
         // Status filter (column 5)
         String selectedStatus = (String) statusFilter.getSelectedItem();
         if (selectedStatus != null && !"All".equals(selectedStatus)) {
-            String match = "SIMULATED".equals(selectedStatus) ? "OK" : selectedStatus;
-            filters.add(RowFilter.regexFilter("^" + java.util.regex.Pattern.quote(match) + "$", 5));
+            filters.add(RowFilter.regexFilter(
+                    "^" + java.util.regex.Pattern.quote(selectedStatus) + "$", 5));
         }
 
         if (filters.isEmpty()) {
@@ -417,22 +521,22 @@ public final class FixPreviewDialog extends JDialog {
         };
 
         private final List<FixEntry> entries;
-        private final List<Boolean> checked;
+        private final FixPreviewState previewState;
         private final List<String> userNewValues;
 
-        FixTableModel(List<FixEntry> entries) {
+        FixTableModel(List<FixEntry> entries, FixPreviewState previewState) {
             this.entries = entries;
-            this.checked = new ArrayList<Boolean>();
+            this.previewState = previewState;
             this.userNewValues = new ArrayList<String>();
             for (int i = 0; i < entries.size(); i++) {
-                checked.add(Boolean.TRUE);
+                previewState.isSelected(i);
                 String nv = entries.get(i).action().newValue();
                 userNewValues.add(nv != null ? nv : "");
             }
         }
 
         boolean isChecked(int row) {
-            return checked.get(row).booleanValue();
+            return previewState.isSelected(row);
         }
 
         String getUserNewValue(int row) {
@@ -458,26 +562,45 @@ public final class FixPreviewDialog extends JDialog {
         public Object getValueAt(int row, int col) {
             FixEntry entry = entries.get(row);
             switch (col) {
-                case 0: return checked.get(row);
+                case 0: return Boolean.valueOf(previewState.isSelected(row));
                 case 1: return entry.action().elementName();
                 case 2: return entry.action().actionType().name()
                         + (entry.action().field() != null ? " [" + entry.action().field() + "]" : "");
                 case 3: return entry.action().oldValue() != null ? entry.action().oldValue() : "";
                 case 4: return userNewValues.get(row);
-                case 5: return entry.status() == FixStatus.SIMULATED ? "OK" : entry.status().name();
+                case 5: return FixUiSupport.statusLabel(entry.status());
                 default: return "";
             }
         }
 
         @Override
         public void setValueAt(Object value, int row, int col) {
+            FixEntry entry = entries.get(row);
             if (col == 0) {
-                checked.set(row, (Boolean) value);
-                fireTableCellUpdated(row, col);
+                boolean selected = ((Boolean) value).booleanValue();
+                previewState.setSelected(row, selected);
+                if (!selected && isReprocessable(entry.status())) {
+                    entry.markSkipped("Excluded by user");
+                } else if (selected && entry.status() == FixStatus.SKIPPED) {
+                    entry.resetToPending();
+                }
+                fireTableRowsUpdated(row, row);
             } else if (col == 4) {
                 userNewValues.set(row, value != null ? value.toString() : "");
-                fireTableCellUpdated(row, col);
+                if (isReprocessable(entry.status())) {
+                    if (previewState.isSelected(row)) {
+                        entry.resetToPending();
+                    } else {
+                        entry.markSkipped("Excluded by user");
+                    }
+                }
+                fireTableRowsUpdated(row, row);
             }
+        }
+
+        private static boolean isReprocessable(FixStatus status) {
+            return status == FixStatus.PENDING || status == FixStatus.SIMULATED
+                    || status == FixStatus.CONFLICT || status == FixStatus.SKIPPED;
         }
     }
 
@@ -496,7 +619,8 @@ public final class FixPreviewDialog extends JDialog {
         @Override
         public Component getTableCellEditorComponent(JTable table, Object value,
                 boolean isSelected, int row, int column) {
-            FixEntry entry = entries.get(row);
+            int modelRow = table.convertRowIndexToModel(row);
+            FixEntry entry = entries.get(modelRow);
             List<String> options = entry.action().options();
 
             if (options != null && !options.isEmpty()) {
@@ -568,13 +692,13 @@ public final class FixPreviewDialog extends JDialog {
 
             if (value instanceof String && !isSelected) {
                 String status = (String) value;
-                if ("APPLIED".equals(status)) {
+                if ("Applied".equals(status)) {
                     setForeground(new Color(0x21, 0x73, 0x46));
-                } else if ("FAILED".equals(status)) {
+                } else if ("Failed".equals(status)) {
                     setForeground(AccentColors.failure());
-                } else if ("CONFLICT".equals(status)) {
+                } else if ("Conflict".equals(status)) {
                     setForeground(new Color(255, 165, 0));
-                } else if ("SKIPPED".equals(status)) {
+                } else if ("Skipped".equals(status) || "Rolled Back".equals(status)) {
                     setForeground(Color.GRAY);
                 } else if ("OK".equals(status)) {
                     setForeground(new Color(0x21, 0x73, 0x46));

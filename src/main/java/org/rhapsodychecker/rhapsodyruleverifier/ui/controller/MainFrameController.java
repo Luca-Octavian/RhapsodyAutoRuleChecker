@@ -37,6 +37,7 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleFactory;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.RuleStatus;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.fix.FixHistoryDialog;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.fix.FixPreviewDialog;
+import org.rhapsodychecker.rhapsodyruleverifier.ui.fix.FixPreviewState;
 import org.rhapsodychecker.rhapsodyruleverifier.prefs.RecentFilesStore;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.wizard.WizardDialog;
 import org.rhapsodychecker.rhapsodyruleverifier.ui.style.AccentColors;
@@ -99,6 +100,7 @@ public final class MainFrameController {
     private FastDetectionResult   fastDetectionResult;
     private FixPlan               fixPlan;
     private FixService            fixService;
+    private FixPreviewState       fixPreviewState;
     private EvaluationContext      lastContext;
     private boolean               loadedFromCache = false;
     /** Canonical path of the model that is currently loaded in memory. */
@@ -534,7 +536,11 @@ public final class MainFrameController {
             fixService = new FixService(executor, new FixPlanJournal(), index);
         }
 
-        FixPreviewDialog dialog = new FixPreviewDialog(view.frame(), fixPlan, fixService);
+        if (fixPreviewState == null) {
+            fixPreviewState = new FixPreviewState();
+        }
+        FixPreviewDialog dialog = new FixPreviewDialog(
+                view.frame(), fixPlan, fixService, fixPreviewState);
         dialog.setVisible(true);
 
         if (dialog.wasApplied()) {
@@ -602,10 +608,13 @@ public final class MainFrameController {
     private void buildFixPlan(String configPath) {
         if (lastResults == null || config == null || index == null) {
             fixPlan = null;
+            fixPreviewState = null;
             return;
         }
 
         try {
+            // A new evaluation starts a new preview session.
+            fixPreviewState = new FixPreviewState();
             // Build rule map by re-creating rules from specs
             Map<String, Rule> ruleMap = new LinkedHashMap<String, Rule>();
             for (RuleSpec spec : config.enabledRules()) {
@@ -640,6 +649,7 @@ public final class MainFrameController {
         } catch (Throwable t) {
             AppLogger.warn("Failed to build fix plan: " + t.getMessage());
             fixPlan = null;
+            fixPreviewState = null;
         }
 
         updateButtonStates();
@@ -773,6 +783,7 @@ public final class MainFrameController {
         // Clear stale fix plan, fix service, and results — they belong to the previous model state
         fixPlan = null;
         fixService = null;
+        fixPreviewState = null;
         lastResults = null;
         lastContext = null;
         view.loadTree(result.packageTree());
