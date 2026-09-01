@@ -15,15 +15,15 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Descoperă tag-urile existente pe un subset de elemente.
+ * Discovers existing tags on a subset of elements.
  *
- * De ce scoped și nu global:
- *   Pe un model cu 6000+ elemente, getTags() pe fiecare ar dubla timpul de încărcare.
- *   În schimb, wizard-ul știe "utilizatorul configurează reguli pentru Block-uri" →
- *   scanăm doar cele ~130 de Block-uri, nu tot modelul.
+ * Why scoped and not global:
+ *   On a model with 6000+ elements, calling getTags() on each would double load time.
+ *   Instead, the wizard knows "the user is configuring rules for Blocks" →
+ *   we scan only the ~130 Blocks, not the entire model.
  *
- * maxPerKind = cap de siguranță suplimentar: chiar dacă scope-ul e larg,
- *   nu scanăm mai mult de N elemente per tip.
+ * maxPerKind = additional safety cap: even if the scope is wide,
+ *   we scan no more than N elements per kind.
  */
 public final class TagDiscoveryService {
 
@@ -36,10 +36,10 @@ public final class TagDiscoveryService {
     }
 
     /**
-     * @param records      toate record-urile din snapshot
-     * @param scopeFilter  predicate care restricționează ce se scanează
-     *                     (ex: r -> r.kind() == BLOCK)
-     * @param handleByGuid map GUID → handle nativ live
+     * @param records      all records from the snapshot
+     * @param scopeFilter  predicate that restricts what gets scanned
+     *                     (e.g., r -> r.kind() == BLOCK)
+     * @param handleByGuid map GUID → live native handle
      */
     public TagDiscoveryResult discover(
             List<ElementRecord>          records,
@@ -52,7 +52,7 @@ public final class TagDiscoveryService {
         for (ElementRecord record : records) {
             if (!scopeFilter.test(record)) continue;
 
-            // Verificăm că nu depășim capul per kind
+            // Check that we don't exceed the cap per kind
             int count = seen.merge(record.kind(), 1, Integer::sum);
             if (count > maxPerKind) continue;
 

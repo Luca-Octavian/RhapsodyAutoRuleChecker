@@ -14,9 +14,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Citește profilurile active din proiectul Rhapsody.
- * Detectează heurisitic dacă modelul pare să folosească ISO26262/ASIL
- * pe baza numelui profilurilor găsite.
+ * Reads active profiles from the Rhapsody project.
+ * Heuristically detects whether the model appears to use ISO26262/ASIL
+ * based on the names of the discovered profiles.
  */
 public final class ProfileDetector {
 
@@ -32,7 +32,7 @@ public final class ProfileDetector {
                 String name = profile.getName();
                 if (name != null && !name.trim().isEmpty()) {
                     names.add(name);
-                    // Folosim SuggestionsService.isAsilProfileName pentru consistenta
+                    // Use SuggestionsService.isAsilProfileName for consistency
                     if (SuggestionsService.isAsilProfileName(name)) {
                         asilHints = true;
                     }

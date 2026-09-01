@@ -212,6 +212,30 @@ public final class HoverInfoProvider {
                 "The ElementKind values that the element is allowed to have when its owner "
                 + "has the specified stereotype. At least one must be selected.",
                 "e.g. PORT_FLOW for Logical blocks, PORT for Technical blocks");
+
+        // ── Rule params: UniqueName ──────────────────────────────────────────
+        put("rule.params.uniqueName.info", "Unique Name",
+                "Flags elements that share the same name under the same owner. "
+                + "No parameters needed — all sibling elements with duplicate names "
+                + "will be reported as violations.");
+
+        // ── Rule params: ChildCount ──────────────────────────────────────────
+        put("rule.params.childCount.childKind", "Child Kind",
+                "Which type of child element to count. Select an ElementKind from the "
+                + "dropdown (e.g. PORT_FLOW, BLOCK, PART). The rule counts children "
+                + "of this specific kind owned by the candidate element.",
+                "e.g. PORT_FLOW");
+        put("rule.params.childCount.minCount", "Minimum Count",
+                "The minimum number of children of the specified kind that the element "
+                + "must have. If the actual count is less than this, the rule fails.",
+                "e.g. 1");
+
+        // ── Rule params: MaxDepth ────────────────────────────────────────────
+        put("rule.params.maxDepth.maxDepth", "Maximum Depth",
+                "The maximum allowed number of :: separators in the element's owner path. "
+                + "Elements nested deeper than this threshold will be flagged. "
+                + "For example, a path 'A::B::C::D' has 3 separators.",
+                "e.g. 5");
     }
 
     public static FieldHelp get(String key) {

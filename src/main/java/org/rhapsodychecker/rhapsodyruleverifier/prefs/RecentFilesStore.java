@@ -5,11 +5,11 @@ import java.util.*;
 import java.util.prefs.Preferences;
 
 /**
- * Retine ultimele N cai folosite (modele .rpyx si config-uri .yaml),
- * per utilizator curent, fara nevoie de drepturi de administrator.
+ * Stores the last N paths used (models .rpyx and configs .yaml),
+ * per current user, without requiring administrator privileges.
  *
- * IMPORTANT: foloseste userNodeForPackage (HKEY_CURRENT_USER pe Windows),
- * NU systemNodeForPackage (HKEY_LOCAL_MACHINE, ar necesita admin).
+ * IMPORTANT: uses userNodeForPackage (HKEY_CURRENT_USER on Windows),
+ * NOT systemNodeForPackage (HKEY_LOCAL_MACHINE, would require admin).
  */
 public final class RecentFilesStore {
 
@@ -19,12 +19,12 @@ public final class RecentFilesStore {
     private static final String KEY_RECENT_CONFIGS = "recentConfigs";
     private static final String KEY_LAST_MODEL_TS   = "lastModelTimestamp_";
 
-    private static final String ENTRY_SEPARATOR = "\u001F"; // caracter de control, sigur ca separator
+    private static final String ENTRY_SEPARATOR = "\u001F"; // control character, safe as separator
 
     private final Preferences prefs;
 
     public RecentFilesStore() {
-        // userNodeForPackage = per-utilizator curent, fara admin necesar
+        // userNodeForPackage = per current user, no admin required
         this.prefs = Preferences.userNodeForPackage(RecentFilesStore.class);
     }
 
@@ -56,9 +56,8 @@ public final class RecentFilesStore {
 
 
     /**
-     * Salveaza lastModified-ul fisierului .rpyx la momentul ultimei scanari reusite.
-     * Folosit ulterior de ModelFreshnessChecker pentru a decide daca mai e nevoie
-     * de o reconectare/rescanare completa, sau daca fisierul e neschimbat.
+     * Saves the lastModified timestamp of the .rpyx file at the time of the last successful scan.
+     * Used later to decide whether a full reconnect/rescan is needed, or if the file is unchanged.
      */
     public void recordModelTimestamp(String modelPath, long lastModifiedAtScanTime) {
         prefs.putLong(KEY_LAST_MODEL_TS + hashKey(modelPath), lastModifiedAtScanTime);
@@ -79,11 +78,11 @@ public final class RecentFilesStore {
         if (path == null || path.trim().isEmpty()) return;
 
         List<String> current = new ArrayList<>(readList(key));
-        // Elimina duplicat daca exista deja (indiferent de pozitie), apoi il pune primul
+        // Remove duplicate if it already exists (regardless of position), then put it first
         current.removeIf(existing -> existing.equalsIgnoreCase(path));
         current.add(0, path);
 
-        // Pastreaza doar primele MAX_ENTRIES
+        // Keep only the first MAX_ENTRIES
         List<String> trimmed = current.size() > MAX_ENTRIES
                 ? current.subList(0, MAX_ENTRIES)
                 : current;
@@ -91,7 +90,7 @@ public final class RecentFilesStore {
         prefs.put(key, String.join(ENTRY_SEPARATOR, trimmed));
     }
 
-    /** Cheie stabila si scurta pentru Preferences, derivata din calea completa. */
+    /** Stable and short key for Preferences, derived from the full path. */
     private static String hashKey(String path) {
         return Integer.toHexString(path.hashCode());
     }

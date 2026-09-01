@@ -19,6 +19,9 @@ public final class RuleParamPanelFactory {
         REGISTRY.put(RuleType.RELATION_EXISTS, RelationExistsPanel::new);
         REGISTRY.put(RuleType.OWNER_STEREOTYPE_CONSTRAINT, OwnerStereotypeConstraintPanel::new);
         REGISTRY.put(RuleType.FLOW_PROPERTY_CONSTRAINT, FlowPropertyConstraintPanel::new);
+        REGISTRY.put(RuleType.UNIQUE_NAME, UniqueNamePanel::new);
+        REGISTRY.put(RuleType.CHILD_COUNT, ChildCountPanel::new);
+        REGISTRY.put(RuleType.MAX_DEPTH, MaxDepthPanel::new);
 
         for (RuleType t : RuleType.values()) {
             if (!REGISTRY.containsKey(t)) {

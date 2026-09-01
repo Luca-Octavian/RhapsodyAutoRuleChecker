@@ -8,8 +8,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Agregarea tuturor rezultatelor din faza de fast scan (startup).
- * Conține statistici in-memory + rezultate ProfileDetector + PortProbeService.
+ * Aggregation of all results from the fast scan phase (startup).
+ * Contains in-memory statistics + ProfileDetector results + PortProbeService results.
  */
 public final class FastDetectionResult {
 

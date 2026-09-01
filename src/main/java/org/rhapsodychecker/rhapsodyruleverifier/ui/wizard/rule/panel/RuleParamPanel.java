@@ -11,5 +11,7 @@ public interface RuleParamPanel {
     default String validationMessage() { return null; }
     default void updateValidationMarkers() {}
     default boolean usesTargetSpec() { return false; }
+    /** Whether this rule type uses an element set (appliesTo). Return false to hide it in the wizard. */
+    default boolean usesElementSet() { return true; }
     default JTextField liveValidationField() { return null; }
 }

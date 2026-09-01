@@ -10,7 +10,7 @@ import javax.swing.*;
 import java.awt.*;
 
 /**
- * Pasul 4: adăugare / editare / ștergere reguli.
+ * Step 2: add / edit / delete rules.
  */
 public final class RuleStepPanel extends JPanel {
 

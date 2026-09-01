@@ -48,6 +48,7 @@ public final class RuleDialog extends JDialog {
     private final JComboBox<RuleType> typeCombo =
             new JComboBox<RuleType>(RuleType.values());
     private final JComboBox<String> setCombo = new JComboBox<String>();
+    private JComponent setComboLabel;
     private final JTextField messageField = new JTextField(40);
     private final JComboBox<String> groupCombo = new JComboBox<String>();
 
@@ -114,7 +115,7 @@ public final class RuleDialog extends JDialog {
 
         setCombo.addItem("");
         for (ElementSetDefinition set : state.sets()) setCombo.addItem(set.id());
-        RuleFormLayout.addRow(panel, gbc, row++, "Applies To Set",
+        setComboLabel = addTargetRow(panel, gbc, row++, "Applies To Set",
                 "rule.appliesToSet", setCombo);
 
         targetKindLabel = addTargetRow(panel, gbc, row++, "Target:",
@@ -215,6 +216,11 @@ public final class RuleDialog extends JDialog {
     }
 
     private void updateTargetVisibility() {
+        boolean elementSetVisible = parameterEditor.usesElementSet();
+        setVisible(setComboLabel, elementSetVisible);
+        setVisible(setCombo, elementSetVisible);
+        if (!elementSetVisible) setCombo.setSelectedItem("");
+
         boolean targetRequired = parameterEditor.usesTargetSpec();
         boolean taggedValue = targetRequired
                 && targetKind.getSelectedItem() == AliasKind.TAGGED_VALUE;

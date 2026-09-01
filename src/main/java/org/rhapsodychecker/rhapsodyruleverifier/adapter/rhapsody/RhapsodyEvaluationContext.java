@@ -20,6 +20,9 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
     // Cache relation info per element GUID to avoid repeated lookups
     private final Map<String, List<ResolvedRelation>> relationCache = new HashMap<>();
 
+    // Lazily-built ownerGuid → children index for UniqueNameRule / ChildCountRule
+    private Map<String, List<ElementRecord>> childrenByOwner;
+
     public RhapsodyEvaluationContext(RhapsodyAliasResolver aliasResolver,
                                      RhapsodyModelSnapshot snapshot,
                                      ElementIndex index,
@@ -92,6 +95,20 @@ public final class RhapsodyEvaluationContext implements EvaluationContext {
     public Optional<ElementRecord> findElementByGuid(String guid) {
         if (guid == null || guid.isEmpty()) return Optional.empty();
         return index.repository().get(guid);
+    }
+
+    @Override
+    public List<ElementRecord> findElementsByOwnerGuid(String ownerGuid) {
+        if (ownerGuid == null || ownerGuid.isEmpty()) return Collections.emptyList();
+        if (childrenByOwner == null) {
+            childrenByOwner = new HashMap<>();
+            for (ElementRecord r : index.repository().allRecords()) {
+                r.ownerGuid().ifPresent(og ->
+                    childrenByOwner.computeIfAbsent(og, k -> new ArrayList<>()).add(r));
+            }
+        }
+        List<ElementRecord> result = childrenByOwner.get(ownerGuid);
+        return result != null ? result : Collections.<ElementRecord>emptyList();
     }
 
     // ---- Cached relation lookup ----

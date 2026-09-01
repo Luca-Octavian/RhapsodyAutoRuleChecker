@@ -204,6 +204,9 @@ The application supports these rule types:
 - `RELATION_EXISTS`
 - `OWNER_STEREOTYPE_CONSTRAINT`
 - `FLOW_PROPERTY_CONSTRAINT`
+- `UNIQUE_NAME`
+- `CHILD_COUNT`
+- `MAX_DEPTH`
 
 ### `REQUIRED_VALUE`
 
@@ -436,6 +439,87 @@ Available blocks:
 | `initialValue` | `required`, `mustBeEmpty`, `allowed`, `caseSensitive` | Requires an initial value, requires it to be empty, or limits allowed initial values. Use either `required` or `mustBeEmpty`, not both. |
 | `direction` | `required`, `allowed`, `caseSensitive` | Requires a direction and optionally limits it to `In`, `Out`, and `Bidirectional`. |
 
+### `UNIQUE_NAME`
+
+Checks that no two sibling elements (elements with the same owner) share the same name.
+
+This rule does not require an `appliesTo` scope. It runs against all elements in the model automatically.
+
+```yaml
+type: UNIQUE_NAME
+```
+
+No parameters are required. The rule compares every element's name against its siblings under the same owner and flags duplicates.
+
+Custom failure messages can use `{elementName}` and `{count}` placeholders.
+
+```yaml
+rules:
+  - id: no-duplicate-names
+    type: UNIQUE_NAME
+    title: Elements must have unique names among siblings
+    message: "'{elementName}' appears {count} times under the same owner."
+```
+
+### `CHILD_COUNT`
+
+Checks that an element has at least a given number of children of a specific element kind.
+
+```yaml
+type: CHILD_COUNT
+appliesTo:
+  set: InterfaceBlocks
+params:
+  child_kind: PORT_FLOW
+  min_count: 1
+```
+
+| Field | Required | Default | Description |
+| --- | --- | --- | --- |
+| `child_kind` | Yes | | The `ElementKind` to count among the element's children (for example `PORT_FLOW`, `PORT_PROXY`, `BLOCK`). |
+| `min_count` | No | `1` | Minimum number of matching children required. |
+
+Custom failure messages can use `{elementName}`, `{count}`, `{minCount}`, and `{childKind}` placeholders.
+
+```yaml
+rules:
+  - id: interface-block-has-flow-port
+    type: CHILD_COUNT
+    title: InterfaceBlocks must have at least one FlowPort
+    appliesTo:
+      set: InterfaceBlocks
+    params:
+      child_kind: PORT_FLOW
+      min_count: 1
+```
+
+### `MAX_DEPTH`
+
+Checks that an element's package nesting depth does not exceed a threshold. Depth is measured by counting `::` separators in the element's owner path.
+
+This rule does not require an `appliesTo` scope. It runs against all elements in the model automatically.
+
+```yaml
+type: MAX_DEPTH
+params:
+  max_depth: 5
+```
+
+| Field | Required | Default | Description |
+| --- | --- | --- | --- |
+| `max_depth` | No | `5` | Maximum allowed number of `::` separators in the element's owner path. |
+
+Custom failure messages can use `{elementName}`, `{depth}`, and `{maxDepth}` placeholders.
+
+```yaml
+rules:
+  - id: nesting-limit
+    type: MAX_DEPTH
+    title: Elements must not be nested more than 5 levels deep
+    params:
+      max_depth: 5
+```
+
 ## Validation rules
 
 The application validates configuration structure before evaluation.
@@ -500,6 +584,36 @@ These examples describe how to create common rules without editing YAML.
 6. Choose `outgoing` as the direction.
 7. Set the count to **At least** `1`.
 8. Save the rule and configuration.
+
+### Detect duplicate sibling names
+
+1. Load the model and click **New Config (Wizard)**.
+2. Go to **Rules** and click **Add Rule**.
+3. Set the rule ID to `no-duplicate-names`.
+4. Choose `UNIQUE_NAME`.
+5. No element set or parameters are needed.
+6. Save the rule, then review and save the configuration.
+
+### Require at least one FlowPort on InterfaceBlocks
+
+1. Create an element set named `InterfaceBlocks`.
+2. Select the `INTERFACE_BLOCK` kind.
+3. Add a rule with ID `interface-block-has-flow-port`.
+4. Choose `CHILD_COUNT`.
+5. Select the `InterfaceBlocks` set.
+6. Set **Child Kind** to `PORT_FLOW`.
+7. Set **Minimum Count** to `1`.
+8. Save the rule and configuration.
+
+### Limit package nesting depth
+
+1. Load the model and click **New Config (Wizard)**.
+2. Go to **Rules** and click **Add Rule**.
+3. Set the rule ID to `nesting-limit`.
+4. Choose `MAX_DEPTH`.
+5. No element set is needed.
+6. Set **Maximum Depth** to `5` (or your preferred limit).
+7. Save the rule and configuration.
 
 ### Require FlowProperty type and direction
 

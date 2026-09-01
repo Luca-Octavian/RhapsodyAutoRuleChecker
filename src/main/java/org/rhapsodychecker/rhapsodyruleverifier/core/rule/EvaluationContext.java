@@ -5,6 +5,8 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl.RelationExistsRule.RelationQuery;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -28,4 +30,12 @@ public interface EvaluationContext {
      */
     Optional<Object> getOption(String key);
     Optional<ElementRecord> findElementByGuid(String guid);
+
+    /**
+     * Find all elements whose ownerGuid matches the given GUID.
+     * Used by rules that need sibling/child lookups (e.g. UniqueNameRule, ChildCountRule).
+     */
+    default List<ElementRecord> findElementsByOwnerGuid(String ownerGuid) {
+        return Collections.emptyList();
+    }
 }

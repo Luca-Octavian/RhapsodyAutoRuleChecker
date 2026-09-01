@@ -26,6 +26,9 @@ public final class RuleFactory {
         register(RuleType.RELATION_EXISTS,             RelationExistsRule::new);
         register(RuleType.NAMING_PATTERN,              NamingPatternRule::new);
         register(RuleType.FLOW_PROPERTY_CONSTRAINT,    FlowPropertyConstraintRule::new);
+        register(RuleType.UNIQUE_NAME,                 UniqueNameRule::new);
+        register(RuleType.CHILD_COUNT,                 ChildCountRule::new);
+        register(RuleType.MAX_DEPTH,                   MaxDepthRule::new);
     }
 
     private RuleFactory() {}

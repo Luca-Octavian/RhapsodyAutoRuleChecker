@@ -6,8 +6,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Rezultatul detecției profilurilor încărcate în proiect.
- * hasAsilHints = true dacă vreun profil conține cuvinte cheie ISO26262/ASIL.
+ * Result of detecting profiles loaded in the project.
+ * hasAsilHints = true if any profile contains ISO26262/ASIL keywords.
  */
 public final class ProfileSummary {
 

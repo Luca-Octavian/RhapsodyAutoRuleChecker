@@ -67,6 +67,10 @@ public final class RuleParameterEditor extends JPanel {
         return active != null && active.usesTargetSpec();
     }
 
+    public boolean usesElementSet() {
+        return active == null || active.usesElementSet();
+    }
+
     public JTextField liveValidationField() {
         return active == null ? null : active.liveValidationField();
     }

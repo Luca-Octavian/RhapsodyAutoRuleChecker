@@ -13,13 +13,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Converteste un RuleCheckerConfig existent → WizardState.
- * Folosit de "Edit in Wizard" pentru a pre-popula wizard-ul
- * dintr-un YAML incarcat anterior.
+ * Converts an existing RuleCheckerConfig into a WizardState.
+ * Used by "Edit in Wizard" to pre-populate the wizard
+ * from a previously loaded YAML file.
  *
- * Daca FastDetectionResult e disponibil, marcheaza in warnings
- * elementele care nu sunt detectate in modelul curent.
- * Daca nu e disponibil (model neîncarcat), importa totul fara validare.
+ * If a FastDetectionResult is available, marks warnings for
+ * elements that are not detected in the current model.
+ * If not available (model not loaded), imports everything without validation.
  */
 public final class ConfigToWizardStateMapper {
 

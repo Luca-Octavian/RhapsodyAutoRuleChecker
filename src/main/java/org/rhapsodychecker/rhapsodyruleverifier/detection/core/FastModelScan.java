@@ -11,19 +11,19 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Scanare rapidă, zero apeluri native.
- * Agregează statistici din lista de ElementRecord deja încărcată în memorie.
- * Rulează instant, indiferent de mărimea modelului.
+ * Fast scan with zero native calls.
+ * Aggregates statistics from the list of ElementRecord already loaded in memory.
+ * Runs instantly, regardless of model size.
  */
 public final class FastModelScan {
 
-    // Limitează numărul de owner paths stocate pentru a nu umple memoria
+    // Limits the number of stored owner paths to avoid filling memory
     private static final int MAX_OWNER_PATHS = 500;
 
     /**
-     * @param allRecords lista completă de ElementRecord din snapshot
-     * @param profile    rezultatul ProfileDetector (citit separat)
-     * @param ports      rezultatul PortProbeService (eșantion porturi)
+     * @param allRecords the complete list of ElementRecord from the snapshot
+     * @param profile    the ProfileDetector result (read separately)
+     * @param ports      the PortProbeService result (port sample)
      */
     public FastDetectionResult scan(
             List<ElementRecord> allRecords,
@@ -35,23 +35,23 @@ public final class FastModelScan {
                 .filter(r -> r.description().isPresent())
                 .count();
 
-        // Numărăm câte elemente există per metaClass (ex: "Class"->131, "Port"->44)
+        // Count how many elements exist per metaClass (e.g., "Class"->131, "Port"->44)
         Map<String, Long> byMeta = allRecords.stream()
                 .map(ElementRecord::metaClass)
                 .filter(Objects::nonNull)
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
-        // Numărăm frecvența fiecărui stereotip (ex: "Block"->120, "ASIL_A"->15)
+        // Count the frequency of each stereotype (e.g., "Block"->120, "ASIL_A"->15)
         Map<String, Long> byStereo = allRecords.stream()
                 .flatMap(r -> r.stereotypes().stream())
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
-        // Numărăm per ElementKind (ex: "BLOCK"->120, "PORT_FLOW"->30)
+        // Count per ElementKind (e.g., "BLOCK"->120, "PORT_FLOW"->30)
         Map<String, Long> byKind = allRecords.stream()
                 .map(r -> r.kind().name())
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
-        // Primele N owner paths — utile pentru sugestii includePackages/excludePackages
+        // First N owner paths — useful for includePackages/excludePackages suggestions
         Set<String> topOwners = allRecords.stream()
                 .map(r -> r.ownerPath().orElse(null))
                 .filter(Objects::nonNull)

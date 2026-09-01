@@ -11,8 +11,9 @@ Download the latest release zip from the [Releases](../../releases) page. Extrac
 - `RhapsodyRuleVerifier.exe`
 - `RhapsodyRuleVerifier.l4j.ini`
 - `jre/` (bundled Java runtime)
+- `docs/` (user guide and configuration reference in HTML format)
 
-Keep all three in the same folder. Run `RhapsodyRuleVerifier.exe` to start the application. No separate Java installation is needed.
+Keep all four in the same folder. Run `RhapsodyRuleVerifier.exe` to start the application. No separate Java installation is needed.
 
 ## Before you start
 
@@ -109,7 +110,7 @@ Not all rules support auto-fix. The following rules can suggest fixes:
 | NamingPatternRule | SET_NAME | Prepends the expected prefix (startsWith) or appends the expected suffix (endsWith) |
 | FlowPropertyConstraintRule | SET_INITIAL_VALUE | Clears the initial value when the mustBeEmpty constraint is violated |
 
-Rules that involve structural changes (OwnerStereotypeConstraintRule, RelationExistsRule) do not support auto-fix. These require manual correction in Rhapsody because they involve creating or deleting elements, changing metaclasses, or modifying relations — operations that cannot be safely automated without affecting diagram layouts and model integrity.
+Rules that involve structural changes (OwnerStereotypeConstraintRule, RelationExistsRule) or model-wide analysis (UniqueNameRule, ChildCountRule, MaxDepthRule) do not support auto-fix. These require manual correction in Rhapsody because they involve creating or deleting elements, changing metaclasses, modifying relations, or restructuring the model hierarchy. These operations cannot be safely automated without affecting diagram layouts and model integrity.
 
 #### The preview dialog
 

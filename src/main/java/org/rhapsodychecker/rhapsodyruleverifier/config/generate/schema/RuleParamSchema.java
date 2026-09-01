@@ -7,11 +7,11 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Schema completă a parametrilor pentru un tip de regulă.
- * Wizard-ul o folosește pentru a randa dinamic formularul corect.
+ * Complete parameter schema for a rule type.
+ * The wizard uses it to dynamically render the correct form.
  *
- * ruleType  → tipul de regulă pentru care se aplică schema
- * fields    → lista ordonată de câmpuri pe care wizard-ul le afișează
+ * ruleType - the rule type this schema applies to
+ * fields   - ordered list of fields the wizard displays
  */
 public final class RuleParamSchema {
 
@@ -26,7 +26,7 @@ public final class RuleParamSchema {
     public RuleType        ruleType() { return ruleType; }
     public List<FieldSpec> fields()   { return fields; }
 
-    /** Shortcut: returnează doar câmpurile obligatorii. */
+    /** Shortcut: returns only the required fields. */
     public List<FieldSpec> requiredFields() {
         return fields.stream()
                 .filter(FieldSpec::required)

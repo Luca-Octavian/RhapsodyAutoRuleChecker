@@ -4,16 +4,17 @@ package org.rhapsodychecker.rhapsodyruleverifier.config.generate.schema;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * Registru singleton al schemelor de parametri per tip de regulă.
+ * Singleton registry of parameter schemas per rule type.
  *
- * Wizard-ul apelează getSchema(ruleType) și primește lista de câmpuri
- * pe care trebuie să le afișeze utilizatorului.
+ * The wizard calls getSchema(ruleType) and receives the list of fields
+ * it needs to display to the user.
  *
- * Schemele reflectă exact parametrii acceptați de implementările Rule:
+ * The schemas mirror the exact parameters accepted by the Rule implementations:
  *   RequiredValueRule, RequiredStereotypeRule, RequiredStereotypeOneOfRule,
  *   RelationExistsRule, OwnerStereotypeConstraintRule, NamingPatternRule,
  *   FlowPropertyConstraintRule.
@@ -33,6 +34,9 @@ public final class RuleParamSchemaRegistry {
         schemas.put(RuleType.OWNER_STEREOTYPE_CONSTRAINT, buildOwnerStereotypeConstraintSchema());
         schemas.put(RuleType.NAMING_PATTERN,             buildNamingPatternSchema());
         schemas.put(RuleType.FLOW_PROPERTY_CONSTRAINT,   buildFlowPropertyConstraintSchema());
+        schemas.put(RuleType.UNIQUE_NAME,                buildUniqueNameSchema());
+        schemas.put(RuleType.CHILD_COUNT,                buildChildCountSchema());
+        schemas.put(RuleType.MAX_DEPTH,                  buildMaxDepthSchema());
     }
 
     public static RuleParamSchemaRegistry getInstance() { return INSTANCE; }
@@ -282,6 +286,60 @@ public final class RuleParamSchemaRegistry {
                         .fieldType(FieldType.BOOLEAN)
                         .required(false)
                         .defaultValue("true")
+                        .build()
+        ));
+    }
+
+    // -------------------------------------------------------------------------
+    // FlowPropertyConstraint
+    // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // UniqueName
+    // -------------------------------------------------------------------------
+
+    private RuleParamSchema buildUniqueNameSchema() {
+        return new RuleParamSchema(RuleType.UNIQUE_NAME, Collections.<FieldSpec>emptyList());
+    }
+
+    // -------------------------------------------------------------------------
+    // ChildCount
+    // -------------------------------------------------------------------------
+
+    private RuleParamSchema buildChildCountSchema() {
+        return new RuleParamSchema(RuleType.CHILD_COUNT, Arrays.asList(
+
+                FieldSpec.builder()
+                        .paramKey("child_kind")
+                        .label("Child element kind to count")
+                        .fieldType(FieldType.KIND_SELECT)
+                        .required(true)
+                        .suggestionsSource(FieldSpec.SuggestionsSource.ELEMENT_KINDS)
+                        .build(),
+
+                FieldSpec.builder()
+                        .paramKey("min_count")
+                        .label("Minimum required children")
+                        .fieldType(FieldType.NUMBER)
+                        .required(true)
+                        .defaultValue("1")
+                        .build()
+        ));
+    }
+
+    // -------------------------------------------------------------------------
+    // MaxDepth
+    // -------------------------------------------------------------------------
+
+    private RuleParamSchema buildMaxDepthSchema() {
+        return new RuleParamSchema(RuleType.MAX_DEPTH, Arrays.asList(
+
+                FieldSpec.builder()
+                        .paramKey("max_depth")
+                        .label("Maximum allowed nesting depth (:: separators)")
+                        .fieldType(FieldType.NUMBER)
+                        .required(true)
+                        .defaultValue("5")
                         .build()
         ));
     }

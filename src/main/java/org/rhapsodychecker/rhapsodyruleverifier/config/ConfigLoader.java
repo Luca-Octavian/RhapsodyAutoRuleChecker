@@ -135,7 +135,8 @@ public final class ConfigLoader {
                     appliesToExcludePkgs = optStringList(appliesTo, "excludePackages");
                 }
 
-                if (appliesToSet == null && appliesToTypes.isEmpty() && appliesToStereotypes.isEmpty()) {
+                if (appliesToSet == null && appliesToTypes.isEmpty() && appliesToStereotypes.isEmpty()
+                        && type.requiresAppliesTo()) {
                     errors.add(label + ": appliesTo must specify a set or at least types/stereotypes");
                     continue;
                 }

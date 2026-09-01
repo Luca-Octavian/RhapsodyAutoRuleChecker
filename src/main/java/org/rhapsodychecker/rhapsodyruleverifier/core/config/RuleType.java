@@ -10,7 +10,25 @@ public enum RuleType {
     NAMING_PATTERN,
     RELATION_EXISTS,
     OWNER_STEREOTYPE_CONSTRAINT,
-    FLOW_PROPERTY_CONSTRAINT;
+    FLOW_PROPERTY_CONSTRAINT,
+    UNIQUE_NAME,
+    CHILD_COUNT,
+    MAX_DEPTH;
+
+    /**
+     * Whether this rule type requires an appliesTo specification.
+     * Rules that operate on ALL elements globally (e.g. UniqueNameRule, MaxDepthRule)
+     * do not require an element set.
+     */
+    public boolean requiresAppliesTo() {
+        switch (this) {
+            case UNIQUE_NAME:
+            case MAX_DEPTH:
+                return false;
+            default:
+                return true;
+        }
+    }
 
     public static RuleType fromString(String value) {
         if (value == null || value.trim().isEmpty()) {
@@ -31,9 +49,15 @@ public enum RuleType {
             case "owner_stereotype_constraint": return OWNER_STEREOTYPE_CONSTRAINT;
             case "flowpropertyconstraint":
             case "flow_property_constraint": return FLOW_PROPERTY_CONSTRAINT;
+            case "uniquename":
+            case "unique_name":             return UNIQUE_NAME;
+            case "childcount":
+            case "child_count":             return CHILD_COUNT;
+            case "maxdepth":
+            case "max_depth":               return MAX_DEPTH;
             default:
                 throw new IllegalArgumentException("Unknown RuleType: '" + value + "'. "
-                        + "Allowed: RequiredValue, RequiredStereotype, RequiredStereotypeOneOf, NamingPattern, RelationExists, OwnerStereotypeConstraint, FlowPropertyConstraint");
+                        + "Allowed: RequiredValue, RequiredStereotype, RequiredStereotypeOneOf, NamingPattern, RelationExists, OwnerStereotypeConstraint, FlowPropertyConstraint, UniqueName, ChildCount, MaxDepth");
         }
     }
 }

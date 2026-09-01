@@ -10,19 +10,19 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Derivă sugestii de stereotipuri din rezultatele detecției.
- * Logică pură — zero apeluri native, zero dependențe pe Rhapsody API.
+ * Derives stereotype suggestions from detection results.
+ * Pure logic - zero native calls, zero Rhapsody API dependencies.
  */
 public final class SuggestionsService {
 
     // ── Stereotype suggestions ────────────────────────────────────────────────
 
     /**
-     * Sugerează stereotipurile găsite pe elementele de un kind specific.
-     * Filtrat pe kind — nu returnează stereotipuri globale irelevante.
+     * Suggests stereotypes found on elements of a specific kind.
+     * Filtered by kind - does not return irrelevant global stereotypes.
      *
-     * @param kind       kind-ul pentru care vrem sugestii (ex: BLOCK)
-     * @param allRecords toate elementele din snapshot
+     * @param kind       the kind to suggest stereotypes for (e.g. BLOCK)
+     * @param allRecords all element records from the snapshot
      */
     public List<String> suggestStereotypesForKind(
             ElementKind         kind,
@@ -39,8 +39,8 @@ public final class SuggestionsService {
     }
 
     /**
-     * Sugestii pentru porturi directed (PORT_FLOW + PORT_PROXY combinate).
-     * Utile pentru wizard cand userul configureaza reguli pe porturi cu directie.
+     * Suggestions for directed ports (PORT_FLOW + PORT_PROXY combined).
+     * Useful for the wizard when the user configures rules on ports with direction.
      */
     public List<String> suggestStereotypesForDirectedPorts(List<ElementRecord> allRecords) {
         return allRecords.stream()
@@ -57,8 +57,8 @@ public final class SuggestionsService {
     // ── Tag value suggestions ─────────────────────────────────────────────────
 
     /**
-     * Sugerează valorile observate pentru un tag specific.
-     * Folosit la RequiredValue cu operator in/not_in.
+     * Suggests observed values for a specific tag.
+     * Used by RequiredValue with operator in/not_in.
      */
     public List<String> suggestValuesForTag(String tagName, TagDiscoveryResult tags) {
         return new ArrayList<>(tags.valuesFor(tagName));
@@ -67,8 +67,8 @@ public final class SuggestionsService {
     // ── ElementKind suggestions ───────────────────────────────────────────────
 
     /**
-     * Returnează toate ElementKind-urile ca strings.
-     * Folosit pentru OwnerStereotypeConstraint → allowedKinds.
+     * Returns all ElementKind values as strings.
+     * Used by OwnerStereotypeConstraint for allowedKinds.
      */
     public List<String> availableElementKinds() {
         return Arrays.stream(ElementKind.values())
@@ -79,8 +79,8 @@ public final class SuggestionsService {
     // ── ProfileDetector fix helper ────────────────────────────────────────────
 
     /**
-     * Verifica daca un profil sugereaza context de safety/ASIL.
-     * Folosit de ProfileDetector — separat aici pentru testabilitate.
+     * Checks whether a profile name suggests a safety/ASIL context.
+     * Used by ProfileDetector - separated here for testability.
      */
     public static boolean isAsilProfileName(String name) {
         if (name == null) return false;

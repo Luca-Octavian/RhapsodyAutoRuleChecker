@@ -8,9 +8,9 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
- * Toate tag-urile găsite pe elementele scanate, cu valorile lor observate.
- * Ex: { "ASIL" -> ["QM","A","B"], "Description" -> ["", "text..."] }
- * Folosit de SuggestionsService pentru a ghici alias-urile potrivite.
+ * All tags found on scanned elements, with their observed values.
+ * E.g.: { "ASIL" -> ["QM","A","B"], "Description" -> ["", "text..."] }
+ * Used by SuggestionsService to guess the appropriate aliases.
  */
 public final class TagDiscoveryResult {
 

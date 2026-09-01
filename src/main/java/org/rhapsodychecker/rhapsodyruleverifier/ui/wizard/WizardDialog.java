@@ -15,11 +15,11 @@ import java.io.File;
 import java.util.Optional;
 
 /**
- * Dialog modal cu 3 pași (CardLayout) pentru configurarea regulilor.
- * Acceptă un WizardState pre-populat (edit) sau null (new config).
+ * Modal dialog with 3 steps (CardLayout) for rule configuration.
+ * Accepts a pre-populated WizardState (edit) or null (new config).
  *
- * După închidere, getSavedConfigPath() returnează calea YAML salvată
- * dacă user-ul a finalizat, sau Optional.empty() dacă a anulat.
+ * After closing, getSavedConfigPath() returns the saved YAML path
+ * if the user completed the wizard, or Optional.empty() if cancelled.
  */
 public final class WizardDialog extends JDialog {
 
@@ -62,7 +62,7 @@ public final class WizardDialog extends JDialog {
         setResizable(true);
         AppTheme.guardMinimumSize(this, new Dimension(800, 600));
 
-        // Construieste pașii
+        // Build the steps
         reviewPanel = new ReviewStepPanel(wizardState);
 
         cardPanel.add(new ElementSetStepPanel(wizardState, fast),    STEP_SETS);
@@ -95,7 +95,7 @@ public final class WizardDialog extends JDialog {
         headerPanel.add(stepLabel);
         add(headerPanel, BorderLayout.NORTH);
 
-        // ── Conținut pași ─────────────────────────────────────────────────────
+        // ── Step content ─────────────────────────────────────────────────────
         add(cardPanel, BorderLayout.CENTER);
 
         // ── Navigare ──────────────────────────────────────────────────────────

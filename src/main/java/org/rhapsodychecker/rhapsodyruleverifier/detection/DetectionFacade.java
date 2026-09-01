@@ -14,11 +14,11 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * Punct unic de intrare pentru toate operațiile de detecție.
+ * Single entry point for all detection operations.
  *
- * Strategia de cost:
- *   fastScan()         → rulează la startup, instant (zero apeluri native grele)
- *   discoverTags()     → on-demand, scoped la kind/scope selectat în wizard
+ * Cost strategy:
+ *   fastScan()         - runs at startup, instant (zero heavyweight native calls)
+ *   discoverTags()     - on-demand, scoped to the kind/scope selected in the wizard
  */
 public final class DetectionFacade {
 
@@ -43,12 +43,12 @@ public final class DetectionFacade {
     }
 
     // ------------------------------------------------------------------
-    // FAZA 1 — startup, rulează în SwingWorker pentru a nu bloca UI-ul
+    // PHASE 1 - startup, runs in a SwingWorker to avoid blocking the UI
     // ------------------------------------------------------------------
 
     /**
-     * Scanare rapidă la încărcarea modelului.
-     * Apelurile native sunt limitate la: citire profiluri + probe N porturi.
+     * Fast scan at model load time.
+     * Native calls are limited to: profile reading + probing N ports.
      */
     public FastDetectionResult fastScan(
             List<ElementRecord>          allRecords,
@@ -68,12 +68,12 @@ public final class DetectionFacade {
     }
 
     // ------------------------------------------------------------------
-    // FAZA 2 — on-demand, când utilizatorul intră pe un pas din wizard
+    // PHASE 2 - on-demand, when the user enters a wizard step
     // ------------------------------------------------------------------
 
     /**
-     * Descoperă tag-urile pentru un scope arbitrar.
-     * Rulează în SwingWorker — nu apela de pe EDT.
+     * Discovers tags for an arbitrary scope.
+     * Runs in a SwingWorker - do not call from the EDT.
      */
     public TagDiscoveryResult discoverTags(
             List<ElementRecord>          allRecords,
@@ -83,7 +83,7 @@ public final class DetectionFacade {
         return tagDiscoveryService.discover(allRecords, scopeFilter, handleByGuid);
     }
 
-    /** Shortcut: descoperă tag-uri doar pentru un ElementKind specific. */
+    /** Shortcut: discovers tags for a specific ElementKind only. */
     public TagDiscoveryResult discoverTagsForKind(
             List<ElementRecord>          allRecords,
             ElementKind                  kind,
@@ -93,11 +93,11 @@ public final class DetectionFacade {
     }
 
     // ------------------------------------------------------------------
-    // FAZA 3 — logică pură, fără apeluri native
+    // PHASE 3 - pure logic, no native calls
     // ------------------------------------------------------------------
 
     // ------------------------------------------------------------------
-    // Factory pentru wiring implicit
+    // Factory for implicit wiring
     // ------------------------------------------------------------------
 
     public static DetectionFacade create(PortProbeService portProbeService) {

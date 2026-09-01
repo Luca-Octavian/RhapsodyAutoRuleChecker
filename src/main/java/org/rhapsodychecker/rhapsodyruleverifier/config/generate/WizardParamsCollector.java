@@ -9,12 +9,12 @@ import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 import java.util.*;
 
 /**
- * Validează params colectați din UI față de schema regulii alese.
+ * Validates parameters collected from the UI against the chosen rule's schema.
  *
- * Utilizare:
+ * Usage:
  *   ValidationResult result = WizardParamsCollector.validate(RuleType.REQUIRED_VALUE, params);
- *   if (result.isValid()) { // construiește RuleRequest }
- *   else { // afișează result.errors() în UI }
+ *   if (result.isValid()) { // build the RuleRequest }
+ *   else { // display result.errors() in the UI }
  */
 public final class WizardParamsCollector {
 
@@ -35,7 +35,7 @@ public final class WizardParamsCollector {
             validateFieldValue(field, value, errors);
         }
 
-        // Validări cross-field per tip de regulă
+        // Cross-field validation per rule type
         validateCrossFields(ruleType, params, errors);
 
         return new ValidationResult(errors);

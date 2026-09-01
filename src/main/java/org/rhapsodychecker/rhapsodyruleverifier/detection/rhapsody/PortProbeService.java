@@ -15,12 +15,12 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
- * Eșantionează porturi și testează rezolvabilitatea proprietăților
- * type/direction/multiplicity prin RhapsodyPortInfoResolver.
+ * Samples ports and tests the resolvability of type/direction/multiplicity
+ * properties via RhapsodyPortInfoResolver.
  *
- * Porturi directed (PORT_FLOW + PORT_PROXY): au direction, pot avea type.
- * Porturi standard (PORT): de obicei fara direction/type explicit.
- * Probe-ul e separat ca wizard-ul sa stie ce optiuni sa ofere per tip.
+ * Directed ports (PORT_FLOW + PORT_PROXY): have direction, may have type.
+ * Standard ports (PORT): usually without explicit direction/type.
+ * The probe is separate so the wizard knows which options to offer per type.
  */
 public final class PortProbeService {
 
@@ -61,7 +61,7 @@ public final class PortProbeService {
             if (sampled >= sampleLimit) break;
             sampled++;
 
-            // type: disponibil din snapshot fara apel nativ
+            // type: available from snapshot without native call
             if (port.typeName().isPresent()) {
                 okType++;
             }

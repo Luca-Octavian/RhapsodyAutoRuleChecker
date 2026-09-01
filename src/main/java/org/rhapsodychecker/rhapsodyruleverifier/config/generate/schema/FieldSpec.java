@@ -6,24 +6,24 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Descriptorul unui singur câmp din formularul wizard-ului.
+ * Descriptor for a single field in the wizard form.
  *
- * paramKey      → cheia din RuleRequest.params() (ex: "nonEmpty", "anyOf", "operator")
- * label         → eticheta afișată în UI
- * fieldType     → tipul de input randat
- * required      → dacă lipsa valorii blochează crearea regulii
- * fixedOptions  → valori fixe predefinite pentru DROPDOWN (ex: operatori, direcții)
- * suggestionsSource → de unde vine lista pentru MULTI_SELECT/SINGLE_SELECT
- *                     (ex: STEREOTYPES, TAG_VALUES, ELEMENT_KINDS)
- * defaultValue  → valoare precompletată opțional
+ * paramKey          - the key in RuleRequest.params() (e.g. "nonEmpty", "anyOf", "operator")
+ * label             - the label displayed in the UI
+ * fieldType         - the type of input control rendered
+ * required          - whether a missing value blocks rule creation
+ * fixedOptions      - predefined fixed values for DROPDOWN (e.g. operators, directions)
+ * suggestionsSource - where the list for MULTI_SELECT/SINGLE_SELECT comes from
+ *                     (e.g. STEREOTYPES, TAG_VALUES, ELEMENT_KINDS)
+ * defaultValue      - optional pre-filled value
  */
 public final class FieldSpec {
 
     public enum SuggestionsSource {
         NONE,
-        STEREOTYPES,        // din FastDetectionResult.countsByStereotype()
-        TAG_VALUES,         // din TagDiscoveryResult pentru un tag anume
-        ELEMENT_KINDS       // din ElementKind enum
+        STEREOTYPES,        // from FastDetectionResult.countsByStereotype()
+        TAG_VALUES,         // from TagDiscoveryResult for a specific tag
+        ELEMENT_KINDS       // from the ElementKind enum
     }
 
     private final String            paramKey;

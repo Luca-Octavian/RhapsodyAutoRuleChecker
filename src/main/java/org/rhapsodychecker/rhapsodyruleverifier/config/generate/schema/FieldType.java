@@ -2,15 +2,15 @@
 package org.rhapsodychecker.rhapsodyruleverifier.config.generate.schema;
 
 /**
- * Tipul de input pe care wizard-ul trebuie să îl randeze pentru un câmp.
+ * The type of input control the wizard renders for a field.
  *
- * TEXT          → input text liber (ex: pattern regex, mesaj custom)
- * NUMBER        → input numeric natural (ex: minLength, minValue)
- * BOOLEAN       → checkbox (ex: nonEmpty, passIfAbsent)
- * DROPDOWN      → selecție dintr-o listă fixă predefinită (ex: operator, direction)
- * MULTI_SELECT  → checkboxuri multiple din sugestii detectate (ex: anyOf, requiredStereotypes)
- * SINGLE_SELECT → radio/dropdown din sugestii detectate (ex: ownerStereotype)
- * KIND_SELECT   → selecție din ElementKind enum (ex: allowedKinds)
+ * TEXT          - free text input (e.g. regex pattern, custom message)
+ * NUMBER        - natural number input (e.g. minLength, minValue)
+ * BOOLEAN       - checkbox (e.g. nonEmpty, passIfAbsent)
+ * DROPDOWN      - selection from a predefined fixed list (e.g. operator, direction)
+ * MULTI_SELECT  - multiple checkboxes from detected suggestions (e.g. anyOf, requiredStereotypes)
+ * SINGLE_SELECT - radio/dropdown from detected suggestions (e.g. ownerStereotype)
+ * KIND_SELECT   - selection from the ElementKind enum (e.g. allowedKinds)
  */
 public enum FieldType {
     TEXT,

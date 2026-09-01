@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * Pasul final de review:
  *  - Element Sets (text read-only)
- *  - Rules — câte un JCheckBox per regulă; debifat = disabled
+ *  - Rules — one JCheckBox per rule; unchecked = disabled
  */
 public class ReviewStepPanel extends JPanel {
 
@@ -51,7 +51,7 @@ public class ReviewStepPanel extends JPanel {
         }
     }
 
-    // ── Construcție UI ────────────────────────────────────────────────────────
+    // ── UI construction ───────────────────────────────────────────────────────
 
     private void rebuild() {
         JPanel content = new JPanel();
