@@ -1,6 +1,7 @@
 // File: src/main/java/org/rhapsodychecker/rhapsodyruleverifier/ui/MainFrame.java
 package org.rhapsodychecker.rhapsodyruleverifier.ui;
 
+import org.rhapsodychecker.rhapsodyruleverifier.prefs.RhapsodyPathSetup;
 import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
@@ -350,6 +351,7 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
         System.setProperty("sun.java2d.dpiaware", "true");
         System.setProperty("sun.java2d.uiScale.enabled", "true");
         System.setProperty("sun.java2d.d3d", "false");
+        RhapsodyPathSetup.ensureConfigured();
         AppLogger.init();
         Runtime.getRuntime().addShutdownHook(new Thread(AppLogger::close));
         AppTheme.apply();

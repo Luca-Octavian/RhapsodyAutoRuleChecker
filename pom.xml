@@ -6,11 +6,11 @@
 
   <groupId>org.rhapsodychecker</groupId>
   <artifactId>rhapsodyruleverifier</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>1.0.0</version>
 
-  <name>rhapsodyruleverifier</name>
-  <description>A simple rhapsodyruleverifier.</description>
-  <url>http://www.example.com</url>
+  <name>Rhapsody Rule Verifier</name>
+  <description>Desktop application for checking IBM Rhapsody models against YAML-defined rules.</description>
+  <url>https://github.com/Luca-Octavian/RhapsodyAutoRuleChecker</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

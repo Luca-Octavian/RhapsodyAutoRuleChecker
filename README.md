@@ -50,7 +50,11 @@ The application needs the Rhapsody Java API native libraries to connect to Rhaps
 C:\LegacyApp\Rhapsody_1002_64bit\Share\JavaAPI
 ```
 
-If your Rhapsody installation is in a different location, open `RhapsodyRuleVerifier.l4j.ini` in a text editor, update the path to point to your Rhapsody `Share\JavaAPI` folder, and restart the application.
+If that path is correct, the application starts normally with no extra setup.
+
+If your Rhapsody installation is in a different location, the application will automatically show a setup dialog on first launch asking you to browse to your Rhapsody `Share\JavaAPI` folder. Once selected, the path is saved in `RhapsodyRuleVerifier.l4j.ini` and you will be asked to restart. Subsequent launches will use the configured path without prompting.
+
+You can also edit `RhapsodyRuleVerifier.l4j.ini` manually if you prefer.
 
 ## Requirements
 

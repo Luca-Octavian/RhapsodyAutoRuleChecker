@@ -12,9 +12,9 @@ public enum ElementKind {
     PORT_PROXY,
     PORT_FLOW,
     PORT,           // generic port if no specific port stereotype is present
-    INTERFACE,      // optional: interface elements if you need them
-    PACKAGE,        // optional: package elements
-    REQUIREMENT,    // optional: requirement elements
+    INTERFACE,
+    PACKAGE,
+    REQUIREMENT,
 
     /**
      * Statechart / activity pseudostate (Rhapsody metaClass "Connector",

@@ -27,7 +27,7 @@ org.rhapsodychecker.rhapsodyruleverifier
       schema/               Rule parameter schemas for the wizard
   core/
     config/                 Enums: RuleType, AliasKind, ComparisonOperator, etc.
-    index/                  ElementIndex and ElementIndexBuilder
+    index/                  ElementIndex, ElementIndexBuilder, ElementRepository
     model/                  ElementRecord, ElementKind (domain model, no Rhapsody dependency)
     profiler/               PipelineProfiler, PhaseTimer, diagnostics
     progress/               LoadingStep, ProgressReporter interface
@@ -37,9 +37,12 @@ org.rhapsodychecker.rhapsodyruleverifier
     selector/               ElementSelector (scope resolution from config)
     service/                ModelLoadService, EvaluationService, ExportService, NavigationService
     util/                   ReflectiveMethodCache
-  detection/                Model detection facade, port probing, suggestions
+  detection/                Model detection facade, suggestions
+    api/                    Detection result DTOs (ProfileSummary, TagDiscoveryResult, FastDetectionResult)
+    core/                   FastModelScan
+    rhapsody/               TagDiscoveryService, PortProbeService, ProfileDetector
   export/                   ExcelReportExporter
-  fix/                      Auto-fix engine: FixAction, FixActionType, FixEntry, FixStatus, FixPlan, FixPlanJournal, FixService, FixSimulator, FixCollector, FixExecutor
+  fix/                      Auto-fix engine: FixAction, FixActionType, FixEntry, FixStatus, FixPlan, FixPlanJournal, FixService, FixSimulator, FixCollector, FixExecutor, FixProgressListener
   prefs/                    RecentFilesStore (Java Preferences API)
   ui/                       Swing UI: MainFrame, PackageTreePanel, ResultsTablePanel
     controller/             MainFrameController (all UI logic)
@@ -48,6 +51,7 @@ org.rhapsodychecker.rhapsodyruleverifier
     wizard/                 WizardDialog, ElementSetDialog, RuleDialog, ReviewStepPanel
       help/                 HoverInfoProvider, StepIndicator, CollapsibleSection
       rule/                 RuleParameterEditor, RuleFormLayout, RuleValueCodec
+        panel/              RuleParamPanel, RuleParamPanelFactory, PanelSupport, and per-type panels
 ```
 
 ## Runtime pipeline
@@ -98,21 +102,20 @@ This separation means that a different adapter (for example, reading from an exp
 
 `ElementRecord` is an immutable value object holding the normalized data for one model element: GUID, name, meta-class, `ElementKind`, owner path, owner GUID, stereotypes, description, tag values, type name, port direction, port multiplicity, initial value, and any relations and references attached during loading.
 
-`ElementKind` is an enum that classifies Rhapsody elements into application-level categories such as `BLOCK`, `INTERFACE_BLOCK`, `PART`, `PORT_STANDARD`, `PORT_FLOW`, `PORT_PROXY`, `FLOW_PROPERTY`, `REQUIREMENT`, `PACKAGE`, `INTERFACE`, `CONNECTOR`, and `STATE_CONNECTOR`. The `ElementKind` mapping is handled during loading so that rules and element sets can refer to stable kind names instead of Rhapsody's internal meta-class strings.
+`ElementKind` is an enum that classifies Rhapsody elements into application-level categories such as `BLOCK`, `INTERFACE_BLOCK`, `PART`, `PORT_FULL`, `PORT_FLOW`, `PORT_PROXY`, `PORT` (generic), `FLOW_PROPERTY`, `REQUIREMENT`, `PACKAGE`, `INTERFACE`, `STATE_CONNECTOR`, `LINK`, and `OTHER`. The `ElementKind` mapping is handled during loading so that rules and element sets can refer to stable kind names instead of Rhapsody's internal meta-class strings.
 
-### Connector, state connector, and link
+### State connector and link
 
-Rhapsody uses three distinct concepts that share the word "connector". They map to three distinct kinds:
+Rhapsody uses two distinct concepts that share the word "connector". They map to two distinct kinds:
 
-| Kind | Rhapsody metaClass | API type | Live check | Meaning |
-| --- | --- | --- | --- | --- |
-| `CONNECTOR` | `Connector` | `IRPConnector` | `getConnectorType() == "Junction"` | Junction pseudostate — this is what Rhapsody's Ctrl+F returns when searching for "Connector". |
-| `STATE_CONNECTOR` | `Connector` | `IRPConnector` | any other `getConnectorType()` | Non-junction statechart/activity pseudostate: Condition, Diagram, EnterExit, Fork, History, Join, Termination, InPin, OutPin, InOutPin. |
-| `LINK` | `Link` | `IRPLink` (extends `IRPUnit`) | `instanceof IRPLink` | Instance-level structural link joining Parts and/or Ports in an IBD. Not what Rhapsody calls a "Connector". |
+| Kind | Rhapsody metaClass | API type | Meaning |
+| --- | --- | --- | --- |
+| `STATE_CONNECTOR` | `Connector` | `IRPConnector` / `IRPStateVertex` | Statechart / activity pseudostate: Junction, Condition, Diagram, EnterExit, Fork, History, Join, Termination, InPin, OutPin, InOutPin, and merge nodes. Nothing in this bucket is a structural connector. |
+| `LINK` | `Link` | `IRPLink` (extends `IRPUnit`) | Instance-level structural link joining Parts and/or Ports in an IBD. Not what Rhapsody calls a "Connector". |
 
-Classification starts with the metaClass string in `RhapsodyModelLoader.classify()` (Link → `LINK`, Connector → `STATE_CONNECTOR`) and is then refined in `RhapsodyElementReader.refineConnectorKind()` using live `instanceof` checks and, for `IRPConnector`, `getConnectorType()`. Only Junction pseudostates are promoted to `CONNECTOR`.
+Classification starts with the metaClass string in `RhapsodyModelLoader.classify()` (Link → `LINK`, Connector → `STATE_CONNECTOR`).
 
-Only `LINK` participates in relation indexing. `CONNECTOR` and `STATE_CONNECTOR` elements are pseudostates, not relations between elements, so they are not registered in `relationsByOwner`. For links, the far endpoint is resolved via `getFromElement()`/`getToElement()` with `getFromPort()`/`getToPort()` and `getFromSysMLPort()`/`getToSysMLPort()` preferred — note that `IRPLink.getOther()` returns the *inverse link*, not the connected element, and must not be used for this.
+Only `LINK` participates in relation indexing. `STATE_CONNECTOR` elements are pseudostates, not relations between elements, so they are not registered in `relationsByOwner`. For links, the far endpoint is resolved via `getFromElement()`/`getToElement()` with `getFromPort()`/`getToPort()` and `getFromSysMLPort()`/`getToSysMLPort()` preferred — note that `IRPLink.getOther()` returns the *inverse link*, not the connected element, and must not be used for this.
 
 ## Element index
 
@@ -149,12 +152,17 @@ Every rule implements the `Rule` interface:
 ```java
 public interface Rule {
     String id();
-    String title();
+    default String title() { return id(); }
     void configure(Map<String, Object> params);
     boolean appliesTo(ElementRecord element, EvaluationContext context);
     RuleResult evaluate(ElementRecord element, EvaluationContext context);
+    default Optional<FixAction> suggestFix(ElementRecord element, EvaluationContext context) {
+        return Optional.empty();
+    }
 }
 ```
+
+Rules that support auto-fix override `suggestFix()` to return a `FixAction` describing the corrective change. The fix subsystem (`FixCollector`, `FixService`, `FixExecutor`) uses these suggestions to build and apply fix plans.
 
 `configure()` receives a map containing `ruleId`, `ruleTitle`, `ruleMessage`, `target` (for `REQUIRED_VALUE`), and a nested `params` map with rule-specific settings. Each built-in rule parses its own parameters from this map.
 
@@ -166,7 +174,7 @@ public interface Rule {
 2. Create a class implementing `Rule` under `core/rule/impl/`.
 3. Register it in the `RuleFactory` static block.
 4. Add a schema to `RuleParamSchemaRegistry` so the wizard can display its parameters.
-5. Add a case to `RuleParameterEditor.build()` for the wizard UI.
+5. Create a panel class under `ui/wizard/rule/panel/` extending `RuleParamPanel`, and register it in `RuleParamPanelFactory`.
 
 External code can also call `RuleFactory.register(type, supplier)` at startup without modifying the factory class.
 
@@ -311,7 +319,7 @@ To add a new rule type to the project:
 
 4. **Add a parameter schema.** Add a method in `RuleParamSchemaRegistry` that returns a `RuleParamSchema` for your type. This tells the wizard what fields to display.
 
-5. **Add wizard controls.** Add a case to `RuleParameterEditor.build()` to create the UI controls for the new type's parameters. Implement `buildParams()` to serialize the wizard state, `prefill()` to load existing values, and `validationMessage()` to check required fields.
+5. **Add wizard controls.** Create a panel class under `ui/wizard/rule/panel/` extending `RuleParamPanel`, and register it in `RuleParamPanelFactory`. Implement `buildParams()` to serialize the wizard state, `prefill()` to load existing values, and `validationMessage()` to check required fields.
 
 6. **Update the YAML parser if needed.** If the new type requires special parsing beyond the generic `params` map, update `ConfigLoader`.
 
