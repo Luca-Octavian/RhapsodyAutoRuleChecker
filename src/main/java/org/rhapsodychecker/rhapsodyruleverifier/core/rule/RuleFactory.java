@@ -10,47 +10,35 @@ import java.util.function.Supplier;
 /**
  * Creates configured Rule instances from RuleSpec (config).
  *
- * Uses a registry pattern: rule types are mapped to suppliers in a static
- * registry. New rule types can be added via {@link #register(RuleType, Supplier)}
- * without modifying this class (Open/Closed Principle).
+ * Uses a registry pattern: rule types are mapped to suppliers in an immutable
+ * static registry built at class-load time.
  */
 public final class RuleFactory {
 
-    private static final Map<RuleType, Supplier<Rule>> REGISTRY = new LinkedHashMap<>();
+    private static final Map<RuleType, Supplier<Rule>> REGISTRY;
 
     static {
-        register(RuleType.REQUIRED_VALUE,              RequiredValueRule::new);
-        register(RuleType.OWNER_STEREOTYPE_CONSTRAINT, OwnerStereotypeConstraintRule::new);
-        register(RuleType.REQUIRED_STEREOTYPE,         RequiredStereotypeRule::new);
-        register(RuleType.REQUIRED_STEREOTYPE_ONE_OF,  RequiredStereotypeOneOfRule::new);
-        register(RuleType.RELATION_EXISTS,             RelationExistsRule::new);
-        register(RuleType.NAMING_PATTERN,              NamingPatternRule::new);
-        register(RuleType.FLOW_PROPERTY_CONSTRAINT,    FlowPropertyConstraintRule::new);
-        register(RuleType.UNIQUE_NAME,                 UniqueNameRule::new);
-        register(RuleType.CHILD_COUNT,                 ChildCountRule::new);
-        register(RuleType.MAX_DEPTH,                   MaxDepthRule::new);
+        Map<RuleType, Supplier<Rule>> m = new LinkedHashMap<>();
+        m.put(RuleType.REQUIRED_VALUE,              RequiredValueRule::new);
+        m.put(RuleType.OWNER_STEREOTYPE_CONSTRAINT, OwnerStereotypeConstraintRule::new);
+        m.put(RuleType.REQUIRED_STEREOTYPE,         RequiredStereotypeRule::new);
+        m.put(RuleType.REQUIRED_STEREOTYPE_ONE_OF,  RequiredStereotypeOneOfRule::new);
+        m.put(RuleType.RELATION_EXISTS,             RelationExistsRule::new);
+        m.put(RuleType.NAMING_PATTERN,              NamingPatternRule::new);
+        m.put(RuleType.FLOW_PROPERTY_CONSTRAINT,    FlowPropertyConstraintRule::new);
+        m.put(RuleType.UNIQUE_NAME,                 UniqueNameRule::new);
+        m.put(RuleType.CHILD_COUNT,                 ChildCountRule::new);
+        m.put(RuleType.MAX_DEPTH,                   MaxDepthRule::new);
+        REGISTRY = Collections.unmodifiableMap(m);
     }
 
     private RuleFactory() {}
 
     /**
-     * Register a rule supplier for a given type.
-     * Can be called at startup to add custom/plugin rule types.
-     *
-     * @param type     the rule type enum value
-     * @param supplier a factory that creates a fresh (unconfigured) Rule instance
-     */
-    public static void register(RuleType type, Supplier<Rule> supplier) {
-        Objects.requireNonNull(type, "type");
-        Objects.requireNonNull(supplier, "supplier");
-        REGISTRY.put(type, supplier);
-    }
-
-    /**
-     * Returns an unmodifiable view of the currently registered rule types.
+     * Returns an unmodifiable view of the registered rule types.
      */
     public static Set<RuleType> registeredTypes() {
-        return Collections.unmodifiableSet(REGISTRY.keySet());
+        return REGISTRY.keySet();
     }
 
     /**
@@ -59,7 +47,7 @@ public final class RuleFactory {
      *
      * @throws IllegalArgumentException if no supplier is registered for the spec's type
      */
-    public static Rule createRule(RuleSpec spec) {
+    public static synchronized Rule createRule(RuleSpec spec) {
         Supplier<Rule> supplier = REGISTRY.get(spec.type());
         if (supplier == null) {
             throw new IllegalArgumentException(

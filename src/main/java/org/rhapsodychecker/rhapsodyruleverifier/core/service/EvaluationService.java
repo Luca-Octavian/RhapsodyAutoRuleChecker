@@ -91,13 +91,21 @@ public final class EvaluationService {
                                        String scopePath,
                                        boolean fromCache,
                                        ProgressReporter reporter) throws Exception {
+        RuleCheckerConfig config;
         reporter.onStepStarted(LoadingStep.LOADING_CONFIG);
-        RuleCheckerConfig config = ConfigLoader.load(Paths.get(configPath));
-        reporter.onStepCompleted(LoadingStep.LOADING_CONFIG);
+        try {
+            config = ConfigLoader.load(Paths.get(configPath));
+        } finally {
+            reporter.onStepCompleted(LoadingStep.LOADING_CONFIG);
+        }
 
+        ContextPair pair;
         reporter.onStepStarted(LoadingStep.SELECTING_ELEMENTS);
-        ContextPair pair = contextFactory.create(config, index);
-        reporter.onStepCompleted(LoadingStep.SELECTING_ELEMENTS);
+        try {
+            pair = contextFactory.create(config, index);
+        } finally {
+            reporter.onStepCompleted(LoadingStep.SELECTING_ELEMENTS);
+        }
 
         RuleEngine engine = new RuleEngine(config, pair.selector(), pair.context(), scopePath, reporter);
         List<RuleResult> results = engine.evaluateWithSummary().allResults();

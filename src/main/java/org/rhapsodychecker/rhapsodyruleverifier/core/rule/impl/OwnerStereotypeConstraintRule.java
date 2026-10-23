@@ -74,7 +74,7 @@ public final class OwnerStereotypeConstraintRule implements Rule {
             }
             return DefaultRuleResult.fail(id, element.guid(),
                     formatMessage(element));
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }

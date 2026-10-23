@@ -24,10 +24,16 @@ public final class RhapsodyModelSnapshot {
                                  Map<String, IRPModelElement> handleByGuid,
                                  Map<String, List<RelationInfo>> relationsByOwner,
                                  Map<String, List<ReferenceInfo>> referencesByElement) {
-        this.records = Objects.requireNonNull(records, "records");
-        this.handleByGuid = Objects.requireNonNull(handleByGuid, "handleByGuid");
-        this.relationsByOwner = Objects.requireNonNull(relationsByOwner, "relationsByOwner");
-        this.referencesByElement = Objects.requireNonNull(referencesByElement, "referencesByElement");
+        Objects.requireNonNull(records, "records");
+        Objects.requireNonNull(handleByGuid, "handleByGuid");
+        Objects.requireNonNull(relationsByOwner, "relationsByOwner");
+        Objects.requireNonNull(referencesByElement, "referencesByElement");
+
+        // Defensive copies: callers cannot mutate snapshot state after construction.
+        this.records = Collections.unmodifiableList(new ArrayList<>(records));
+        this.handleByGuid = Collections.unmodifiableMap(new HashMap<>(handleByGuid));
+        this.relationsByOwner = deepCopyRelations(relationsByOwner);
+        this.referencesByElement = deepCopyReferences(referencesByElement);
     }
 
     // Backwards-compatible 3-arg constructor
@@ -47,6 +53,26 @@ public final class RhapsodyModelSnapshot {
     public Map<String, IRPModelElement> handleByGuid() { return handleByGuid; }
     public Map<String, List<RelationInfo>> relationsByOwner() { return relationsByOwner; }
     public Map<String, List<ReferenceInfo>> referencesByElement() { return referencesByElement; }
+
+    // ── Deep-copy helpers ───────────────────────────────────────────────────
+
+    private static Map<String, List<RelationInfo>> deepCopyRelations(
+            Map<String, List<RelationInfo>> src) {
+        Map<String, List<RelationInfo>> copy = new HashMap<>();
+        for (Map.Entry<String, List<RelationInfo>> e : src.entrySet()) {
+            copy.put(e.getKey(), Collections.unmodifiableList(new ArrayList<>(e.getValue())));
+        }
+        return Collections.unmodifiableMap(copy);
+    }
+
+    private static Map<String, List<ReferenceInfo>> deepCopyReferences(
+            Map<String, List<ReferenceInfo>> src) {
+        Map<String, List<ReferenceInfo>> copy = new HashMap<>();
+        for (Map.Entry<String, List<ReferenceInfo>> e : src.entrySet()) {
+            copy.put(e.getKey(), Collections.unmodifiableList(new ArrayList<>(e.getValue())));
+        }
+        return Collections.unmodifiableMap(copy);
+    }
 
     /**
      * @deprecated Use {@link #relationsByOwner()} instead. Kept for migration visibility.
@@ -112,7 +138,9 @@ public final class RhapsodyModelSnapshot {
         public RelationInfo(String guid, String metaClass, Set<String> stereotypes, String otherEndGuid) {
             this.guid = guid;
             this.metaClass = metaClass != null ? metaClass : "Dependency";
-            this.stereotypes = stereotypes != null ? stereotypes : Collections.<String>emptySet();
+        this.stereotypes = stereotypes != null
+                ? Collections.unmodifiableSet(new HashSet<>(stereotypes))
+                : Collections.<String>emptySet();
             this.otherEndGuid = otherEndGuid;
         }
 
@@ -134,7 +162,9 @@ public final class RhapsodyModelSnapshot {
         public ReferenceInfo(String guid, String metaClass, Set<String> stereotypes) {
             this.guid = guid;
             this.metaClass = metaClass != null ? metaClass : "";
-            this.stereotypes = stereotypes != null ? stereotypes : Collections.<String>emptySet();
+            this.stereotypes = stereotypes != null
+                    ? Collections.unmodifiableSet(new HashSet<>(stereotypes))
+                    : Collections.<String>emptySet();
         }
 
         public String guid() { return guid; }

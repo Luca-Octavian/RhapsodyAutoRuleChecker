@@ -129,7 +129,7 @@ public final class RequiredValueRule implements Rule {
 
             return DefaultRuleResult.pass(id, element.guid());
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }
@@ -267,7 +267,7 @@ public final class RequiredValueRule implements Rule {
             if (resolved.isPresent()) {
                 oldValue = resolved.asString().orElse(null);
             }
-        } catch (Throwable ignored) {
+        } catch (Exception ignored) {
             // best-effort: oldValue stays null
         }
 

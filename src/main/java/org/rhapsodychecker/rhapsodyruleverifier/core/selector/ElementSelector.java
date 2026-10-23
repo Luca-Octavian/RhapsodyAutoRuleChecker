@@ -188,7 +188,7 @@ public final class ElementSelector {
         for (String r : regexes) {
             try {
                 out.add(Pattern.compile(r));
-            } catch (Throwable t) {
+            } catch (Exception t) {
                 // Skip invalid regex
             }
         }

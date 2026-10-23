@@ -123,7 +123,7 @@ public final class NamingPatternRule implements Rule {
                     .detail("expected", expected)
                     .build();
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }

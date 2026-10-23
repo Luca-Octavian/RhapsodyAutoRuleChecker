@@ -137,7 +137,7 @@ public final class FlowPropertyConstraintRule implements Rule {
                     .detail("violations", violations)
                     .build();
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }

@@ -69,6 +69,18 @@ public final class FixService {
             }
         }
 
+        // Write intent journal BEFORE any mutations so we have a record even
+        // if the process crashes mid-apply.
+        boolean intentJournalWritten = false;
+        try {
+            File journalFile = journal.write(plan);
+            LOG.info("Intent journal written before apply: " + journalFile.getAbsolutePath());
+            intentJournalWritten = true;
+        } catch (IOException e) {
+            LOG.warning("Failed to write intent journal before apply: " + e.getMessage()
+                    + " — proceeding with fixes but audit trail may be incomplete");
+        }
+
         int applied = 0;
         int processed = 0;
         for (int i = 0; i < entries.size(); i++) {
@@ -97,12 +109,15 @@ public final class FixService {
 
         this.lastAppliedPlan = plan;
 
-        // Write journal
+        // Write final journal with actual outcomes
         try {
             File journalFile = journal.write(plan);
-            LOG.info("Fix journal written: " + journalFile.getAbsolutePath());
+            LOG.info("Final fix journal written: " + journalFile.getAbsolutePath());
         } catch (IOException e) {
-            LOG.warning("Failed to write fix journal: " + e.getMessage());
+            LOG.warning("Failed to write final fix journal: " + e.getMessage()
+                    + (intentJournalWritten
+                            ? " — intent journal is still available"
+                            : " — NO journal record exists for this fix session"));
         }
 
         return applied;

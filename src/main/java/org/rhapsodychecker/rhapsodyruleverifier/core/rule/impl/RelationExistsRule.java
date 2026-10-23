@@ -97,7 +97,7 @@ public final class RelationExistsRule implements Rule {
             return DefaultRuleResult.fail(id, element.guid(),
                     formatMessage(element, count));
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }

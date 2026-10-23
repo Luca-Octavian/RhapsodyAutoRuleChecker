@@ -39,7 +39,6 @@ public final class FixPreviewDialog extends JDialog {
 
     private final FixPlan plan;
     private final FixService fixService;
-    private final FixPreviewState previewState;
     private final FixTableModel tableModel;
     private final JTable table;
     private final TableRowSorter<FixTableModel> rowSorter;
@@ -55,12 +54,10 @@ public final class FixPreviewDialog extends JDialog {
 
     private boolean applied = false;
 
-    public FixPreviewDialog(JFrame owner, FixPlan plan, FixService fixService,
-            FixPreviewState previewState) {
+    public FixPreviewDialog(JFrame owner, FixPlan plan, FixService fixService) {
         super(owner, "Auto-Fix Preview", true);
         this.plan = plan;
         this.fixService = fixService;
-        this.previewState = previewState;
 
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -92,7 +89,7 @@ public final class FixPreviewDialog extends JDialog {
         headerPanel.add(filterPanel, BorderLayout.SOUTH);
 
         // Table
-        tableModel = new FixTableModel(plan.entries(), previewState);
+        tableModel = new FixTableModel(plan.entries());
         table = new JTable(tableModel);
         rowSorter = new TableRowSorter<>(tableModel);
         table.setRowSorter(rowSorter);
@@ -285,7 +282,6 @@ public final class FixPreviewDialog extends JDialog {
         });
 
         // ── SwingWorker with progress ──────────────────────────────────
-        final int total = plan.entries().size();
 
         new SwingWorker<Integer, int[]>() {
             private int appliedCount;
@@ -521,22 +517,22 @@ public final class FixPreviewDialog extends JDialog {
         };
 
         private final List<FixEntry> entries;
-        private final FixPreviewState previewState;
+        private final boolean[] selected;
         private final List<String> userNewValues;
 
-        FixTableModel(List<FixEntry> entries, FixPreviewState previewState) {
+        FixTableModel(List<FixEntry> entries) {
             this.entries = entries;
-            this.previewState = previewState;
+            this.selected = new boolean[entries.size()];
+            java.util.Arrays.fill(this.selected, true);
             this.userNewValues = new ArrayList<String>();
             for (int i = 0; i < entries.size(); i++) {
-                previewState.isSelected(i);
                 String nv = entries.get(i).action().newValue();
                 userNewValues.add(nv != null ? nv : "");
             }
         }
 
         boolean isChecked(int row) {
-            return previewState.isSelected(row);
+            return selected[row];
         }
 
         String getUserNewValue(int row) {
@@ -562,7 +558,7 @@ public final class FixPreviewDialog extends JDialog {
         public Object getValueAt(int row, int col) {
             FixEntry entry = entries.get(row);
             switch (col) {
-                case 0: return Boolean.valueOf(previewState.isSelected(row));
+                case 0: return Boolean.valueOf(selected[row]);
                 case 1: return entry.action().elementName();
                 case 2: return entry.action().actionType().name()
                         + (entry.action().field() != null ? " [" + entry.action().field() + "]" : "");
@@ -577,18 +573,18 @@ public final class FixPreviewDialog extends JDialog {
         public void setValueAt(Object value, int row, int col) {
             FixEntry entry = entries.get(row);
             if (col == 0) {
-                boolean selected = ((Boolean) value).booleanValue();
-                previewState.setSelected(row, selected);
-                if (!selected && isReprocessable(entry.status())) {
+                boolean sel = ((Boolean) value).booleanValue();
+                selected[row] = sel;
+                if (!sel && isReprocessable(entry.status())) {
                     entry.markSkipped("Excluded by user");
-                } else if (selected && entry.status() == FixStatus.SKIPPED) {
+            } else if (sel && entry.status() == FixStatus.SKIPPED) {
                     entry.resetToPending();
                 }
                 fireTableRowsUpdated(row, row);
             } else if (col == 4) {
                 userNewValues.set(row, value != null ? value.toString() : "");
                 if (isReprocessable(entry.status())) {
-                    if (previewState.isSelected(row)) {
+                    if (selected[row]) {
                         entry.resetToPending();
                     } else {
                         entry.markSkipped("Excluded by user");

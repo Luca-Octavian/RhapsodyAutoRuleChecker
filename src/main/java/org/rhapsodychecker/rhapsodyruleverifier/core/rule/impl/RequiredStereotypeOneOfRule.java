@@ -61,7 +61,7 @@ public final class RequiredStereotypeOneOfRule implements Rule {
             return DefaultRuleResult.fail(id, element.guid(),
                     formatMessage(element, "none found", "must have at least one of " + anyOf));
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }

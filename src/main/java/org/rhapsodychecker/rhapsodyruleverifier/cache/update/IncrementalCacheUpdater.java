@@ -307,7 +307,6 @@ public final class IncrementalCacheUpdater {
         Map<String, String> ownerPathCache = new HashMap<String, String>(2048);
 
         List<ElementRecord> updatedRecords = new ArrayList<ElementRecord>();
-        Map<String, IRPModelElement> updatedHandles = new HashMap<String, IRPModelElement>();
         Map<String, List<RhapsodyModelSnapshot.ReferenceInfo>> updatedRefs =
                 new HashMap<String, List<RhapsodyModelSnapshot.ReferenceInfo>>();
 
@@ -321,7 +320,6 @@ public final class IncrementalCacheUpdater {
             ElementRecord record = readFullElement(elt, guidToName, guidToOwnerGuid, ownerPathCache);
             if (record != null) {
                 updatedRecords.add(record);
-                updatedHandles.put(guid, elt);
 
                 readReferences(elt, guid, updatedRefs, fingerprints);
             }
@@ -476,7 +474,7 @@ public final class IncrementalCacheUpdater {
 
         RhapsodyModelSnapshot snapshot = new RhapsodyModelSnapshot(
                 Collections.unmodifiableList(finalRecords),
-                Collections.<String, IRPModelElement>emptyMap(),
+                scannedHandles,
                 Collections.unmodifiableMap(finalRels),
                 Collections.unmodifiableMap(finalRefs));
 
@@ -661,25 +659,10 @@ public final class IncrementalCacheUpdater {
         return true;
     }
 
-    // ---- CachedElement → ElementRecord conversion ----
+    // ---- CachedElement → ElementRecord conversion (delegated to CacheMapper) ----
 
     private static ElementRecord toElementRecord(CachedElement c) {
-        return ElementRecord.builder()
-                .guid(c.getGuid())
-                .name(c.getName())
-                .metaClass(c.getMetaClass())
-                .kind(ElementKind.valueOf(c.getKind()))
-                .description(c.getDescription())
-                .ownerGuid(c.getOwnerGuid())
-                .ownerPath(c.getOwnerPath())
-                .typeGuid(c.getTypeGuid())
-                .typeName(c.getTypeName())
-                .stereotypes(c.getStereotypes() != null ? c.getStereotypes() : Collections.<String>emptySet())
-                .portDirection(c.getPortDirection())
-                .portMultiplicity(c.getPortMultiplicity())
-                .initialValue(c.getInitialValue())
-                .tagValues(c.getTagValues() != null ? c.getTagValues() : Collections.<String, String>emptyMap())
-                .build();
+        return org.rhapsodychecker.rhapsodyruleverifier.cache.CacheMapper.toElementRecord(c);
     }
 
     // ---- Result holder ----

@@ -88,7 +88,7 @@ public final class ChildCountRule implements Rule {
                     .detail("minCount", minCount)
                     .build();
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }

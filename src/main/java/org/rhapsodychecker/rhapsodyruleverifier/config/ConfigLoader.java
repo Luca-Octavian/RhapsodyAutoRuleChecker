@@ -44,8 +44,8 @@ public final class ConfigLoader {
             root = castMap(raw);
         } catch (ConfigLoadException e) {
             throw e;
-        } catch (Throwable t) {
-            throw new ConfigLoadException("Failed to parse YAML from '" + sourceName + "': " + t.getMessage(), t);
+        } catch (Exception e) {
+            throw new ConfigLoadException("Failed to parse YAML from '" + sourceName + "': " + e.getMessage(), e);
         }
 
         try {
@@ -158,9 +158,14 @@ public final class ConfigLoader {
                 Object rawCond = fields.get("conditions");
                 if (rawCond instanceof List) {
                     conditions = new ArrayList<>();
-                    for (Object c : (List<?>) rawCond) {
+                    List<?> condList = (List<?>) rawCond;
+                    for (int ci = 0; ci < condList.size(); ci++) {
+                        Object c = condList.get(ci);
                         if (c instanceof Map) {
                             conditions.add(castMap(c));
+                        } else {
+                            errors.add(label + ": conditions[" + ci + "] must be a mapping, got "
+                                    + (c == null ? "null" : c.getClass().getSimpleName()));
                         }
                     }
                 }
@@ -310,7 +315,7 @@ public final class ConfigLoader {
         String s = v.toString().trim().toLowerCase();
         if ("true".equals(s) || "yes".equals(s)) return true;
         if ("false".equals(s) || "no".equals(s)) return false;
-        return defaultVal;
+        throw new IllegalArgumentException("'" + key + "' must be a boolean (true/false/yes/no), got: " + v);
     }
 
     private static List<String> optStringList(Map<String, Object> map, String key) {

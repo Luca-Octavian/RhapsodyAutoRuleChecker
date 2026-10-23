@@ -318,7 +318,7 @@ public class MainFrame extends JFrame implements MainFrameController.View, Theme
         updateModelBtn.setEnabled(controller.isUpdateModelEnabled(fieldPath));
         newConfigWizardBtn.setEnabled(controller.isModelLoaded());
         editConfigWizardBtn.setEnabled(controller.isModelLoaded() && controller.hasConfig());
-        fixBtn.setEnabled(controller.hasFixPlan() && !controller.isLoadedFromCache());
+        fixBtn.setEnabled(controller.hasFixPlan() && controller.isFixEligible());
         fixHistoryBtn.setEnabled(controller.hasFixHistory());
         openCacheBtn.setEnabled(controller.isCacheAvailable(fieldPath));
     }

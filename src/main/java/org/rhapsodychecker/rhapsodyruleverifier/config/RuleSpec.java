@@ -49,9 +49,17 @@ public final class RuleSpec {
         this.appliesToIncludePackages = freezeList(b.appliesToIncludePackages);
         this.appliesToExcludePackages = freezeList(b.appliesToExcludePackages);
 
-        this.conditions = b.conditions != null
-                ? Collections.unmodifiableList(new ArrayList<>(b.conditions))
-                : Collections.emptyList();
+        // Deep-copy: each condition map is independently copied so callers
+        // cannot mutate the RuleSpec's internal state after construction.
+        if (b.conditions != null && !b.conditions.isEmpty()) {
+            List<Map<String, Object>> deepCopy = new ArrayList<>(b.conditions.size());
+            for (Map<String, Object> cond : b.conditions) {
+                deepCopy.add(Collections.unmodifiableMap(new LinkedHashMap<>(cond)));
+            }
+            this.conditions = Collections.unmodifiableList(deepCopy);
+        } else {
+            this.conditions = Collections.emptyList();
+        }
 
         this.target = b.target;
 

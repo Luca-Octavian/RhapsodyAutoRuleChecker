@@ -1,5 +1,6 @@
 package org.rhapsodychecker.rhapsodyruleverifier.core.rule;
 
+import org.rhapsodychecker.rhapsodyruleverifier.core.AppLogger;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
@@ -66,16 +67,19 @@ public final class RuleEngine {
 
                 allCandidates.add(candidates);
                 totalCandidates += candidates.size();
-            } catch (Throwable t) {
+            } catch (Exception e) {
+                AppLogger.error("Rule '" + spec.id()
+                        + "' failed during candidate selection: " + e.getMessage(), e);
                 allCandidates.add(Collections.<ElementRecord>emptyList());
                 allResults.add(DefaultRuleResult.skipped(spec.id(), "N/A",
-                        "Rule could not select candidates: " + t.getMessage()));
+                        "Rule could not select candidates: " + e.getMessage()));
             }
         }
 
         // Phase 2: evaluate using pre-collected candidate lists
         int processed = 0;
         reporter.onStepStarted(LoadingStep.EVALUATING_RULES);
+        try {
 
         for (int i = 0; i < enabledSpecs.size(); i++) {
             RuleSpec spec = enabledSpecs.get(i);
@@ -91,9 +95,12 @@ public final class RuleEngine {
                         if (rule.appliesTo(candidate, context)) {
                             allResults.add(rule.evaluate(candidate, context));
                         }
-                    } catch (Throwable t) {
+                    } catch (Exception e) {
+                        AppLogger.error("Rule '" + spec.id()
+                                + "' failed evaluating element " + candidate.guid()
+                                + ": " + e.getMessage(), e);
                         allResults.add(DefaultRuleResult.skipped(spec.id(),
-                                candidate.guid(), "Unexpected error: " + t.getMessage()));
+                                candidate.guid(), "Evaluation error: " + e.getMessage()));
                     }
 
                     processed++;
@@ -102,14 +109,18 @@ public final class RuleEngine {
                     }
                 }
 
-            } catch (Throwable t) {
+            } catch (Exception e) {
+                AppLogger.error("Rule '" + spec.id()
+                        + "' could not be created: " + e.getMessage(), e);
                 allResults.add(DefaultRuleResult.skipped(spec.id(), "N/A",
-                        "Rule could not be created: " + t.getMessage()));
+                        "Rule could not be created: " + e.getMessage()));
             }
         }
 
-        reporter.onStepCompleted(LoadingStep.EVALUATING_RULES);
-        reporter.onDone();
+        } finally {
+            reporter.onStepCompleted(LoadingStep.EVALUATING_RULES);
+            reporter.onDone();
+        }
 
         return Collections.unmodifiableList(allResults);
     }
@@ -118,7 +129,7 @@ public final class RuleEngine {
         return new EvaluationSummary(evaluateAll());
     }
 
-    // ── EvaluationSummary — unchanged ─────────────────────────────────────────
+    // ── EvaluationSummary ─────────────────────────────────────────────────────
 
     public static final class EvaluationSummary {
         private final List<RuleResult> allResults;

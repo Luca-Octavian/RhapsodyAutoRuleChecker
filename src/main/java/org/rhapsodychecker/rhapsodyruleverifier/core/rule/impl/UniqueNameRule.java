@@ -67,7 +67,7 @@ public final class UniqueNameRule implements Rule {
                     .detail("elementName", element.name())
                     .build();
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             return DefaultRuleResult.skipped(id, element.guid(),
                     "Error evaluating rule: " + t.getMessage());
         }

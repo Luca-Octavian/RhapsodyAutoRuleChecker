@@ -5,15 +5,12 @@ import org.junit.Test;
 import org.rhapsodychecker.rhapsodyruleverifier.config.ElementSetDefinition;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleCheckerConfig;
 import org.rhapsodychecker.rhapsodyruleverifier.config.RuleSpec;
-import org.rhapsodychecker.rhapsodyruleverifier.config.TargetSpec;
-import org.rhapsodychecker.rhapsodyruleverifier.core.config.AliasKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.config.RuleType;
 import org.rhapsodychecker.rhapsodyruleverifier.core.index.ElementIndex;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementKind;
 import org.rhapsodychecker.rhapsodyruleverifier.core.model.ElementRecord;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.AliasResolver;
 import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.DefaultResolvedValue;
-import org.rhapsodychecker.rhapsodyruleverifier.core.resolve.ResolvedValue;
 import org.rhapsodychecker.rhapsodyruleverifier.core.rule.impl.RelationExistsRule;
 import org.rhapsodychecker.rhapsodyruleverifier.core.selector.ElementSelector;
 

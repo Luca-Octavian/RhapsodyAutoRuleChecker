@@ -2,6 +2,7 @@ package org.rhapsodychecker.rhapsodyruleverifier.prefs;
 
 import javax.swing.*;
 import java.io.*;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.prefs.Preferences;
@@ -36,8 +37,10 @@ public final class RhapsodyPathSetup {
         // Check if we previously saved a path in Preferences
         Preferences prefs = Preferences.userNodeForPackage(RhapsodyPathSetup.class);
         String saved = prefs.get(PREF_KEY, null);
-        if (saved != null && isValidJavaApiPath(saved) && saved.equals(currentPath)) {
-            return; // ini already matches saved path — shouldn't happen but guard
+        if (saved != null && isValidJavaApiPath(saved)) {
+            // Saved path is valid — inject it into java.library.path at runtime
+            injectLibraryPath(saved);
+            return;
         }
 
         // Need to prompt the user
@@ -185,6 +188,27 @@ public final class RhapsodyPathSetup {
             return true;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    /**
+     * Dynamically adds the given path to {@code java.library.path} and resets
+     * the JVM's cached {@code sys_paths} so that {@link System#loadLibrary}
+     * will pick up native libraries from the new location.
+     */
+    private static void injectLibraryPath(String path) {
+        String current = System.getProperty("java.library.path", "");
+        if (!current.contains(path)) {
+            System.setProperty("java.library.path", path + ";" + current);
+        }
+        // Reset the JVM's cached library paths so the new value is honoured
+        try {
+            Field sysPathsField = ClassLoader.class.getDeclaredField("sys_paths");
+            sysPathsField.setAccessible(true);
+            sysPathsField.set(null, null);
+        } catch (Exception ignored) {
+            // On newer JVMs this reflection may fail; the property update
+            // alone is usually sufficient when set before any native load.
         }
     }
 
